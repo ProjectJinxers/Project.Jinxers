@@ -1,0 +1,21 @@
+apply plugin: 'java'
+apply plugin: 'eclipse'
+apply plugin: 'application'
+
+repositories { 
+    mavenCentral()
+    maven { url 'https://jitpack.io' }
+}
+
+sourceCompatibility = 1.11
+targetCompatibility = 1.11
+
+dependencies {
+
+    implementation 'com.hedera.hashgraph:ethereumj-core:1.12.0-v0.5.0'
+    implementation 'com.github.ipfs:java-ipfs-http-client:v1.3.3'
+    implementation 'com.github.iotaledger:iota-java:1.0.0-beta9'
+    implementation 'org.yaml:snakeyaml:1.24'
+    implementation 'com.google.code.gson:gson:2.8.6'
+    
+}

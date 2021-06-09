@@ -14,6 +14,23 @@ The requirements have been identified and modeled. Almost all problems, that cam
 
 Feel free to fork this repo and use the model as a starting point for refinement and for adding your own ideas. Pull Requests will probably not be merged, at least not in the near future. We'll see what happens. No matter who does it, we want to see the ideas come to life!
 
+## License
+
+>Copyright (C) 2021 ProjectJinxers
+>
+>This program is free software: you can redistribute it and/or modify
+>it under the terms of the GNU General Public License as published by
+>the Free Software Foundation, either version 3 of the License, or
+>(at your option) any later version.
+>
+>This program is distributed in the hope that it will be useful,
+>but WITHOUT ANY WARRANTY; without even the implied warranty of
+>MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+>GNU General Public License for more details.
+>
+>You should have received a copy of the GNU General Public License
+>along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 ## Author
 
 ProjectJinxers

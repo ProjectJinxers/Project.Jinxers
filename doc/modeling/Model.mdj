@@ -69385,7 +69385,7 @@
 													"top": 100,
 													"width": 252.1416015625,
 													"height": 13,
-													"text": "-signature: String",
+													"text": "-signature: byte[]",
 													"horizontalAlignment": 0
 												}
 											],
@@ -69673,23 +69673,6 @@
 												},
 												{
 													"_type": "UMLOperationView",
-													"_id": "AAAAAAF577EwNmrJ7dU=",
-													"_parent": {
-														"$ref": "AAAAAAF576igMWp0lk4="
-													},
-													"model": {
-														"$ref": "AAAAAAF577EwLWrGhzA="
-													},
-													"font": "Arial;13;0",
-													"left": 981,
-													"top": 1435,
-													"width": 101.14990234375,
-													"height": 13,
-													"text": "+sign()",
-													"horizontalAlignment": 0
-												},
-												{
-													"_type": "UMLOperationView",
 													"_id": "AAAAAAF577GiEWrQIAE=",
 													"_parent": {
 														"$ref": "AAAAAAF576igMWp0lk4="
@@ -69699,10 +69682,27 @@
 													},
 													"font": "Arial;13;0",
 													"left": 981,
-													"top": 1450,
+													"top": 1435,
 													"width": 101.14990234375,
 													"height": 13,
 													"text": "+hash()",
+													"horizontalAlignment": 0
+												},
+												{
+													"_type": "UMLOperationView",
+													"_id": "AAAAAAF577EwNmrJ7dU=",
+													"_parent": {
+														"$ref": "AAAAAAF576igMWp0lk4="
+													},
+													"model": {
+														"$ref": "AAAAAAF577EwLWrGhzA="
+													},
+													"font": "Arial;13;0",
+													"left": 981,
+													"top": 1450,
+													"width": 101.14990234375,
+													"height": 13,
+													"text": "+sign()",
 													"horizontalAlignment": 0
 												}
 											],
@@ -73701,7 +73701,7 @@
 													"top": 892,
 													"width": 103.32080078125,
 													"height": 13,
-													"text": "-publicKey: String",
+													"text": "-publicKey: byte[]",
 													"horizontalAlignment": 0
 												}
 											],
@@ -76250,7 +76250,7 @@
 									},
 									"name": "signature",
 									"visibility": "private",
-									"type": "String"
+									"type": "byte[]"
 								}
 							],
 							"operations": [
@@ -76306,19 +76306,19 @@
 								},
 								{
 									"_type": "UMLOperation",
-									"_id": "AAAAAAF577EwLWrGhzA=",
-									"_parent": {
-										"$ref": "AAAAAAF576igMWprmbE="
-									},
-									"name": "sign"
-								},
-								{
-									"_type": "UMLOperation",
 									"_id": "AAAAAAF577GiCWrNwfk=",
 									"_parent": {
 										"$ref": "AAAAAAF576igMWprmbE="
 									},
 									"name": "hash"
+								},
+								{
+									"_type": "UMLOperation",
+									"_id": "AAAAAAF577EwLWrGhzA=",
+									"_parent": {
+										"$ref": "AAAAAAF576igMWprmbE="
+									},
+									"name": "sign"
 								}
 							]
 						},
@@ -77032,7 +77032,7 @@
 									},
 									"name": "publicKey",
 									"visibility": "private",
-									"type": "String"
+									"type": "byte[]"
 								}
 							]
 						},
