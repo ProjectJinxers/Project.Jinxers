@@ -24,16 +24,28 @@ targetCompatibility = 1.11
 
 dependencies {
 
-    implementation 'com.hedera.hashgraph:ethereumj-core:1.12.0-v0.5.0'
+    implementation('com.hedera.hashgraph:ethereumj-core:1.12.0-v0.5.0') {
+        exclude group: 'org.ethereum', module: 'leveldbjni-all'
+        exclude group: 'org.ethereum', module: 'rocksdbjni'
+        exclude group: 'org.ethereum', module: 'solcJ-all'
+    }
     implementation 'com.github.ipfs:java-ipfs-http-client:v1.3.3'
     implementation 'com.github.iotaledger:iota-java:1.0.0-beta9'
     implementation 'org.yaml:snakeyaml:1.24'
     implementation 'com.google.code.gson:gson:2.8.6'
     
     testImplementation('org.junit.jupiter:junit-jupiter-api:5.4.2')
-    testRuntime('org.junit.jupiter:junit-jupiter-engine:5.4.2')
+    testImplementation 'org.mockito:mockito-core:3.11.0'
+    testImplementation 'org.mockito:mockito-junit-jupiter:3.11.0'
+    testImplementation 'org.powermock:powermock-core:2.0.9'
+    testImplementation 'org.powermock:powermock-api-mockito2:2.0.9'
+    testImplementation 'org.powermock:powermock-module-junit4:2.0.9'
+    testRuntimeOnly('org.junit.jupiter:junit-jupiter-engine:5.4.2')
+    testImplementation 'org.junit.vintage:junit-vintage-engine:5.7.0'
     
 }
+
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 
 test {
     useJUnitPlatform()
@@ -53,5 +65,9 @@ test {
         // use enum values:
         // events org.gradle.api.tasks.testing.logging.TestLogEvent.STANDARD_OUT,
         //        org.gradle.api.tasks.testing.logging.TestLogEvent.STANDARD_ERROR,
+        exceptionFormat = TestExceptionFormat.FULL
+    }
+    filter {
+        excludeTestsMatching "org.projectjinxers.ipld.*IPFSAccessTest" // depend on locally running node or Infura
     }
 }

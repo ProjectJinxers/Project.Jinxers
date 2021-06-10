@@ -110,7 +110,7 @@ public class IPLDJsonReader implements IPLDReader {
 				}
 			}
 		}
-		emptyInstance.read(eager ? context : null);
+		emptyInstance.read(this, eager ? context : null);
 		return signature;
 	}
 	

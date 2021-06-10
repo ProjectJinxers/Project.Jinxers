@@ -1,0 +1,5 @@
+ipfs.node: 
+   host: ipfs.infura.io
+   port: 5001
+   version: /api/v0/
+   secure: true

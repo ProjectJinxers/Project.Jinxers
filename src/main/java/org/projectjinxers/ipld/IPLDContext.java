@@ -60,14 +60,14 @@ public class IPLDContext {
 	 * @param object the object to serialize and store
 	 * @param signingKey the optional signing key (if present, and the concrete data instance type supports signing,
 	 * a signature is created and stored in the given object)
-	 * @return the base58 form of the multihash for the saved object
+	 * @return the string form of the multihash for the saved object
 	 * @throws IOException if a single write operation fails
 	 */
 	public <D extends IPLDSerializable> String saveObject(IPLDObject<D> object, ECKey signingKey) throws IOException {
 		IPLDWriter writer = in.createWriter();
 		byte[] bytes = writer.write(this, object, signingKey);
-		MerkleNode node = access.ipfs.dag.put(in.getIn(), bytes, out.getOut());
-		return node.hash.toBase58();
+		MerkleNode node = access.ipfs.dag.put(in.getIn(), bytes, out.getIn());
+		return node.hash.toString();
 	}
 	
 	/**

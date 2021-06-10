@@ -16,9 +16,13 @@
  */
 package org.projectjinxers.model;
 
+import java.io.IOException;
+
 import org.ethereum.crypto.ECKey;
 import org.ethereum.crypto.ECKey.ECDSASignature;
 import org.projectjinxers.ipld.IPLDContext;
+import org.projectjinxers.ipld.IPLDReader;
+import org.projectjinxers.ipld.IPLDWriter;
 
 /**
  * The base interface for all data model classes, that can be saved as IPLD in IPFS.
@@ -30,32 +34,38 @@ public interface IPLDSerializable {
 	/**
 	 * Reads (deserializes) the single properties.
 	 * 
-	 * @param contextForRecursion if non-null, links should be resolved with the help of this context
+	 * @param reader provides the single values by key
+	 * @param contextForRecursion if non-null, links should be resolved with the help of this context (not with the
+	 * given reader!)
 	 */
-	void read(IPLDContext contextForRecursion);
+	void read(IPLDReader reader, IPLDContext contextForRecursion);
 	
 	/**
 	 * Writes (serializes) the single properties. This default implementation calls
 	 * {@link #writeProperties(ECKey, IPLDContext)} and, if that returned a non-null hash, signs that hash with the
 	 * given key.
 	 * 
+	 * @param writer takes the single values by key
 	 * @param signingKey the signing key
-	 * @param context the context
+	 * @param context the context (for recursion)
 	 * @return the signature if the hash has been created and signed
+	 * @throws IOException if writing a single property fails
 	 */
-	default ECDSASignature write(ECKey signingKey, IPLDContext context) {
-		byte[] hash = writeProperties(signingKey, context);
+	default ECDSASignature write(IPLDWriter writer, ECKey signingKey, IPLDContext context) throws IOException {
+		byte[] hash = writeProperties(writer, signingKey, context);
 		return hash == null ? null : signingKey.sign(hash);
 	}
 	
 	/**
 	 * Writes (serializes) the single properties.
 	 * 
+	 * @param writer takes the single values by key
 	 * @param signingKey the signing key (for recursion)
 	 * @param context the context
 	 * @return the optional hash (if null, the data will not be signed)
+	 * @throws IOException if writing a single property fails
 	 */
-	byte[] writeProperties(ECKey signingKey, IPLDContext context);
+	byte[] writeProperties(IPLDWriter writer, ECKey signingKey, IPLDContext context) throws IOException;
 	
 	/**
 	 * @return the hash of the serialized data (this is not the multihash for the object)

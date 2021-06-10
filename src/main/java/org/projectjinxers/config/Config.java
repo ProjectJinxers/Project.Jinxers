@@ -16,26 +16,23 @@
  */
 package org.projectjinxers.config;
 
-import java.io.InputStream;
 import java.util.Map;
-
-import org.yaml.snakeyaml.Yaml;
 
 /**
  * Corresponds to the config.yml resource file.
  * 
  * @author ProjectJinxers
  */
-public class Config {
+public class Config extends YamlConfig {
 	
 	private static final String KEY_IPFS_NODE = "ipfs.node";
-	private static final String KEY_IPFS_HOST = KEY_IPFS_NODE + ".host";
-	private static final String KEY_IPFS_PORT = KEY_IPFS_NODE + ".port";
-	private static final String KEY_IPFS_VERSION = KEY_IPFS_NODE + ".version";
-	private static final String KEY_IPFS_NODE_TIMEOUT = KEY_IPFS_NODE + ".timeout";
-	private static final String KEY_IPFS_CONN_TIMEOUT = KEY_IPFS_NODE_TIMEOUT + ".connection";
-	private static final String KEY_IPFS_READ_TIMEOUT = KEY_IPFS_NODE_TIMEOUT + ".read";
-	private static final String KEY_IPFS_SECURE = KEY_IPFS_HOST + ".secure";
+	private static final String KEY_IPFS_HOST = "host";
+	private static final String KEY_IPFS_PORT = "port";
+	private static final String KEY_IPFS_VERSION = "version";
+	private static final String KEY_IPFS_NODE_TIMEOUT = "timeout";
+	private static final String KEY_IPFS_CONN_TIMEOUT = "connection";
+	private static final String KEY_IPFS_READ_TIMEOUT = "read";
+	private static final String KEY_IPFS_SECURE = "secure";
 	
 	private static Config sharedInstance;
 	
@@ -57,21 +54,21 @@ public class Config {
 	private final boolean ipfsSecure;
 	
 	private Config() {
-		Yaml yaml = new Yaml();
-		InputStream is = getClass().getClassLoader().getResourceAsStream("config.yaml");
-		Map<String, Object> map = yaml.load(is);
-		this.ipfsHost = (String) map.get(KEY_IPFS_HOST);
-		this.ipfsPort = (int) map.get(KEY_IPFS_PORT);
-		this.ipfsVersion = (String) map.get(KEY_IPFS_VERSION);
-		if (map.containsKey(KEY_IPFS_NODE_TIMEOUT)) {
-			this.ipfsConnectionTimeout = (int) map.get(KEY_IPFS_CONN_TIMEOUT);
-			this.ipfsReadTimeout = (int) map.get(KEY_IPFS_READ_TIMEOUT);
+		super("config.yml");
+		Map<?, ?> node = getRootObject(KEY_IPFS_NODE);
+		this.ipfsHost = (String) node.get(KEY_IPFS_HOST);
+		this.ipfsPort = (int) node.get(KEY_IPFS_PORT);
+		this.ipfsVersion = (String) node.get(KEY_IPFS_VERSION);
+		if (node.containsKey(KEY_IPFS_NODE_TIMEOUT)) {
+			Map<?, ?> timeouts = (Map<?, ?>) node.get(KEY_IPFS_NODE_TIMEOUT);
+			this.ipfsConnectionTimeout = (int) timeouts.get(KEY_IPFS_CONN_TIMEOUT);
+			this.ipfsReadTimeout = (int) timeouts.get(KEY_IPFS_READ_TIMEOUT);
 		}
 		else {
 			this.ipfsConnectionTimeout = -1;
 			this.ipfsReadTimeout = -1;
 		}
-		this.ipfsSecure = Boolean.TRUE.equals(map.get(KEY_IPFS_SECURE));
+		this.ipfsSecure = Boolean.TRUE.equals(node.get(KEY_IPFS_SECURE));
 	}
 	
 	/**

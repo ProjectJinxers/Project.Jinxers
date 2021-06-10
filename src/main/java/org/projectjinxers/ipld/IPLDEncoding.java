@@ -35,8 +35,7 @@ public enum IPLDEncoding {
 		
 		@Override
 		public IPLDWriter createWriter() {
-			// TODO Auto-generated method stub
-			return null;
+			return new IPLDJsonWriter();
 		}
 		
 	},
@@ -47,12 +46,12 @@ public enum IPLDEncoding {
 		
 		@Override
 		public IPLDReader createReader() {
-			throw new UnsupportedOperationException("not implemented!");
+			return new IPLDJsonReader();
 		}
 		
 		@Override
 		public IPLDWriter createWriter() {
-			throw new UnsupportedOperationException("not implemented!");
+			return new IPLDJsonWriter();
 		}
 		
 	};

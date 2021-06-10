@@ -16,11 +16,13 @@
 */
 package org.projectjinxers.model;
 
+import java.io.IOException;
 import java.lang.reflect.Constructor;
 
 import org.ethereum.crypto.ECKey;
 import org.ethereum.crypto.ECKey.ECDSASignature;
 import org.projectjinxers.ipld.IPLDContext;
+import org.projectjinxers.ipld.IPLDWriter;
 
 /**
  * Wrapper class for data model objects, that can be saved as IPLD in IPFS.
@@ -103,12 +105,14 @@ public class IPLDObject<D extends IPLDSerializable> {
 	/**
 	 * Writes (serializes) the data instance to IPFS. Stores and returns the signature, if any.
 	 * 
+	 * @param writer takes the single properties by key
 	 * @param signingKey the key for signing the hash
 	 * @param context the context
 	 * @return the optional signature
+	 * @throws IOException if writing a single property fails
 	 */
-	public ECDSASignature write(ECKey signingKey, IPLDContext context) {
-		this.signature = mapped.write(signingKey, context);
+	public ECDSASignature write(IPLDWriter writer, ECKey signingKey, IPLDContext context) throws IOException {
+		this.signature = mapped.write(writer, signingKey, context);
 		return signature;
 	}
 

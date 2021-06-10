@@ -46,11 +46,12 @@ public class IPLDJsonWriter implements IPLDWriter {
 		ByteArrayOutputStream baos = new ByteArrayOutputStream();
 		jsonWriter = new JsonWriter(new OutputStreamWriter(baos));
 		jsonWriter.beginObject();
-		ECDSASignature signature = object.write(signingKey, context);
+		ECDSASignature signature = object.write(this, signingKey, context);
 		if (signature != null) {
 			writeSignature(signature);
 		}
 		jsonWriter.endObject();
+		jsonWriter.flush();
 		return baos.toByteArray();
 	}
 	
