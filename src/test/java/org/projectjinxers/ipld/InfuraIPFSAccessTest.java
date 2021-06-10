@@ -1,18 +1,15 @@
 /*
  * Copyright (C) 2021 ProjectJinxers
  * 
- * This program is free software: you can redistribute it and/or modify it under
- * the terms of the GNU General Public License as published by the Free Software
- * Foundation, either version 3 of the License, or (at your option) any later
+ * This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
+ * License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later
  * version.
  * 
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
- * FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
- * details.
+ * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
+ * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
  * 
- * You should have received a copy of the GNU General Public License along with
- * this program. If not, see <https://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU General Public License along with this program. If not, see
+ * <https://www.gnu.org/licenses/>.
  */
 package org.projectjinxers.ipld;
 
@@ -50,22 +47,16 @@ import io.ipfs.api.Multipart;
 import io.ipfs.api.NamedStreamable;
 
 /**
- * Test class for connecting to ipfs.infura.io. The only two add operations that
- * didn't return 500, 403 or 401 are root add and block put. Neither of them
- * required authentication. Currently dag put doesn't work. With valid
- * credentials for an Ethereum project, the server returns 403. With sign in
- * credentials or credentials for a FileCoin project, it returns 401. In the
- * dashboard for the Ethereum project the dag put requests are listed as
- * (blank). The root add requests are listed as /api/v0/add. The tests only
- * work, if the ipfs.infura.io node is configured in config.yml. You can rename
- * or copy the file config-infura.yml. Infura secrets must be configured in
- * test-secret-config.yml, which is obviously not pushed to version control. The
- * structure is: infura at root level and 'user' as well as 'pass' as children.
- * The current save test doesn't actually save. The hash for reading the object
- * is what the save operation, if it worked, would return. Reading (dag get)
- * didn't work at first (read timeout), but after a little while, the document,
- * which had been saved on the local node, apparently made it to the Infura
- * node.
+ * Test class for connecting to ipfs.infura.io. The only two add operations that didn't return 500, 403 or 401 are root
+ * add and block put. Neither of them required authentication. Currently dag put doesn't work. With valid credentials
+ * for an Ethereum project, the server returns 403. With sign in credentials or credentials for a FileCoin project, it
+ * returns 401. In the dashboard for the Ethereum project the dag put requests are listed as (blank). The root add
+ * requests are listed as /api/v0/add. The tests only work, if the ipfs.infura.io node is configured in config.yml. You
+ * can rename or copy the file config-infura.yml. Infura secrets must be configured in test-secret-config.yml, which is
+ * obviously not pushed to version control. The structure is: infura at root level and 'user' as well as 'pass' as
+ * children. The current save test doesn't actually save. The hash for reading the object is what the save operation, if
+ * it worked, would return. Reading (dag get) didn't work at first (read timeout), but after a little while, the
+ * document, which had been saved on the local node, apparently made it to the Infura node.
  * 
  * @author ProjectJinxers
  */
@@ -161,8 +152,7 @@ public class InfuraIPFSAccessTest {
 
         TestData testData = new TestData();
         testData.text = "Yo!";
-        // The next two lines would save the testData. Unfortunately Infura returns a
-        // 403 error. So this test only reads.
+        // The next 2 lines would save the testData. Unfortunately Infura returns a 403 error. So this test only reads.
         // IPLDObject<TestData> wrapper = new IPLDObject<>(testData);
         String multihash = "zdpuAmqZ7i5rBbkJAav81kuAZojMZcWPkHippghvi8A9VCEBT";// context.saveObject(wrapper, null);
         Assert.assertNotNull(multihash);

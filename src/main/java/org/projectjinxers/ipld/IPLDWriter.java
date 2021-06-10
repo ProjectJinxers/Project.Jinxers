@@ -1,18 +1,15 @@
 /*
  * Copyright (C) 2021 ProjectJinxers
  * 
- * This program is free software: you can redistribute it and/or modify it under
- * the terms of the GNU General Public License as published by the Free Software
- * Foundation, either version 3 of the License, or (at your option) any later
+ * This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
+ * License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later
  * version.
  * 
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
- * FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
- * details.
+ * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
+ * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
  * 
- * You should have received a copy of the GNU General Public License along with
- * this program. If not, see <https://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU General Public License along with this program. If not, see
+ * <https://www.gnu.org/licenses/>.
  */
 package org.projectjinxers.ipld;
 
@@ -32,13 +29,11 @@ public interface IPLDWriter {
     /**
      * Writes (serializes) the given object.
      * 
-     * @param <D>        the type of the data instance to write (contained in
-     *                   object)
+     * @param <D>        the type of the data instance to write (contained in object)
      * @param context    the context
      * @param object     the object to write
-     * @param signingKey the optional signing key (if present, and the concrete data
-     *                   instance type supports signing, a signature is created and
-     *                   stored in the given object)
+     * @param signingKey the optional signing key (if present, and the concrete data instance type supports signing, a
+     *                   signature is created and stored in the given object)
      * @return the serialized form of the given object
      * @throws IOException if single write operations fail
      */

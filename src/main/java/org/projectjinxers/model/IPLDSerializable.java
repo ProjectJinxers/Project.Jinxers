@@ -1,18 +1,15 @@
 /*
  * Copyright (C) 2021 ProjectJinxers
  * 
- * This program is free software: you can redistribute it and/or modify it under
- * the terms of the GNU General Public License as published by the Free Software
- * Foundation, either version 3 of the License, or (at your option) any later
+ * This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
+ * License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later
  * version.
  * 
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
- * FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
- * details.
+ * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
+ * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
  * 
- * You should have received a copy of the GNU General Public License along with
- * this program. If not, see <https://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU General Public License along with this program. If not, see
+ * <https://www.gnu.org/licenses/>.
  */
 package org.projectjinxers.model;
 
@@ -25,8 +22,7 @@ import org.projectjinxers.ipld.IPLDReader;
 import org.projectjinxers.ipld.IPLDWriter;
 
 /**
- * The base interface for all data model classes, that can be saved as IPLD in
- * IPFS.
+ * The base interface for all data model classes, that can be saved as IPLD in IPFS.
  * 
  * @author ProjectJinxers
  */
@@ -36,15 +32,15 @@ public interface IPLDSerializable {
      * Reads (deserializes) the single properties.
      * 
      * @param reader              provides the single values by key
-     * @param contextForRecursion if non-null, links should be resolved with the
-     *                            help of this context (not with the given reader!)
+     * @param contextForRecursion if non-null, links should be resolved with the help of this context (not with the
+     *                            given reader!)
      */
     void read(IPLDReader reader, IPLDContext contextForRecursion);
 
     /**
      * Writes (serializes) the single properties. This default implementation calls
-     * {@link #writeProperties(ECKey, IPLDContext)} and, if that returned a non-null
-     * hash, signs that hash with the given key.
+     * {@link #writeProperties(ECKey, IPLDContext)} and, if that returned a non-null hash, signs that hash with the
+     * given key.
      * 
      * @param writer     takes the single values by key
      * @param signingKey the signing key
@@ -69,8 +65,7 @@ public interface IPLDSerializable {
     byte[] writeProperties(IPLDWriter writer, ECKey signingKey, IPLDContext context) throws IOException;
 
     /**
-     * @return the hash of the serialized data (this is not the multihash for the
-     *         object)
+     * @return the hash of the serialized data (this is not the multihash for the object)
      */
     byte[] hash();
 
