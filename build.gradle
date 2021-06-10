@@ -7,6 +7,18 @@ repositories {
     maven { url 'https://jitpack.io' }
 }
 
+import org.gradle.plugins.ide.eclipse.model.SourceFolder 
+eclipse.classpath.file {
+    beforeMerged { classpath -> 
+        classpath.entries.clear()
+    }
+    whenMerged {  cp -> 
+        cp.entries.findAll { it instanceof SourceFolder && it.path.startsWith("src/main/") }*.output = "bin/main" 
+        cp.entries.findAll { it instanceof SourceFolder && it.path.startsWith("src/test/") }*.output = "bin/test" 
+        cp.entries.removeAll { it.kind == "output" }
+    }
+}
+
 sourceCompatibility = 1.11
 targetCompatibility = 1.11
 
@@ -18,4 +30,28 @@ dependencies {
     implementation 'org.yaml:snakeyaml:1.24'
     implementation 'com.google.code.gson:gson:2.8.6'
     
+    testImplementation('org.junit.jupiter:junit-jupiter-api:5.4.2')
+    testRuntime('org.junit.jupiter:junit-jupiter-engine:5.4.2')
+    
+}
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        // Make sure output from
+        // standard out or error is shown
+        // in Gradle output.
+        showStandardStreams = true
+ 
+        // Or we use events method:
+        // events 'standard_out', 'standard_error'
+ 
+        // Or set property events:
+        // events = ['standard_out', 'standard_error']
+ 
+        // Instead of string values we can
+        // use enum values:
+        // events org.gradle.api.tasks.testing.logging.TestLogEvent.STANDARD_OUT,
+        //        org.gradle.api.tasks.testing.logging.TestLogEvent.STANDARD_ERROR,
+    }
 }
