@@ -154,19 +154,7 @@ public class InfuraIPFSAccessTest {
 		        String res = m.finish();
 		        return MerkleNode.fromJSON(JSONParser.parse(res));
 			}}).when(spy).put(Mockito.any(), Mockito.any(), Mockito.any());
-		//PowerMockito.mockStatic(IPFS.class);
-		/*PowerMockito.spy(IPFS.class);
-		PowerMockito.doAnswer(new Answer<HttpURLConnection>() {
-			@Override
-			public HttpURLConnection answer(InvocationOnMock invocation) throws Throwable {
-				HttpURLConnection conn = (HttpURLConnection) invocation.callRealMethod();
-				String encoded = Base64.getEncoder().encodeToString(
-						(BasicAuthenticator.user+":"+BasicAuthenticator.pass).getBytes(StandardCharsets.UTF_8));
-				conn.setRequestProperty("Authorization", "Basic "+encoded);
-				return conn;
-			}
-		}).when(IPFS.class, "configureConnection",
-				Mockito.any(), Mockito.any(), Mockito.anyInt(), Mockito.anyInt());*/
+		
 		TestData testData = new TestData();
 		testData.text = "Yo!";
 		// The next two lines would save the testData. Unfortunately Infura returns a 403 error. So this test only reads.
