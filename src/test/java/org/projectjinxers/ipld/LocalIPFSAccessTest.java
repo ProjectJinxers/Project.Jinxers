@@ -17,12 +17,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.io.IOException;
 
-import org.ethereum.crypto.ECKey;
 import org.junit.Assert;
 import org.junit.jupiter.api.Test;
+import org.projectjinxers.account.Signer;
 import org.projectjinxers.config.Config;
 import org.projectjinxers.model.IPLDObject;
 import org.projectjinxers.model.IPLDSerializable;
+import org.projectjinxers.model.Metadata;
+import org.projectjinxers.model.ValidationContext;
 
 /**
  * Test class for saving and retrieving a simple JSON string on a local IPFS node. The out encoding has to be cbor.
@@ -48,7 +50,7 @@ class LocalIPFSAccessTest {
         multihash = context.saveObject(wrapper, null);
         Assert.assertNotNull(multihash);
         TestData read = new TestData();
-        context.loadObject(multihash, read);
+        context.loadObject(multihash, read, null);
         Assert.assertEquals(testData.text, read.text);
     }
 
@@ -57,19 +59,14 @@ class LocalIPFSAccessTest {
         private String text;
 
         @Override
-        public void read(IPLDReader reader, IPLDContext contextForRecursion) {
+        public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
+                Metadata metadata) {
             this.text = reader.readString("text");
         }
 
         @Override
-        public byte[] writeProperties(IPLDWriter writer, ECKey signingKey, IPLDContext context) throws IOException {
+        public void writeProperties(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
             writer.writeString("text", text);
-            return null;
-        }
-
-        @Override
-        public byte[] hash() {
-            return null;
         }
 
     }

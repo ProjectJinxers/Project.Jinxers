@@ -1,6 +1,7 @@
 apply plugin: 'java'
 apply plugin: 'eclipse'
 apply plugin: 'application'
+apply plugin: 'jacoco'
 
 repositories { 
     mavenCentral()
@@ -70,4 +71,9 @@ test {
     filter {
         excludeTestsMatching "org.projectjinxers.ipld.*IPFSAccessTest" // depend on locally running node or Infura
     }
+    finalizedBy jacocoTestReport
+}
+
+jacocoTestReport {
+    dependsOn test
 }

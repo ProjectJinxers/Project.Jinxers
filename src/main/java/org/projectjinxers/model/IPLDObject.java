@@ -16,8 +16,8 @@ package org.projectjinxers.model;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 
-import org.ethereum.crypto.ECKey;
 import org.ethereum.crypto.ECKey.ECDSASignature;
+import org.projectjinxers.account.Signer;
 import org.projectjinxers.ipld.IPLDContext;
 import org.projectjinxers.ipld.IPLDWriter;
 
@@ -33,8 +33,9 @@ public class IPLDObject<D extends IPLDSerializable> {
     private String multihash;
     private D mapped;
     private IPLDContext context;
+    private ValidationContext validationContext;
     private Class<D> dataClass;
-    private ECDSASignature signature;
+    private Metadata metadata;
 
     /**
      * Constructor for locally created objects. Usually the instance will be written to IPFS.
@@ -48,13 +49,15 @@ public class IPLDObject<D extends IPLDSerializable> {
     /**
      * Constructor for loaded objects or root objects that are to be loaded.
      * 
-     * @param multihash the multihash
-     * @param context   the context
-     * @param dataClass the class of the data instance
+     * @param multihash         the multihash
+     * @param context           the context
+     * @param validationContext the validation context
+     * @param dataClass         the class of the data instance
      */
-    public IPLDObject(String multihash, IPLDContext context, Class<D> dataClass) {
+    public IPLDObject(String multihash, IPLDContext context, ValidationContext validationContext, Class<D> dataClass) {
         this.multihash = multihash;
         this.context = context;
+        this.validationContext = validationContext;
         this.dataClass = dataClass;
     }
 
@@ -76,8 +79,8 @@ public class IPLDObject<D extends IPLDSerializable> {
             try {
                 Constructor<D> ctor = dataClass.getDeclaredConstructor();
                 ctor.setAccessible(true);
-                mapped = ctor.newInstance();
-                signature = context.loadObject(multihash, mapped);
+                this.mapped = ctor.newInstance();
+                this.metadata = context.loadObject(multihash, mapped, validationContext);
             }
             catch (Exception e) {
                 e.printStackTrace();
@@ -87,27 +90,46 @@ public class IPLDObject<D extends IPLDSerializable> {
     }
 
     /**
-     * Verifies the signature with the given public key.
-     * 
-     * @param publicKey the public key
-     * @return true iff the signature has been verified successfully
+     * @return the metadata (if this instance has not metadata, yet, {@link #getMapped()} is called)
      */
-    public boolean verifySignature(byte[] publicKey) {
-        return signature != null && getMapped() != null && ECKey.verify(mapped.hash(), signature, publicKey);
+    public Metadata getMetadata() {
+        if (metadata == null) {
+            getMapped();
+        }
+        return metadata;
     }
 
     /**
-     * Writes (serializes) the data instance to IPFS. Stores and returns the signature, if any.
+     * Writes (serializes) the data instance to IPFS.
      * 
-     * @param writer     takes the single properties by key
-     * @param signingKey the key for signing the hash
-     * @param context    the context
-     * @return the optional signature
+     * @param writer  takes the single properties by key
+     * @param signer  the signer for recursion
+     * @param context the context
      * @throws IOException if writing a single property fails
      */
-    public ECDSASignature write(IPLDWriter writer, ECKey signingKey, IPLDContext context) throws IOException {
-        this.signature = mapped.write(writer, signingKey, context);
-        return signature;
+    public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+        mapped.write(writer, signer, context);
+    }
+
+    /**
+     * This method is called after serializing the data. If the data indicates that signing be mandatory, the data is
+     * hashed and signed and the signature is stored in the returned metadata instance, which is stored in this object,
+     * as well.
+     * 
+     * @param signer   the signer (in case signing is mandatory)
+     * @param hashBase the data to hash and sign
+     * @return the metadata containing the signature and version
+     */
+    public Metadata signIfMandatory(Signer signer, byte[] hashBase) {
+        ECDSASignature signature;
+        if (getMapped().isSignatureMandatory()) {
+            signature = signer.sign(hashBase);
+        }
+        else {
+            signature = null;
+        }
+        this.metadata = new Metadata(mapped.getVersion(), signature);
+        return metadata;
     }
 
 }

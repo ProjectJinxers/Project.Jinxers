@@ -13,11 +13,15 @@
  */
 package org.projectjinxers.ipld;
 
-import org.ethereum.crypto.ECKey.ECDSASignature;
+import java.lang.reflect.Array;
+
+import org.projectjinxers.model.IPLDObject;
 import org.projectjinxers.model.IPLDSerializable;
+import org.projectjinxers.model.Metadata;
+import org.projectjinxers.model.ValidationContext;
 
 /**
- * Interface for reading data from IPFS.
+ * Interface for deserializing data read from IPFS.
  * 
  * @author ProjectJinxers
  */
@@ -26,13 +30,15 @@ public interface IPLDReader {
     /**
      * Reads (deserializes) the given data.
      * 
-     * @param context       the context
-     * @param bytes         the raw bytes
-     * @param emptyInstance the data model instance (will be populated with the values)
-     * @param eager         indicates whether or not links are to be resolved now (as opposed to on-demand)
-     * @return the signature of the read object (optional)
+     * @param context           the context
+     * @param validationContext the validation context
+     * @param bytes             the raw bytes
+     * @param emptyInstance     the data model instance (will be populated with the values)
+     * @param eager             indicates whether or not links are to be resolved now (as opposed to on-demand)
+     * @return the metadata of the read object
      */
-    ECDSASignature read(IPLDContext context, byte[] bytes, IPLDSerializable emptyInstance, boolean eager);
+    Metadata read(IPLDContext context, ValidationContext validationContext, byte[] bytes,
+            IPLDSerializable emptyInstance, boolean eager);
 
     /**
      * Reads a Boolean value.
@@ -75,6 +81,26 @@ public interface IPLDReader {
     String readLink(String key);
 
     /**
+     * Reads a link object value. The link is resolved if eager is true.
+     * 
+     * @param key               the key
+     * @param context           the context (not for recursion only, if null, accessing the data instance will fail)
+     * @param validationContext the validation context
+     * @param dataClass         the class of the data instances
+     * @param eager             indicates whether or not the link is to be resolved now (as opposed to on-demand)
+     * @return the link object value for the given key
+     */
+    default <D extends IPLDSerializable> IPLDObject<D> readLinkObject(String key, IPLDContext context,
+            ValidationContext validationContext, Class<D> dataClass, boolean eager) {
+        String linkMultihash = readLink(key);
+        IPLDObject<D> res = new IPLDObject<D>(linkMultihash, context, validationContext, dataClass);
+        if (eager) {
+            res.getMapped();
+        }
+        return res;
+    }
+
+    /**
      * Reads a boolean array value.
      * 
      * @param key the key
@@ -89,6 +115,22 @@ public interface IPLDReader {
      * @return the char array value for the given key
      */
     char[] readCharArray(String key);
+
+    /**
+     * Reads an int array value.
+     * 
+     * @param key the key
+     * @return the char array value for the given key
+     */
+    int[] readIntArray(String key);
+
+    /**
+     * Reads a long array value.
+     * 
+     * @param key the key
+     * @return the char array value for the given key
+     */
+    long[] readLongArray(String key);
 
     /**
      * Reads a Number array value.
@@ -113,5 +155,33 @@ public interface IPLDReader {
      * @return the links array value for the given key
      */
     String[] readLinksArray(String key);
+
+    /**
+     * Reads a link objects array value. The links are resolved if eager is true. The default implementation is complete
+     * and uses a bit of reflection.
+     * 
+     * @param key               the key
+     * @param context           the context (not for recursion only, if null, accessing the data instance of each entry
+     *                          will fail)
+     * @param validationContext the validation context
+     * @param dataClass         the class of the data instances
+     * @param eager             indicates whether or not links are to be resolved now (as opposed to on-demand)
+     * @return the link objects array value for the given key
+     */
+    default <D extends IPLDSerializable> IPLDObject<D>[] readLinkObjectsArray(String key, IPLDContext context,
+            ValidationContext validationContext, Class<D> dataClass, boolean eager) {
+        String[] linksArray = readLinksArray(key);
+        @SuppressWarnings("unchecked")
+        IPLDObject<D>[] res = (IPLDObject<D>[]) Array.newInstance(IPLDObject.class, linksArray.length);
+        int i = 0;
+        for (String link : linksArray) {
+            IPLDObject<D> linkObject = new IPLDObject<>(link, context, validationContext, dataClass);
+            if (eager) {
+                linkObject.getMapped();
+            }
+            res[i++] = linkObject;
+        }
+        return res;
+    }
 
 }

@@ -23,7 +23,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.Base64;
 
-import org.ethereum.crypto.ECKey;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -35,10 +34,13 @@ import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
+import org.projectjinxers.account.Signer;
 import org.projectjinxers.config.Config;
 import org.projectjinxers.config.TestSecretConfig;
 import org.projectjinxers.model.IPLDObject;
 import org.projectjinxers.model.IPLDSerializable;
+import org.projectjinxers.model.Metadata;
+import org.projectjinxers.model.ValidationContext;
 
 import io.ipfs.api.IPFS;
 import io.ipfs.api.JSONParser;
@@ -76,6 +78,7 @@ public class InfuraIPFSAccessTest {
             pass = config.getInfuraPass();
         }
 
+        @Override
         protected PasswordAuthentication getPasswordAuthentication() {
             return new PasswordAuthentication(user, pass.toCharArray());
         }
@@ -98,10 +101,11 @@ public class InfuraIPFSAccessTest {
         IPFSAccess access = new IPFSAccess();
         IPFS.Dag spy = PowerMockito.spy(access.ipfs.dag);
         IPLDContext context = new IPLDContext(access, IPLDEncoding.JSON, IPLDEncoding.CBOR, false) {
-            public <D extends IPLDSerializable> String saveObject(IPLDObject<D> object, ECKey signingKey)
+            @Override
+            public <D extends IPLDSerializable> String saveObject(IPLDObject<D> object, Signer signer)
                     throws IOException {
                 IPLDWriter writer = IPLDEncoding.JSON.createWriter();
-                final byte[] writtenBytes = writer.write(this, object, signingKey);
+                final byte[] writtenBytes = writer.write(this, object, signer);
                 String fileContents = new String(writtenBytes);
                 System.out.println(fileContents);
                 bytes = writtenBytes;
@@ -154,10 +158,10 @@ public class InfuraIPFSAccessTest {
         testData.text = "Yo!";
         // The next 2 lines would save the testData. Unfortunately Infura returns a 403 error. So this test only reads.
         // IPLDObject<TestData> wrapper = new IPLDObject<>(testData);
-        String multihash = "zdpuAmqZ7i5rBbkJAav81kuAZojMZcWPkHippghvi8A9VCEBT";// context.saveObject(wrapper, null);
+        String multihash = "zdpuAzDcDFcSmmSgCtV5hzQrL5JUtXu8BPyz7rvGUVsepLCcs";// context.saveObject(wrapper, null);
         Assert.assertNotNull(multihash);
         TestData read = new TestData();
-        context.loadObject(multihash, read);
+        context.loadObject(multihash, read, null);
         Assert.assertEquals(testData.text, read.text);
     }
 
@@ -166,19 +170,14 @@ public class InfuraIPFSAccessTest {
         private String text;
 
         @Override
-        public void read(IPLDReader reader, IPLDContext contextForRecursion) {
+        public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
+                Metadata metadata) {
             this.text = reader.readString("text");
         }
 
         @Override
-        public byte[] writeProperties(IPLDWriter writer, ECKey signingKey, IPLDContext context) throws IOException {
+        public void writeProperties(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
             writer.writeString("text", text);
-            return null;
-        }
-
-        @Override
-        public byte[] hash() {
-            return null;
         }
 
     }

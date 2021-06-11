@@ -15,12 +15,12 @@ package org.projectjinxers.ipld;
 
 import java.io.IOException;
 
-import org.ethereum.crypto.ECKey;
+import org.projectjinxers.account.Signer;
 import org.projectjinxers.model.IPLDObject;
 import org.projectjinxers.model.IPLDSerializable;
 
 /**
- * Interface for writing data to IPFS.
+ * Interface for serializing data for sending it to IPFS.
  * 
  * @author ProjectJinxers
  */
@@ -29,16 +29,27 @@ public interface IPLDWriter {
     /**
      * Writes (serializes) the given object.
      * 
-     * @param <D>        the type of the data instance to write (contained in object)
-     * @param context    the context
-     * @param object     the object to write
-     * @param signingKey the optional signing key (if present, and the concrete data instance type supports signing, a
-     *                   signature is created and stored in the given object)
+     * @param <D>     the type of the data instance to write (contained in object)
+     * @param context the context
+     * @param object  the object to write
+     * @param signer  the optional signer (if present, and the concrete data instance type supports signing, a signature
+     *                is created and stored in the metadata of the given object)
      * @return the serialized form of the given object
      * @throws IOException if single write operations fail
      */
-    <D extends IPLDSerializable> byte[] write(IPLDContext context, IPLDObject<D> object, ECKey signingKey)
+    <D extends IPLDSerializable> byte[] write(IPLDContext context, IPLDObject<D> object, Signer signer)
             throws IOException;
+
+    /**
+     * Calculates the bytes to hash for creating or verifying a signature.
+     * 
+     * @param <D>     the type of the data instance
+     * @param context the context
+     * @param data    the data instance
+     * @return the bytes to hash
+     * @throws IOException if single write operations fail
+     */
+    <D extends IPLDSerializable> byte[] hashBase(IPLDContext context, D data) throws IOException;
 
     /**
      * Writes a boolean property.
@@ -86,6 +97,23 @@ public interface IPLDWriter {
     void writeLink(String key, String link) throws IOException;
 
     /**
+     * Writes a link property. If the given link object has no multihash, it will be saved recursively.
+     * 
+     * @param key     the key
+     * @param link    the link
+     * @param signer  the signer for recursion
+     * @param context the context for recursion
+     * @throws IOException if writing fails
+     */
+    default void writeLink(String key, IPLDObject<?> link, Signer signer, IPLDContext context) throws IOException {
+        String multihash = link.getMultihash();
+        if (multihash == null) {
+            multihash = context.saveObject(link, signer);
+        }
+        writeLink(key, multihash);
+    }
+
+    /**
      * Writes a boolean array property.
      * 
      * @param key   the key
@@ -102,6 +130,24 @@ public interface IPLDWriter {
      * @throws IOException if writing fails
      */
     void writeCharArray(String key, char[] value) throws IOException;
+
+    /**
+     * Writes a int array property.
+     * 
+     * @param key   the key
+     * @param value the value
+     * @throws IOException if writing fails
+     */
+    void writeIntArray(String key, int[] value) throws IOException;
+
+    /**
+     * Writes a long array property.
+     * 
+     * @param key   the key
+     * @param value the value
+     * @throws IOException if writing fails
+     */
+    void writeLongArray(String key, long[] value) throws IOException;
 
     /**
      * Writes a Number array property.
@@ -129,5 +175,16 @@ public interface IPLDWriter {
      * @throws IOException if writing fails
      */
     void writeLinkArray(String key, String[] links) throws IOException;
+
+    /**
+     * Recursively writes a link array property. All links without multihash will be saved recursively.
+     * 
+     * @param key     the key
+     * @param links   the links
+     * @param signer  the signer for recursion
+     * @param context the context for recursion
+     * @throws IOException if writing fails
+     */
+    void writeLinkArray(String key, IPLDObject<?>[] links, Signer signer, IPLDContext context) throws IOException;
 
 }

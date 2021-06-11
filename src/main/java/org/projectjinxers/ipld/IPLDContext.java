@@ -15,10 +15,12 @@ package org.projectjinxers.ipld;
 
 import java.io.IOException;
 
-import org.ethereum.crypto.ECKey;
 import org.ethereum.crypto.ECKey.ECDSASignature;
+import org.projectjinxers.account.Signer;
 import org.projectjinxers.model.IPLDObject;
 import org.projectjinxers.model.IPLDSerializable;
+import org.projectjinxers.model.Metadata;
+import org.projectjinxers.model.ValidationContext;
 
 import io.ipfs.api.MerkleNode;
 import io.ipfs.cid.Cid;
@@ -53,16 +55,16 @@ public class IPLDContext {
     /**
      * Serializes and stores the given object in IPFS.
      * 
-     * @param <D>        the type of the data instance to write (contained in object)
-     * @param object     the object to serialize and store
-     * @param signingKey the optional signing key (if present, and the concrete data instance type supports signing, a
-     *                   signature is created and stored in the given object)
+     * @param <D>    the type of the data instance to write (contained in object)
+     * @param object the object to serialize and store
+     * @param signer the optional signer key (if present, and the concrete data instance type supports signing, a
+     *               signature is created and stored in the metadata of the given object)
      * @return the string form of the multihash for the saved object
      * @throws IOException if a single write operation fails
      */
-    public <D extends IPLDSerializable> String saveObject(IPLDObject<D> object, ECKey signingKey) throws IOException {
+    public <D extends IPLDSerializable> String saveObject(IPLDObject<D> object, Signer signer) throws IOException {
         IPLDWriter writer = in.createWriter();
-        byte[] bytes = writer.write(this, object, signingKey);
+        byte[] bytes = writer.write(this, object, signer);
         MerkleNode node = access.ipfs.dag.put(in.getIn(), bytes, out.getIn());
         return node.hash.toString();
     }
@@ -73,17 +75,39 @@ public class IPLDContext {
      * @param <D>           the type of the data instance to read
      * @param multihash     the multihash of the object to load
      * @param emptyInstance the empty data instance
-     * @return the optional signature (read, no signing happens here)
+     * @return the metadata of the read object containing the optional signature (read, no signing happens here)
      * @throws IOException if a single read operation fails
      */
-    public <D extends IPLDSerializable> ECDSASignature loadObject(String multihash, D emptyInstance)
-            throws IOException {
+    public <D extends IPLDSerializable> Metadata loadObject(String multihash, D emptyInstance,
+            ValidationContext validationContext) throws IOException {
         byte[] bytes = access.ipfs.dag.get(Cid.decode(multihash));
         if (bytes == null) {
             return null;
         }
         IPLDReader reader = out.createReader();
-        return reader.read(this, bytes, emptyInstance, eager);
+        return reader.read(this, validationContext, bytes, emptyInstance, eager);
+    }
+
+    /**
+     * Verifies the signature of the given object with the given public key.
+     * 
+     * @param object    the object
+     * @param signer    recreates the hash that had been signed and verifies the signature
+     * @param publicKey the public key
+     * @return true iff the signature has been verified successfully
+     */
+    public <D extends IPLDSerializable> boolean verifySignature(IPLDObject<D> object, Signer verifier,
+            byte[] publicKey) {
+        IPLDWriter writer = in.createWriter();
+        try {
+            byte[] hashBase = writer.hashBase(this, object.getMapped());
+            ECDSASignature signature = object.getMetadata().getSignature();
+            return signature != null && verifier.verifySignature(signature, hashBase, publicKey);
+        }
+        catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 
 }
