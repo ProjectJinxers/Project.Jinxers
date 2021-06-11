@@ -51,7 +51,6 @@ class IPLDSerializationTest {
 
     }
 
-    private IPFSAccess access;
     private IPLDContext context;
     private IPLDWriter writer;
 
@@ -59,8 +58,7 @@ class IPLDSerializationTest {
 
     @BeforeEach
     void setup() {
-        access = new IPFSAccess();
-        context = new IPLDContext(access, IPLDEncoding.JSON, IPLDEncoding.JSON, false);
+        context = new IPLDContext(null, IPLDEncoding.JSON, IPLDEncoding.JSON, false);
         writer = IPLDEncoding.JSON.createWriter();
         sign = false;
     }

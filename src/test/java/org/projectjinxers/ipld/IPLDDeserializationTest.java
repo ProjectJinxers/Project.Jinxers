@@ -48,14 +48,12 @@ class IPLDDeserializationTest {
 
     }
 
-    private IPFSAccess access;
     private IPLDContext context;
     private IPLDReader reader;
 
     @BeforeEach
     void setup() {
-        access = new IPFSAccess();
-        context = new IPLDContext(access, IPLDEncoding.JSON, IPLDEncoding.JSON, false);
+        context = new IPLDContext(null, IPLDEncoding.JSON, IPLDEncoding.JSON, false);
         reader = IPLDEncoding.JSON.createReader();
     }
 
