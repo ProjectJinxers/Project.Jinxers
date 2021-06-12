@@ -21,45 +21,43 @@ import org.projectjinxers.ipld.IPLDReader;
 import org.projectjinxers.ipld.IPLDWriter;
 
 /**
- * Review instances represent users' reviews of a document.
+ * Granted ownerships can be validated by checking the existence of specific instances of this class.
  * 
  * @author ProjectJinxers
  */
-public class Review extends Document implements DocumentAction, Loader<Review> {
+public class GrantedOwnership implements IPLDSerializable, Loader<GrantedOwnership> {
 
-    private static final String KEY_APPROVE = "a";
-    static final String KEY_DOCUMENT = "o";
+    private static final String KEY_DOCUMENT = "d";
+    private static final String KEY_MODEL_STATE = "m";
 
-    private Boolean approve;
     private IPLDObject<Document> document;
+    private IPLDObject<ModelState> modelState; // at request resolution time
 
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {
-        super.read(reader, context, validationContext, eager, metadata);
-        this.approve = reader.readBoolean(KEY_APPROVE);
         this.document = reader.readLinkObject(KEY_DOCUMENT, context, validationContext, LoaderFactory.DOCUMENT, eager);
+        this.modelState = reader.readLinkObject(KEY_MODEL_STATE, context, validationContext, LoaderFactory.MODEL_STATE,
+                eager);
     }
 
     @Override
     public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
-        super.write(writer, signer, context);
-        writer.writeBoolean(KEY_APPROVE, approve);
         writer.writeLink(KEY_DOCUMENT, document, signer, null);
+        writer.writeLink(KEY_MODEL_STATE, modelState, signer, null);
     }
 
-    @Override
     public IPLDObject<Document> getDocument() {
         return document;
     }
 
     @Override
-    public Review getOrCreateDataInstance(IPLDReader reader, Metadata metadata) {
+    public GrantedOwnership getOrCreateDataInstance(IPLDReader reader, Metadata metadata) {
         return this;
     }
 
     @Override
-    public Review getLoaded() {
+    public GrantedOwnership getLoaded() {
         return this;
     }
 

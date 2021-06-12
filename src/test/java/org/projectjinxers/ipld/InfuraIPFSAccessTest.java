@@ -103,8 +103,7 @@ public class InfuraIPFSAccessTest {
         IPFS.Dag spy = PowerMockito.spy(access.ipfs.dag);
         IPLDContext context = new IPLDContext(access, IPLDEncoding.JSON, IPLDEncoding.CBOR, false) {
             @Override
-            public String saveObject(IPLDObject<?> object, Signer signer)
-                    throws IOException {
+            public String saveObject(IPLDObject<?> object, Signer signer) throws IOException {
                 IPLDWriter writer = IPLDEncoding.JSON.createWriter();
                 final byte[] writtenBytes = writer.write(this, object, signer);
                 String fileContents = new String(writtenBytes);
@@ -187,7 +186,7 @@ public class InfuraIPFSAccessTest {
         }
 
         @Override
-        public void writeProperties(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+        public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
             writer.writeString("text", text);
         }
 

@@ -41,8 +41,7 @@ public interface IPLDWriter {
      * @return the serialized form of the given object
      * @throws IOException if single write operations fail
      */
-    byte[] write(IPLDContext context, IPLDObject<?> object, Signer signer)
-            throws IOException;
+    byte[] write(IPLDContext context, IPLDObject<?> object, Signer signer) throws IOException;
 
     /**
      * Calculates the bytes to hash for creating or verifying a signature.
@@ -61,7 +60,21 @@ public interface IPLDWriter {
      * @param value the value
      * @throws IOException if writing fails
      */
-    void writeBoolean(String key, boolean value) throws IOException;
+    void writeBoolean(String key, Boolean value) throws IOException;
+
+    /**
+     * Convenience method for writes a boolean property if its value is true only by default. Can still be overridden,
+     * in case false also has to be written.
+     * 
+     * @param key   the key
+     * @param value the value
+     * @throws IOException if writing fails
+     */
+    default void writeIfTrue(String key, boolean value) throws IOException {
+        if (value) {
+            writeBoolean(key, Boolean.TRUE);
+        }
+    }
 
     /**
      * Writes a char property.
@@ -70,7 +83,7 @@ public interface IPLDWriter {
      * @param value the value
      * @throws IOException if writing fails
      */
-    void writeChar(String key, char value) throws IOException;
+    void writeChar(String key, Character value) throws IOException;
 
     /**
      * Writes a Number property.
@@ -105,7 +118,7 @@ public interface IPLDWriter {
      * @param key     the key
      * @param link    the link
      * @param signer  the signer for recursion
-     * @param context the context for recursion
+     * @param context the context for recursion (you can pass null, if it is an error, if the link does not exist yet)
      * @throws IOException if writing fails
      */
     default void writeLink(String key, IPLDObject<?> link, Signer signer, IPLDContext context) throws IOException {
@@ -197,7 +210,8 @@ public interface IPLDWriter {
      * @param key     the key
      * @param links   the links
      * @param signer  the signer for recursion
-     * @param context the context for recursion
+     * @param context the context for recursion (you can pass null, if it is an error, if at least one link does not
+     *                exist yet)
      * @throws IOException if writing fails
      */
     void writeLinkArray(String key, IPLDObject<?>[] links, Signer signer, IPLDContext context) throws IOException;
@@ -210,11 +224,12 @@ public interface IPLDWriter {
      * @param key     the key
      * @param links   the links
      * @param signer  the signer for recursion
-     * @param context the context for recursion
+     * @param context the context for recursion (you can pass null, if it is an error, if at least one link does not
+     *                exist yet)
      * @throws IOException if writing fails
      */
-    default void writeLinkObjects(String key, Map<String, IPLDObject<?>> links, Signer signer, IPLDContext context)
-            throws IOException {
+    default <D extends IPLDSerializable> void writeLinkObjects(String key, Map<String, IPLDObject<D>> links,
+            Signer signer, IPLDContext context) throws IOException {
         if (links != null) {
             IPLDObject<?>[] linkArray = (IPLDObject<?>[]) Array.newInstance(IPLDObject.class, links.size());
             writeLinkArray(key, links.values().toArray(linkArray), signer, context);

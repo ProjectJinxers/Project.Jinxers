@@ -16,51 +16,49 @@ package org.projectjinxers.model;
 import java.io.IOException;
 
 import org.projectjinxers.account.Signer;
+import org.projectjinxers.ipld.ByteCodec;
 import org.projectjinxers.ipld.IPLDContext;
 import org.projectjinxers.ipld.IPLDReader;
 import org.projectjinxers.ipld.IPLDWriter;
 
 /**
- * Review instances represent users' reviews of a document.
+ * A ValueVote is a vote, which carries an arbitrary value. Every vote of an anonymous voting is automatically a an
+ * instance of this class.
  * 
  * @author ProjectJinxers
  */
-public class Review extends Document implements DocumentAction, Loader<Review> {
+public class ValueVote extends AbstractVote {
 
-    private static final String KEY_APPROVE = "a";
-    static final String KEY_DOCUMENT = "o";
+    private static final String KEY_STRING_VALUE = "s";
+    private static final String KEY_BYTES_VALUE = "b";
 
-    private Boolean approve;
-    private IPLDObject<Document> document;
+    private Object value;
 
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {
         super.read(reader, context, validationContext, eager, metadata);
-        this.approve = reader.readBoolean(KEY_APPROVE);
-        this.document = reader.readLinkObject(KEY_DOCUMENT, context, validationContext, LoaderFactory.DOCUMENT, eager);
+        String stringValue = reader.readString(KEY_STRING_VALUE);
+        if (stringValue != null) {
+            this.value = stringValue;
+        }
+        byte[] bytesValue = reader.readByteArray(KEY_BYTES_VALUE, ByteCodec.DEFAULT);
+        if (bytesValue != null) {
+            this.value = bytesValue;
+        }
+        else {
+            this.value = null;
+        }
     }
 
     @Override
     public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
-        super.write(writer, signer, context);
-        writer.writeBoolean(KEY_APPROVE, approve);
-        writer.writeLink(KEY_DOCUMENT, document, signer, null);
-    }
-
-    @Override
-    public IPLDObject<Document> getDocument() {
-        return document;
-    }
-
-    @Override
-    public Review getOrCreateDataInstance(IPLDReader reader, Metadata metadata) {
-        return this;
-    }
-
-    @Override
-    public Review getLoaded() {
-        return this;
+        if (value instanceof byte[]) {
+            writer.writeByteArray(KEY_BYTES_VALUE, (byte[]) value, ByteCodec.DEFAULT);
+        }
+        else if (value instanceof String) {
+            writer.writeString(KEY_STRING_VALUE, (String) value);
+        }
     }
 
 }

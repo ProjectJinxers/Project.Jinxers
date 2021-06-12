@@ -61,8 +61,8 @@ public interface IPLDReader {
      * @param eager             indicates whether or not links are to be resolved now (as opposed to on-demand)
      * @return the metadata of the read object
      */
-    Metadata read(IPLDContext context, ValidationContext validationContext, byte[] bytes,
-            Loader<?> loader, boolean eager);
+    Metadata read(IPLDContext context, ValidationContext validationContext, byte[] bytes, Loader<?> loader,
+            boolean eager);
 
     /**
      * Checks if a primitive value for the given key is present.

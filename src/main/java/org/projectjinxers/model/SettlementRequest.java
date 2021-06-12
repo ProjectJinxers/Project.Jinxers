@@ -21,30 +21,28 @@ import org.projectjinxers.ipld.IPLDReader;
 import org.projectjinxers.ipld.IPLDWriter;
 
 /**
- * Review instances represent users' reviews of a document.
+ * Users can issue SettlementRequests to initiate the settlement of a document (discussion).
  * 
  * @author ProjectJinxers
  */
-public class Review extends Document implements DocumentAction, Loader<Review> {
+public class SettlementRequest implements DocumentAction, Loader<SettlementRequest> {
 
-    private static final String KEY_APPROVE = "a";
-    static final String KEY_DOCUMENT = "o";
+    private static final String KEY_TIMESTAMP = "t";
+    private static final String KEY_DOCUMENT = "d";
 
-    private Boolean approve;
+    private long timestamp;
     private IPLDObject<Document> document;
 
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {
-        super.read(reader, context, validationContext, eager, metadata);
-        this.approve = reader.readBoolean(KEY_APPROVE);
+        this.timestamp = reader.readNumber(KEY_TIMESTAMP).longValue();
         this.document = reader.readLinkObject(KEY_DOCUMENT, context, validationContext, LoaderFactory.DOCUMENT, eager);
     }
 
     @Override
     public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
-        super.write(writer, signer, context);
-        writer.writeBoolean(KEY_APPROVE, approve);
+        writer.writeNumber(KEY_TIMESTAMP, timestamp);
         writer.writeLink(KEY_DOCUMENT, document, signer, null);
     }
 
@@ -54,12 +52,12 @@ public class Review extends Document implements DocumentAction, Loader<Review> {
     }
 
     @Override
-    public Review getOrCreateDataInstance(IPLDReader reader, Metadata metadata) {
+    public SettlementRequest getOrCreateDataInstance(IPLDReader reader, Metadata metadata) {
         return this;
     }
 
     @Override
-    public Review getLoaded() {
+    public SettlementRequest getLoaded() {
         return this;
     }
 

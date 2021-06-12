@@ -59,8 +59,8 @@ public class IPLDJsonReader implements IPLDReader {
     }
 
     @Override
-    public Metadata read(IPLDContext context, ValidationContext validationContext, byte[] bytes,
-            Loader<?> loader, boolean eager) {
+    public Metadata read(IPLDContext context, ValidationContext validationContext, byte[] bytes, Loader<?> loader,
+            boolean eager) {
         ECDSASignature signature = null;
         int version = 0;
         JsonElement element = JsonParser.parseReader(new InputStreamReader(new ByteArrayInputStream(bytes)));

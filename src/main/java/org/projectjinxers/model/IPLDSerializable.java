@@ -31,8 +31,8 @@ public interface IPLDSerializable {
     /**
      * The version of a stored instance is stored with it in the metadata object. This enables code changes in data
      * model classes, that also change hashes (the ones for signatures and multihashes, as well). Method implementations
-     * of {@link #read(IPLDReader, IPLDContext, boolean)} and {@link #writeProperties(IPLDWriter, ECKey, IPLDContext)}
-     * must respect the version value. The default implementation returns 0.
+     * of {@link #read(IPLDReader, IPLDContext, boolean)} and {@link #write(IPLDWriter, ECKey, IPLDContext)} must
+     * respect the version value. The default implementation returns 0.
      * 
      * @return the version (default 0)
      */
@@ -65,20 +65,6 @@ public interface IPLDSerializable {
             Metadata metadata);
 
     /**
-     * Writes (serializes) the single properties. This default implementation calls
-     * {@link #writeProperties(ECKey, IPLDContext)} and, if that returned a non-null hash, signs that hash with the
-     * given key.
-     * 
-     * @param writer  takes the single values by key
-     * @param signer  the signer (for recursion
-     * @param context the context (for recursion)
-     * @throws IOException if writing a single property fails
-     */
-    default void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
-        writeProperties(writer, signer, context);
-    }
-
-    /**
      * Writes (serializes) the single properties.
      * 
      * @param writer  takes the single values by key
@@ -86,6 +72,6 @@ public interface IPLDSerializable {
      * @param context the context (for recursion)
      * @throws IOException if writing a single property fails
      */
-    void writeProperties(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException;
+    void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException;
 
 }

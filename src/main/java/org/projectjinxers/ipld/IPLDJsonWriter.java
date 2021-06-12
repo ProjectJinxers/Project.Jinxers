@@ -43,8 +43,7 @@ public class IPLDJsonWriter implements IPLDWriter {
     }
 
     @Override
-    public byte[] write(IPLDContext context, IPLDObject<?> object, Signer signer)
-            throws IOException {
+    public byte[] write(IPLDContext context, IPLDObject<?> object, Signer signer) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         jsonWriter = new JsonWriter(new BufferedWriter(new OutputStreamWriter(baos)));
         jsonWriter.beginObject().name(IPLDJsonReader.KEY_DATA).beginObject();
@@ -82,13 +81,17 @@ public class IPLDJsonWriter implements IPLDWriter {
     }
 
     @Override
-    public void writeBoolean(String key, boolean value) throws IOException {
-        jsonWriter.name(key).value(value);
+    public void writeBoolean(String key, Boolean value) throws IOException {
+        if (value != null) {
+            jsonWriter.name(key).value(value);
+        }
     }
 
     @Override
-    public void writeChar(String key, char value) throws IOException {
-        jsonWriter.name(key).value(value);
+    public void writeChar(String key, Character value) throws IOException {
+        if (value != null) {
+            jsonWriter.name(key).value(value);
+        }
     }
 
     @Override

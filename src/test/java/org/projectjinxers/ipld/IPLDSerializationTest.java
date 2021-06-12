@@ -73,7 +73,7 @@ class IPLDSerializationTest {
         }
 
         @Override
-        public void writeProperties(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+        public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
             writer.writeNumber("value", value);
         }
 
@@ -96,7 +96,7 @@ class IPLDSerializationTest {
         private boolean b;
 
         @Override
-        public void writeProperties(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+        public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
             writer.writeChar("c", c);
             writer.writeString("s", s);
             writer.writeBoolean("b", b);
@@ -121,7 +121,7 @@ class IPLDSerializationTest {
         private String link;
 
         @Override
-        public void writeProperties(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+        public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
             writer.writeLink("link", link);
         }
 
@@ -142,7 +142,7 @@ class IPLDSerializationTest {
         private IPLDObject<?> link;
 
         @Override
-        public void writeProperties(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+        public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
             writer.writeLink("link", link, signer, context);
         }
 
@@ -168,7 +168,7 @@ class IPLDSerializationTest {
         private int[] ints;
 
         @Override
-        public void writeProperties(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+        public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
             writer.writeIntArray("ints", ints);
         }
 
@@ -189,7 +189,7 @@ class IPLDSerializationTest {
         private String[] strings;
 
         @Override
-        public void writeProperties(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+        public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
             writer.writeStringArray("strings", strings);
         }
 
@@ -210,7 +210,7 @@ class IPLDSerializationTest {
         private String[] links;
 
         @Override
-        public void writeProperties(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+        public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
             writer.writeLinkArray("links", links);
         }
 
@@ -231,7 +231,7 @@ class IPLDSerializationTest {
         private IPLDObject<?>[] links;
 
         @Override
-        public void writeProperties(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+        public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
             writer.writeLinkArray("links", links, signer, context);
         }
 

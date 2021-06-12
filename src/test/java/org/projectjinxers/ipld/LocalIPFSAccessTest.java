@@ -76,7 +76,7 @@ class LocalIPFSAccessTest {
         }
 
         @Override
-        public void writeProperties(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+        public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
             writer.writeString("text", text);
         }
 

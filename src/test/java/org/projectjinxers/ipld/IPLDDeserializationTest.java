@@ -54,7 +54,7 @@ class IPLDDeserializationTest {
         }
 
         @Override
-        default void writeProperties(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+        default void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
 
         }
 

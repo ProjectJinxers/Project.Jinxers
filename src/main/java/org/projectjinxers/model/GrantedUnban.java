@@ -21,45 +21,39 @@ import org.projectjinxers.ipld.IPLDReader;
 import org.projectjinxers.ipld.IPLDWriter;
 
 /**
- * Review instances represent users' reviews of a document.
+ * Granted unbans can be validated by checking the existence of specific instances of this class.
  * 
  * @author ProjectJinxers
  */
-public class Review extends Document implements DocumentAction, Loader<Review> {
+public class GrantedUnban implements IPLDSerializable, Loader<GrantedUnban> {
 
-    private static final String KEY_APPROVE = "a";
-    static final String KEY_DOCUMENT = "o";
+    private static final String KEY_UNBAN_REQUEST = "u";
 
-    private Boolean approve;
-    private IPLDObject<Document> document;
+    private IPLDObject<UnbanRequest> unbanRequest;
 
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {
-        super.read(reader, context, validationContext, eager, metadata);
-        this.approve = reader.readBoolean(KEY_APPROVE);
-        this.document = reader.readLinkObject(KEY_DOCUMENT, context, validationContext, LoaderFactory.DOCUMENT, eager);
+        this.unbanRequest = reader.readLinkObject(KEY_UNBAN_REQUEST, context, validationContext,
+                LoaderFactory.UNBAN_REQUEST, eager);
     }
 
     @Override
     public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
-        super.write(writer, signer, context);
-        writer.writeBoolean(KEY_APPROVE, approve);
-        writer.writeLink(KEY_DOCUMENT, document, signer, null);
+        writer.writeLink(KEY_UNBAN_REQUEST, unbanRequest, signer, null);
+    }
+
+    public IPLDObject<UnbanRequest> getUnbanRequest() {
+        return unbanRequest;
     }
 
     @Override
-    public IPLDObject<Document> getDocument() {
-        return document;
-    }
-
-    @Override
-    public Review getOrCreateDataInstance(IPLDReader reader, Metadata metadata) {
+    public GrantedUnban getOrCreateDataInstance(IPLDReader reader, Metadata metadata) {
         return this;
     }
 
     @Override
-    public Review getLoaded() {
+    public GrantedUnban getLoaded() {
         return this;
     }
 

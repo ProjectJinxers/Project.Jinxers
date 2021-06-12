@@ -16,51 +16,54 @@ package org.projectjinxers.model;
 import java.io.IOException;
 
 import org.projectjinxers.account.Signer;
+import org.projectjinxers.ipld.ByteCodec;
 import org.projectjinxers.ipld.IPLDContext;
 import org.projectjinxers.ipld.IPLDReader;
 import org.projectjinxers.ipld.IPLDWriter;
 
 /**
- * Review instances represent users' reviews of a document.
+ * Abstract base implementation of the Vote interface.
  * 
  * @author ProjectJinxers
  */
-public class Review extends Document implements DocumentAction, Loader<Review> {
+public abstract class AbstractVote implements Vote {
 
-    private static final String KEY_APPROVE = "a";
-    static final String KEY_DOCUMENT = "o";
+    private static final String KEY_INVITATION_KEY = "i";
+    private static final String KEY_READ_VALUE = "r";
+    private static final String KEY_VALUE_HASH_OBFUSCATION = "o";
 
-    private Boolean approve;
-    private IPLDObject<Document> document;
+    private byte[] invitationKey;
+    private boolean readValue;
+    private int valueHashObfuscation;
 
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {
-        super.read(reader, context, validationContext, eager, metadata);
-        this.approve = reader.readBoolean(KEY_APPROVE);
-        this.document = reader.readLinkObject(KEY_DOCUMENT, context, validationContext, LoaderFactory.DOCUMENT, eager);
+        this.invitationKey = reader.readByteArray(KEY_INVITATION_KEY, ByteCodec.DEFAULT);
+        this.readValue = Boolean.TRUE.equals(reader.readBoolean(KEY_READ_VALUE));
+        this.valueHashObfuscation = reader.readNumber(KEY_VALUE_HASH_OBFUSCATION).intValue();
     }
 
     @Override
     public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
-        super.write(writer, signer, context);
-        writer.writeBoolean(KEY_APPROVE, approve);
-        writer.writeLink(KEY_DOCUMENT, document, signer, null);
+        writer.writeByteArray(KEY_INVITATION_KEY, invitationKey, ByteCodec.DEFAULT);
+        writer.writeIfTrue(KEY_READ_VALUE, readValue);
+        writer.writeNumber(KEY_VALUE_HASH_OBFUSCATION, valueHashObfuscation);
     }
 
     @Override
-    public IPLDObject<Document> getDocument() {
-        return document;
+    public byte[] getInvitationKey() {
+        return invitationKey;
     }
 
     @Override
-    public Review getOrCreateDataInstance(IPLDReader reader, Metadata metadata) {
-        return this;
+    public boolean isReadValue() {
+        return readValue;
     }
 
     @Override
-    public Review getLoaded() {
-        return this;
+    public int getValueHashObfuscation() {
+        return valueHashObfuscation;
     }
 
 }

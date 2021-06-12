@@ -21,46 +21,27 @@ import org.projectjinxers.ipld.IPLDReader;
 import org.projectjinxers.ipld.IPLDWriter;
 
 /**
- * Review instances represent users' reviews of a document.
+ * A simple Vote for an unanonymous Voting where users can select 'yes', 'no' and nothing (e.g. maybe).
  * 
  * @author ProjectJinxers
  */
-public class Review extends Document implements DocumentAction, Loader<Review> {
+public class YesNoMaybeVote extends AbstractVote {
 
-    private static final String KEY_APPROVE = "a";
-    static final String KEY_DOCUMENT = "o";
+    static final String KEY_BOOLEAN_VALUE = "B";
 
-    private Boolean approve;
-    private IPLDObject<Document> document;
+    private Boolean value;
 
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {
         super.read(reader, context, validationContext, eager, metadata);
-        this.approve = reader.readBoolean(KEY_APPROVE);
-        this.document = reader.readLinkObject(KEY_DOCUMENT, context, validationContext, LoaderFactory.DOCUMENT, eager);
+        this.value = reader.readBoolean(KEY_BOOLEAN_VALUE);
     }
 
     @Override
     public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
         super.write(writer, signer, context);
-        writer.writeBoolean(KEY_APPROVE, approve);
-        writer.writeLink(KEY_DOCUMENT, document, signer, null);
-    }
-
-    @Override
-    public IPLDObject<Document> getDocument() {
-        return document;
-    }
-
-    @Override
-    public Review getOrCreateDataInstance(IPLDReader reader, Metadata metadata) {
-        return this;
-    }
-
-    @Override
-    public Review getLoaded() {
-        return this;
+        writer.writeBoolean(KEY_BOOLEAN_VALUE, value);
     }
 
 }

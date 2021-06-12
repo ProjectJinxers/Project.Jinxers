@@ -21,30 +21,34 @@ import org.projectjinxers.ipld.IPLDReader;
 import org.projectjinxers.ipld.IPLDWriter;
 
 /**
- * Review instances represent users' reviews of a document.
+ * Ownership requests can be issued if a user wants to take ownership of an abandoned document.
  * 
  * @author ProjectJinxers
  */
-public class Review extends Document implements DocumentAction, Loader<Review> {
+public class OwnershipRequest extends ToggleRequest implements DocumentAction, Loader<OwnershipRequest> {
 
-    private static final String KEY_APPROVE = "a";
-    static final String KEY_DOCUMENT = "o";
+    private static final String KEY_ANONYMOUS_VOTING = "n";
+    private static final String KEY_VOTING_HASH_SEED = "h";
+    private static final String KEY_DOCUMENT = "d";
 
-    private Boolean approve;
+    private boolean anonymousVoting;
+    private int votingHashSeed;
     private IPLDObject<Document> document;
 
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {
         super.read(reader, context, validationContext, eager, metadata);
-        this.approve = reader.readBoolean(KEY_APPROVE);
+        this.anonymousVoting = Boolean.TRUE.equals(reader.readBoolean(KEY_ANONYMOUS_VOTING));
+        this.votingHashSeed = reader.readNumber(KEY_VOTING_HASH_SEED).intValue();
         this.document = reader.readLinkObject(KEY_DOCUMENT, context, validationContext, LoaderFactory.DOCUMENT, eager);
     }
 
     @Override
     public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
         super.write(writer, signer, context);
-        writer.writeBoolean(KEY_APPROVE, approve);
+        writer.writeIfTrue(KEY_ANONYMOUS_VOTING, anonymousVoting);
+        writer.writeNumber(KEY_VOTING_HASH_SEED, votingHashSeed);
         writer.writeLink(KEY_DOCUMENT, document, signer, null);
     }
 
@@ -54,12 +58,12 @@ public class Review extends Document implements DocumentAction, Loader<Review> {
     }
 
     @Override
-    public Review getOrCreateDataInstance(IPLDReader reader, Metadata metadata) {
+    public OwnershipRequest getOrCreateDataInstance(IPLDReader reader, Metadata metadata) {
         return this;
     }
 
     @Override
-    public Review getLoaded() {
+    public OwnershipRequest getLoaded() {
         return this;
     }
 
