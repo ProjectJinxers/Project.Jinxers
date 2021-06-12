@@ -13,18 +13,25 @@
  */
 package org.projectjinxers.config;
 
-import java.util.Map;
-
 /**
  * Corresponds to the test-secret-config.yml resource file.
  * 
  * @author ProjectJinxers
  */
-public class TestSecretConfig extends YamlConfig {
+public class TestSecretConfig extends YamlConfig<TestSecretConfig.Root> {
 
-    private static final String KEY_INFURA = "infura";
-    private static final String KEY_INFURA_USER = "user";
-    private static final String KEY_INFURA_PASS = "pass";
+    static class Root {
+
+        public Infura infura;
+
+    }
+
+    static class Infura {
+
+        public String user;
+        public String pass;
+
+    }
 
     private static TestSecretConfig sharedInstance;
 
@@ -38,28 +45,22 @@ public class TestSecretConfig extends YamlConfig {
         return sharedInstance;
     }
 
-    private String infuraUser;
-    private String infuraPass;
-
     private TestSecretConfig() {
-        super("test-secret-config.yml");
-        Map<?, ?> infura = getRootObject(KEY_INFURA);
-        this.infuraUser = (String) infura.get(KEY_INFURA_USER);
-        this.infuraPass = (String) infura.get(KEY_INFURA_PASS);
+        super("test-secret-config.yml", Root.class);
     }
 
     /**
      * @return the Infura user (usually the project ID)
      */
     public String getInfuraUser() {
-        return infuraUser;
+        return root.infura.user;
     }
 
     /**
      * @return the Infura password (usually the project secret)
      */
     public String getInfuraPass() {
-        return infuraPass;
+        return root.infura.pass;
     }
 
 }

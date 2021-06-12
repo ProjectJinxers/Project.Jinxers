@@ -20,7 +20,7 @@ import java.util.Map;
 
 import org.apache.commons.codec.binary.Base64;
 import org.projectjinxers.account.Signer;
-import org.projectjinxers.ipld.IPLDContext;
+import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.ipld.IPLDReader;
 import org.projectjinxers.ipld.IPLDReader.KeyProvider;
 import org.projectjinxers.ipld.IPLDWriter;

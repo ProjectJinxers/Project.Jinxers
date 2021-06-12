@@ -18,7 +18,11 @@ package org.projectjinxers.config;
  * 
  * @author ProjectJinxers
  */
-public class SecretConfig extends YamlConfig {
+public class SecretConfig extends YamlConfig<SecretConfig.Root> {
+
+    static class Root {
+
+    }
 
     private static SecretConfig sharedInstance;
 
@@ -33,7 +37,7 @@ public class SecretConfig extends YamlConfig {
     }
 
     private SecretConfig() {
-        super("secret-config.yml");
+        super("secret-config.yml", Root.class);
     }
 
 }

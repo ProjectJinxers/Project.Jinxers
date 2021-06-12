@@ -11,7 +11,7 @@
  * You should have received a copy of the GNU General Public License along with this program. If not, see
  * <https://www.gnu.org/licenses/>.
  */
-package org.projectjinxers.ipld;
+package org.projectjinxers.controller;
 
 import org.projectjinxers.config.Config;
 
@@ -34,16 +34,22 @@ public class IPFSAccess {
      */
     public IPFSAccess() {
         Config config = Config.getSharedInstance();
-        String version = config.getIPFSVersion();
-        if (version == null) {
-            ipfs = new IPFS(config.getIPFSHost(), config.getIPFSPort());
-        }
-        else if (config.hasIPFSTimeout()) {
-            ipfs = new IPFS(config.getIPFSHost(), config.getIPFSPort(), config.getIPFSVersion(),
-                    config.getIPFSConnectionTimeout(), config.getIPFSReadTimeout(), config.isIPFSSecure());
+        String multiaddr = config.getIPFSMultiaddr();
+        if (multiaddr != null) {
+            ipfs = new IPFS(multiaddr);
         }
         else {
-            ipfs = new IPFS(config.getIPFSHost(), config.getIPFSPort(), version, config.isIPFSSecure());
+            String version = config.getIPFSVersion();
+            if (version == null) {
+                ipfs = new IPFS(config.getIPFSHost(), config.getIPFSPort());
+            }
+            else if (config.hasIPFSTimeout()) {
+                ipfs = new IPFS(config.getIPFSHost(), config.getIPFSPort(), config.getIPFSVersion(),
+                        config.getIPFSConnectionTimeout(), config.getIPFSReadTimeout(), config.isIPFSSecure());
+            }
+            else {
+                ipfs = new IPFS(config.getIPFSHost(), config.getIPFSPort(), version, config.isIPFSSecure());
+            }
         }
     }
 

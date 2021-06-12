@@ -13,6 +13,8 @@
  */
 package org.projectjinxers.util;
 
+import java.nio.charset.StandardCharsets;
+
 import org.ethereum.crypto.ECKey.ECDSASignature;
 
 /**
@@ -88,7 +90,7 @@ public class TestSerializationUtil {
      * @return the complete JSON string converted to bytes
      */
     public static byte[] jsonBytes(int version, String dataFragment) {
-        return jsonString(version, dataFragment).getBytes();
+        return jsonString(version, dataFragment).getBytes(StandardCharsets.UTF_8);
     }
 
     /**
@@ -117,7 +119,7 @@ public class TestSerializationUtil {
         if (signature == null) {
             return jsonBytes(version, dataFragment);
         }
-        return jsonString(version, signature, dataFragment).getBytes();
+        return jsonString(version, signature, dataFragment).getBytes(StandardCharsets.UTF_8);
     }
 
 }

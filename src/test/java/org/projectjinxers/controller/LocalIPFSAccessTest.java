@@ -11,7 +11,7 @@
  * You should have received a copy of the GNU General Public License along with this program. If not, see
  * <https://www.gnu.org/licenses/>.
  */
-package org.projectjinxers.ipld;
+package org.projectjinxers.controller;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -21,6 +21,11 @@ import org.junit.Assert;
 import org.junit.jupiter.api.Test;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.config.Config;
+import org.projectjinxers.controller.IPFSAccess;
+import org.projectjinxers.controller.IPLDContext;
+import org.projectjinxers.ipld.IPLDEncoding;
+import org.projectjinxers.ipld.IPLDReader;
+import org.projectjinxers.ipld.IPLDWriter;
 import org.projectjinxers.model.IPLDObject;
 import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.Loader;

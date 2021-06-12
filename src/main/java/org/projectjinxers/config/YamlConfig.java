@@ -14,58 +14,28 @@
 package org.projectjinxers.config;
 
 import java.io.InputStream;
-import java.util.Map;
 
 import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.Constructor;
 
 /**
  * Base class for config classes, whose instances read their properties from YAML files on the classpath.
  * 
  * @author ProjectJinxers
  */
-public class YamlConfig {
+public class YamlConfig<Y> {
 
-    private Map<String, ?> root;
+    public final Y root;
 
     /**
      * Constructor.
      * 
      * @param filePath the path to the YAML file (passed to {@link ClassLoader#getResourceAsStream(String)})
      */
-    public YamlConfig(String filePath) {
-        Yaml yaml = new Yaml();
+    public YamlConfig(String filePath, Class<Y> yamlClass) {
+        Yaml yaml = new Yaml(new Constructor(yamlClass));
         InputStream is = getClass().getClassLoader().getResourceAsStream(filePath);
-        root = yaml.load(is);
-    }
-
-    /**
-     * Checks if the given root property exists.
-     * 
-     * @param key the key
-     * @return true iff the root property exists
-     */
-    public boolean containsRootProperty(String key) {
-        return root.containsKey(key);
-    }
-
-    /**
-     * Convenience method for accessing a sub tree.
-     * 
-     * @param key the root key
-     * @return the sub tree
-     */
-    public Map<?, ?> getRootObject(String key) {
-        return (Map<?, ?>) root.get(key);
-    }
-
-    /**
-     * Gets the value of a root property.
-     * 
-     * @param key the key
-     * @return the value of the root property
-     */
-    public Object getRootValue(String key) {
-        return root.get(key);
+        root = yaml.loadAs(is, yamlClass);
     }
 
 }

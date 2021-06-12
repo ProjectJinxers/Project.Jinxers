@@ -13,23 +13,55 @@
  */
 package org.projectjinxers.config;
 
-import java.util.Map;
-
 /**
  * Corresponds to the config.yml resource file.
  * 
  * @author ProjectJinxers
  */
-public class Config extends YamlConfig {
+public class Config extends YamlConfig<Config.Root> {
 
-    private static final String KEY_IPFS_NODE = "ipfs.node";
-    private static final String KEY_IPFS_HOST = "host";
-    private static final String KEY_IPFS_PORT = "port";
-    private static final String KEY_IPFS_VERSION = "version";
-    private static final String KEY_IPFS_NODE_TIMEOUT = "timeout";
-    private static final String KEY_IPFS_CONN_TIMEOUT = "connection";
-    private static final String KEY_IPFS_READ_TIMEOUT = "read";
-    private static final String KEY_IPFS_SECURE = "secure";
+    static class Root {
+
+        public IPFS ipfs;
+        public IOTA iota;
+
+    }
+
+    static class IPFS {
+
+        public Node node;
+
+    }
+
+    static class Node {
+
+        public String multiaddr;
+        public String host;
+        public int port;
+        public String version;
+        public boolean secure;
+        public Timeout timeout;
+
+    }
+
+    static class Timeout {
+
+        public int connection;
+        public int read;
+
+    }
+
+    static class IOTA {
+
+        public IOTAMain main;
+
+    }
+
+    static class IOTAMain {
+
+        public String address;
+
+    }
 
     private static Config sharedInstance;
 
@@ -43,78 +75,71 @@ public class Config extends YamlConfig {
         return sharedInstance;
     }
 
-    private final String ipfsHost;
-    private final int ipfsPort;
-    private final String ipfsVersion;
-    private final int ipfsConnectionTimeout;
-    private final int ipfsReadTimeout;
-    private final boolean ipfsSecure;
-
     private Config() {
-        super("config.yml");
-        Map<?, ?> node = getRootObject(KEY_IPFS_NODE);
-        this.ipfsHost = (String) node.get(KEY_IPFS_HOST);
-        this.ipfsPort = (int) node.get(KEY_IPFS_PORT);
-        this.ipfsVersion = (String) node.get(KEY_IPFS_VERSION);
-        if (node.containsKey(KEY_IPFS_NODE_TIMEOUT)) {
-            Map<?, ?> timeouts = (Map<?, ?>) node.get(KEY_IPFS_NODE_TIMEOUT);
-            this.ipfsConnectionTimeout = (int) timeouts.get(KEY_IPFS_CONN_TIMEOUT);
-            this.ipfsReadTimeout = (int) timeouts.get(KEY_IPFS_READ_TIMEOUT);
-        }
-        else {
-            this.ipfsConnectionTimeout = -1;
-            this.ipfsReadTimeout = -1;
-        }
-        this.ipfsSecure = Boolean.TRUE.equals(node.get(KEY_IPFS_SECURE));
+        super("config.yml", Root.class);
+    }
+
+    /**
+     * @return the multiaddr for configuring the IPFS node
+     */
+    public String getIPFSMultiaddr() {
+        return root.ipfs.node.multiaddr;
     }
 
     /**
      * @return true if the IPFS timeouts have been configured
      */
     public boolean hasIPFSTimeout() {
-        return ipfsConnectionTimeout >= 0;
+        return root.ipfs.node.timeout != null;
     }
 
     /**
      * @return the host name of the IPFS node
      */
     public String getIPFSHost() {
-        return ipfsHost;
+        return root.ipfs.node.host;
     }
 
     /**
      * @return the port of the IPFS node
      */
     public int getIPFSPort() {
-        return ipfsPort;
+        return root.ipfs.node.port;
     }
 
     /**
      * @return the IPFS version fragment of the URL
      */
     public String getIPFSVersion() {
-        return ipfsVersion;
+        return root.ipfs.node.version;
     }
 
     /**
      * @return the connection timeout for connections to the configured IPFS node
      */
     public int getIPFSConnectionTimeout() {
-        return ipfsConnectionTimeout;
+        return root.ipfs.node.timeout.connection;
     }
 
     /**
      * @return the read timeout for connections to the configured IPFS node
      */
     public int getIPFSReadTimeout() {
-        return ipfsReadTimeout;
+        return root.ipfs.node.timeout.read;
     }
 
     /**
      * @return true if the https scheme is to be used
      */
     public boolean isIPFSSecure() {
-        return ipfsSecure;
+        return root.ipfs.node.secure;
+    }
+
+    /**
+     * @return the main IOTA address (defines a subnet)
+     */
+    public String getIOTAMainAddress() {
+        return root.iota.main.address;
     }
 
 }

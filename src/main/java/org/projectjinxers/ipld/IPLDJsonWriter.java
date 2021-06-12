@@ -20,6 +20,7 @@ import java.io.OutputStreamWriter;
 
 import org.ethereum.crypto.ECKey.ECDSASignature;
 import org.projectjinxers.account.Signer;
+import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.model.IPLDObject;
 import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.Metadata;

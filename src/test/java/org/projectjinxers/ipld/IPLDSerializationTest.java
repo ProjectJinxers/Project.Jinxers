@@ -19,6 +19,7 @@ import static org.projectjinxers.util.TestSerializationUtil.jsonString;
 
 import java.io.IOException;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 
 import org.ethereum.crypto.ECKey.ECDSASignature;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,6 +30,7 @@ import org.mockito.stubbing.Answer;
 import org.projectjinxers.account.ECCSigner;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.account.Users;
+import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.model.IPLDObject;
 import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.Metadata;
@@ -85,7 +87,7 @@ class IPLDSerializationTest {
         simpleData.value = 9;
         IPLDObject<SimpleData> object = new IPLDObject<>(simpleData);
         byte[] bytes = writer.write(context, object, null);
-        String json = new String(bytes);
+        String json = new String(bytes, StandardCharsets.UTF_8);
         assertEquals(jsonString("{\"value\":9}"), json);
     }
 
@@ -112,7 +114,7 @@ class IPLDSerializationTest {
         multiValueData.b = true;
         IPLDObject<MultiValueData> object = new IPLDObject<>(multiValueData);
         byte[] bytes = writer.write(context, object, null);
-        String json = new String(bytes);
+        String json = new String(bytes, StandardCharsets.UTF_8);
         assertEquals(jsonString("{\"c\":110,\"s\":\"multi\",\"b\":true}"), json);
     }
 
@@ -133,7 +135,7 @@ class IPLDSerializationTest {
         stringLinkData.link = "a";
         IPLDObject<StringLinkValueData> object = new IPLDObject<>(stringLinkData);
         byte[] bytes = writer.write(context, object, null);
-        String json = new String(bytes);
+        String json = new String(bytes, StandardCharsets.UTF_8);
         assertEquals(jsonString("{\"link\":{\"/\":\"a\"}}"), json);
     }
 
@@ -159,7 +161,7 @@ class IPLDSerializationTest {
         IPLDContext spy = Mockito.spy(context);
         Mockito.doReturn("a").when(spy).saveObject(Mockito.any(), Mockito.any());
         byte[] bytes = writer.write(spy, object, null);
-        String json = new String(bytes);
+        String json = new String(bytes, StandardCharsets.UTF_8);
         assertEquals(jsonString("{\"link\":{\"/\":\"a\"}}"), json);
     }
 
@@ -180,7 +182,7 @@ class IPLDSerializationTest {
         primitiveArrayValueData.ints = new int[] { 8, 12, 4, 0 };
         IPLDObject<PrimitiveArrayValueData> object = new IPLDObject<>(primitiveArrayValueData);
         byte[] bytes = writer.write(context, object, null);
-        String json = new String(bytes);
+        String json = new String(bytes, StandardCharsets.UTF_8);
         assertEquals(jsonString("{\"ints\":[8,12,4,0]}"), json);
     }
 
@@ -201,7 +203,7 @@ class IPLDSerializationTest {
         stringArrayValueData.strings = new String[] { "a", "b", "c" };
         IPLDObject<StringArrayValueData> object = new IPLDObject<>(stringArrayValueData);
         byte[] bytes = writer.write(context, object, null);
-        String json = new String(bytes);
+        String json = new String(bytes, StandardCharsets.UTF_8);
         assertEquals(jsonString("{\"strings\":[\"a\",\"b\",\"c\"]}"), json);
     }
 
@@ -222,7 +224,7 @@ class IPLDSerializationTest {
         stringLinkArrayValueData.links = new String[] { "a", "b", "c" };
         IPLDObject<StringLinkArrayValueData> object = new IPLDObject<>(stringLinkArrayValueData);
         byte[] bytes = writer.write(context, object, null);
-        String json = new String(bytes);
+        String json = new String(bytes, StandardCharsets.UTF_8);
         assertEquals(jsonString("{\"links\":[{\"/\":\"a\"},{\"/\":\"b\"},{\"/\":\"c\"}]}"), json);
     }
 
@@ -246,7 +248,7 @@ class IPLDSerializationTest {
         objectArrayValueData.links = new IPLDObject<?>[] { a, b, c };
         IPLDObject<ObjectLinkArrayValueData> object = new IPLDObject<>(objectArrayValueData);
         byte[] bytes = writer.write(context, object, null);
-        String json = new String(bytes);
+        String json = new String(bytes, StandardCharsets.UTF_8);
         assertEquals(jsonString("{\"links\":[{\"/\":\"a\"},{\"/\":\"b\"},{\"/\":\"c\"}]}"), json);
     }
 
@@ -273,7 +275,7 @@ class IPLDSerializationTest {
             }
         }).when(spy).saveObject(Mockito.any(), Mockito.any());
         byte[] bytes = writer.write(spy, object, null);
-        String json = new String(bytes);
+        String json = new String(bytes, StandardCharsets.UTF_8);
         assertEquals(jsonString("{\"links\":[{\"/\":\"a\"},{\"/\":\"b\"},{\"/\":\"c\"}]}"), json);
     }
 
@@ -285,7 +287,7 @@ class IPLDSerializationTest {
         sign = true;
         ECCSigner signer = new ECCSigner("user", "pass");
         byte[] bytes = writer.write(context, object, signer);
-        String json = new String(bytes);
+        String json = new String(bytes, StandardCharsets.UTF_8);
         ECDSASignature expectedSignature = new ECDSASignature(
                 new BigInteger("1357931233302495577296061641443476864107299032798182399163036348318695313558"),
                 new BigInteger("23462658328756911968606588084224614208373614148725659541764927042184603482760"));

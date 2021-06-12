@@ -11,7 +11,7 @@
  * You should have received a copy of the GNU General Public License along with this program. If not, see
  * <https://www.gnu.org/licenses/>.
  */
-package org.projectjinxers.ipld;
+package org.projectjinxers.controller;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -37,6 +37,11 @@ import org.powermock.modules.junit4.PowerMockRunner;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.config.Config;
 import org.projectjinxers.config.TestSecretConfig;
+import org.projectjinxers.controller.IPFSAccess;
+import org.projectjinxers.controller.IPLDContext;
+import org.projectjinxers.ipld.IPLDEncoding;
+import org.projectjinxers.ipld.IPLDReader;
+import org.projectjinxers.ipld.IPLDWriter;
 import org.projectjinxers.model.IPLDObject;
 import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.Loader;
@@ -106,7 +111,7 @@ public class InfuraIPFSAccessTest {
             public String saveObject(IPLDObject<?> object, Signer signer) throws IOException {
                 IPLDWriter writer = IPLDEncoding.JSON.createWriter();
                 final byte[] writtenBytes = writer.write(this, object, signer);
-                String fileContents = new String(writtenBytes);
+                String fileContents = new String(writtenBytes, StandardCharsets.UTF_8);
                 System.out.println(fileContents);
                 bytes = writtenBytes;
                 MerkleNode node = spy.put(IPLDEncoding.JSON.getIn(), bytes, IPLDEncoding.CBOR.getIn());
