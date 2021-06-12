@@ -14,7 +14,6 @@
 package org.projectjinxers.model;
 
 import java.io.IOException;
-import java.lang.reflect.Constructor;
 
 import org.ethereum.crypto.ECKey.ECDSASignature;
 import org.projectjinxers.account.Signer;
@@ -34,7 +33,7 @@ public class IPLDObject<D extends IPLDSerializable> {
     private D mapped;
     private IPLDContext context;
     private ValidationContext validationContext;
-    private Class<D> dataClass;
+    private Loader<D> loader;
     private Metadata metadata;
 
     /**
@@ -50,15 +49,15 @@ public class IPLDObject<D extends IPLDSerializable> {
      * Constructor for loaded objects or root objects that are to be loaded.
      * 
      * @param multihash         the multihash
+     * @param loader            a wrapper for the data instance (might be the data instance itself, though)
      * @param context           the context
      * @param validationContext the validation context
-     * @param dataClass         the class of the data instance
      */
-    public IPLDObject(String multihash, IPLDContext context, ValidationContext validationContext, Class<D> dataClass) {
+    public IPLDObject(String multihash, Loader<D> loader, IPLDContext context, ValidationContext validationContext) {
         this.multihash = multihash;
         this.context = context;
         this.validationContext = validationContext;
-        this.dataClass = dataClass;
+        this.loader = loader;
     }
 
     /**
@@ -77,10 +76,8 @@ public class IPLDObject<D extends IPLDSerializable> {
     public D getMapped() {
         if (mapped == null && multihash != null) {
             try {
-                Constructor<D> ctor = dataClass.getDeclaredConstructor();
-                ctor.setAccessible(true);
-                this.mapped = ctor.newInstance();
-                this.metadata = context.loadObject(multihash, mapped, validationContext);
+                this.metadata = context.loadObject(multihash, loader, validationContext);
+                this.mapped = loader.getLoaded();
             }
             catch (Exception e) {
                 e.printStackTrace();

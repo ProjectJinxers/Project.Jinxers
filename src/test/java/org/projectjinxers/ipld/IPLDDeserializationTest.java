@@ -29,6 +29,8 @@ import org.mockito.stubbing.Answer;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.model.IPLDObject;
 import org.projectjinxers.model.IPLDSerializable;
+import org.projectjinxers.model.Loader;
+import org.projectjinxers.model.LoaderFactory;
 import org.projectjinxers.model.Metadata;
 import org.projectjinxers.model.ValidationContext;
 
@@ -39,7 +41,17 @@ import org.projectjinxers.model.ValidationContext;
  */
 class IPLDDeserializationTest {
 
-    static interface IPLDReadable extends IPLDSerializable {
+    static interface IPLDReadable extends IPLDSerializable, Loader<IPLDReadable> {
+
+        @Override
+        default IPLDReadable getOrCreateDataInstance(IPLDReader reader, Metadata metadata) {
+            return this;
+        }
+
+        @Override
+        default IPLDReadable getLoaded() {
+            return this;
+        }
 
         @Override
         default void writeProperties(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
@@ -130,7 +142,13 @@ class IPLDDeserializationTest {
         @Override
         public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
                 Metadata metadata) {
-            link = reader.readLinkObject("link", context, validationContext, SimpleData.class, eager);
+            link = reader.readLinkObject("link", context, validationContext, new LoaderFactory<SimpleData>() {
+                @SuppressWarnings({ "unchecked", "rawtypes" })
+                @Override
+                public Loader<SimpleData> createLoader() {
+                    return (Loader) new SimpleData();
+                }
+            }, eager);
         }
 
     }
@@ -224,7 +242,13 @@ class IPLDDeserializationTest {
         @Override
         public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
                 Metadata metadata) {
-            links = reader.readLinkObjectsArray("links", context, validationContext, SimpleData.class, eager);
+            links = reader.readLinkObjectsArray("links", context, validationContext, new LoaderFactory<SimpleData>() {
+                @SuppressWarnings({ "unchecked", "rawtypes" })
+                @Override
+                public Loader<SimpleData> createLoader() {
+                    return (Loader) new SimpleData();
+                }
+            }, eager);
         }
 
     }

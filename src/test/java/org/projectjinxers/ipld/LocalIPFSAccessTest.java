@@ -23,6 +23,7 @@ import org.projectjinxers.account.Signer;
 import org.projectjinxers.config.Config;
 import org.projectjinxers.model.IPLDObject;
 import org.projectjinxers.model.IPLDSerializable;
+import org.projectjinxers.model.Loader;
 import org.projectjinxers.model.Metadata;
 import org.projectjinxers.model.ValidationContext;
 
@@ -54,9 +55,19 @@ class LocalIPFSAccessTest {
         Assert.assertEquals(testData.text, read.text);
     }
 
-    static class TestData implements IPLDSerializable {
+    static class TestData implements IPLDSerializable, Loader<TestData> {
 
         private String text;
+
+        @Override
+        public TestData getOrCreateDataInstance(IPLDReader reader, Metadata metadata) {
+            return this;
+        }
+
+        @Override
+        public TestData getLoaded() {
+            return this;
+        }
 
         @Override
         public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,

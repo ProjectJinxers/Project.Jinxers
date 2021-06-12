@@ -28,7 +28,9 @@ import org.spongycastle.util.Arrays;
 import com.google.gson.stream.JsonWriter;
 
 /**
- * JSON implementation of the interface for writing (serializing) objects to IPFS.
+ * JSON implementation of the interface for writing (serializing) objects to IPFS. The default implementation will not
+ * write JSON null values. If a value is to be written, and that value is null, it is skipped. You should not rely on
+ * JSON null. There should be no difference between a missing field and a field with value null.
  * 
  * @author ProjectJinxers
  */
@@ -41,7 +43,7 @@ public class IPLDJsonWriter implements IPLDWriter {
     }
 
     @Override
-    public <D extends IPLDSerializable> byte[] write(IPLDContext context, IPLDObject<D> object, Signer signer)
+    public byte[] write(IPLDContext context, IPLDObject<?> object, Signer signer)
             throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         jsonWriter = new JsonWriter(new BufferedWriter(new OutputStreamWriter(baos)));
@@ -64,7 +66,7 @@ public class IPLDJsonWriter implements IPLDWriter {
     }
 
     @Override
-    public <D extends IPLDSerializable> byte[] hashBase(IPLDContext context, D data) throws IOException {
+    public byte[] hashBase(IPLDContext context, IPLDSerializable data) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         jsonWriter = new JsonWriter(new BufferedWriter(new OutputStreamWriter(baos)));
         jsonWriter.beginObject();
@@ -91,95 +93,124 @@ public class IPLDJsonWriter implements IPLDWriter {
 
     @Override
     public void writeNumber(String key, Number value) throws IOException {
-        jsonWriter.name(key).value(value);
+        if (value != null) {
+            jsonWriter.name(key).value(value);
+        }
     }
 
     @Override
     public void writeString(String key, String value) throws IOException {
-        jsonWriter.name(key).value(value);
+        if (value != null) {
+            jsonWriter.name(key).value(value);
+        }
     }
 
     @Override
     public void writeLink(String key, String link) throws IOException {
-        jsonWriter.name(key);
-        writeLink(link);
+        if (link != null) {
+            jsonWriter.name(key);
+            writeLink(link);
+        }
     }
 
     @Override
     public void writeBooleanArray(String key, boolean[] value) throws IOException {
-        jsonWriter.name(key).beginArray();
-        for (boolean val : value) {
-            jsonWriter.value(val);
+        if (value != null) {
+            jsonWriter.name(key).beginArray();
+            for (boolean val : value) {
+                jsonWriter.value(val);
+            }
+            jsonWriter.endArray();
         }
-        jsonWriter.endArray();
+    }
+
+    @Override
+    public void writeByteArray(String key, byte[] value, ByteCodec codec) throws IOException {
+        if (value != null) {
+            writeString(key, codec.encode(value));
+        }
     }
 
     @Override
     public void writeCharArray(String key, char[] value) throws IOException {
-        jsonWriter.name(key).beginArray();
-        for (char val : value) {
-            jsonWriter.value(val);
+        if (value != null) {
+            jsonWriter.name(key).beginArray();
+            for (char val : value) {
+                jsonWriter.value(val);
+            }
+            jsonWriter.endArray();
         }
-        jsonWriter.endArray();
     }
 
     @Override
     public void writeIntArray(String key, int[] value) throws IOException {
-        jsonWriter.name(key).beginArray();
-        for (int val : value) {
-            jsonWriter.value(val);
+        if (value != null) {
+            jsonWriter.name(key).beginArray();
+            for (int val : value) {
+                jsonWriter.value(val);
+            }
+            jsonWriter.endArray();
         }
-        jsonWriter.endArray();
     }
 
     @Override
     public void writeLongArray(String key, long[] value) throws IOException {
-        jsonWriter.name(key).beginArray();
-        for (long val : value) {
-            jsonWriter.value(val);
+        if (value != null) {
+            jsonWriter.name(key).beginArray();
+            for (long val : value) {
+                jsonWriter.value(val);
+            }
+            jsonWriter.endArray();
         }
-        jsonWriter.endArray();
     }
 
     @Override
     public void writeNumberArray(String key, Number[] value) throws IOException {
-        jsonWriter.name(key).beginArray();
-        for (Number val : value) {
-            jsonWriter.value(val);
+        if (value != null) {
+            jsonWriter.name(key).beginArray();
+            for (Number val : value) {
+                jsonWriter.value(val);
+            }
+            jsonWriter.endArray();
         }
-        jsonWriter.endArray();
     }
 
     @Override
     public void writeStringArray(String key, String[] value) throws IOException {
-        jsonWriter.name(key).beginArray();
-        for (String val : value) {
-            jsonWriter.value(val);
+        if (value != null) {
+            jsonWriter.name(key).beginArray();
+            for (String val : value) {
+                jsonWriter.value(val);
+            }
+            jsonWriter.endArray();
         }
-        jsonWriter.endArray();
     }
 
     @Override
     public void writeLinkArray(String key, String[] links) throws IOException {
-        jsonWriter.name(key).beginArray();
-        for (String link : links) {
-            writeLink(link);
+        if (links != null) {
+            jsonWriter.name(key).beginArray();
+            for (String link : links) {
+                writeLink(link);
+            }
+            jsonWriter.endArray();
         }
-        jsonWriter.endArray();
     }
 
     @Override
     public void writeLinkArray(String key, IPLDObject<?>[] links, Signer signer, IPLDContext context)
             throws IOException {
-        jsonWriter.name(key).beginArray();
-        for (IPLDObject<?> link : links) {
-            String multihash = link.getMultihash();
-            if (multihash == null) {
-                multihash = context.saveObject(link, signer);
+        if (links != null) {
+            jsonWriter.name(key).beginArray();
+            for (IPLDObject<?> link : links) {
+                String multihash = link.getMultihash();
+                if (multihash == null) {
+                    multihash = context.saveObject(link, signer);
+                }
+                writeLink(multihash);
             }
-            writeLink(multihash);
+            jsonWriter.endArray();
         }
-        jsonWriter.endArray();
     }
 
     private void writeLink(String link) throws IOException {

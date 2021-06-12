@@ -22,6 +22,7 @@ import java.util.Map.Entry;
 
 import org.ethereum.crypto.ECKey.ECDSASignature;
 import org.projectjinxers.model.IPLDSerializable;
+import org.projectjinxers.model.Loader;
 import org.projectjinxers.model.Metadata;
 import org.projectjinxers.model.ValidationContext;
 
@@ -32,7 +33,9 @@ import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
 
 /**
- * JSON implementation of the interface for reading (deserializing) objects from IPFS.
+ * JSON implementation of the interface for reading (deserializing) objects from IPFS. JSON null values will be ignored
+ * by default. You should not rely on JSON null. There should be no difference between a missing field and a field with
+ * value null.
  * 
  * @author ProjectJinxers
  */
@@ -57,7 +60,7 @@ public class IPLDJsonReader implements IPLDReader {
 
     @Override
     public Metadata read(IPLDContext context, ValidationContext validationContext, byte[] bytes,
-            IPLDSerializable emptyInstance, boolean eager) {
+            Loader<?> loader, boolean eager) {
         ECDSASignature signature = null;
         int version = 0;
         JsonElement element = JsonParser.parseReader(new InputStreamReader(new ByteArrayInputStream(bytes)));
@@ -84,7 +87,8 @@ public class IPLDJsonReader implements IPLDReader {
             }
         }
         Metadata metadata = new Metadata(version, signature);
-        emptyInstance.read(this, context, validationContext, eager, metadata);
+        IPLDSerializable dataInstance = loader.getOrCreateDataInstance(this, metadata);
+        dataInstance.read(this, context, validationContext, eager, metadata);
         return metadata;
     }
 
@@ -125,7 +129,7 @@ public class IPLDJsonReader implements IPLDReader {
                     i++;
                 }
             }
-            else {
+            else if (!value.isJsonNull()) {
                 primitives.put(key, value.getAsJsonPrimitive());
             }
         }
@@ -133,6 +137,26 @@ public class IPLDJsonReader implements IPLDReader {
 
     private String getLink(JsonElement element) {
         return element.getAsJsonObject().get(KEY_INNER_LINK).getAsString();
+    }
+
+    @Override
+    public boolean hasPrimitiveKey(String key) {
+        return primitives.containsKey(key);
+    }
+
+    @Override
+    public boolean hasLinkKey(String key) {
+        return links.containsKey(key);
+    }
+
+    @Override
+    public boolean hasPrimitiveArrayKey(String key) {
+        return primitiveArrays.containsKey(key);
+    }
+
+    @Override
+    public boolean hasLinkArrayKey(String key) {
+        return linkArrays.containsKey(key);
     }
 
     @Override
@@ -176,6 +200,12 @@ public class IPLDJsonReader implements IPLDReader {
             res[i++] = jsonPrimitive.getAsBoolean();
         }
         return res;
+    }
+
+    @Override
+    public byte[] readByteArray(String key, ByteCodec codec) {
+        String encoded = readString(key);
+        return encoded == null ? null : codec.decode(encoded);
     }
 
     @Override

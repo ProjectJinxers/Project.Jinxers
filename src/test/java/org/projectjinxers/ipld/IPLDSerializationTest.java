@@ -240,9 +240,9 @@ class IPLDSerializationTest {
     @Test
     void testObjectLinkArrayValue() throws IOException {
         ObjectLinkArrayValueData objectArrayValueData = new ObjectLinkArrayValueData();
-        IPLDObject<?> a = new IPLDObject<>("a", context, null, null);
-        IPLDObject<?> b = new IPLDObject<>("b", context, null, null);
-        IPLDObject<?> c = new IPLDObject<>("c", context, null, null);
+        IPLDObject<?> a = new IPLDObject<>("a", null, context, null);
+        IPLDObject<?> b = new IPLDObject<>("b", null, context, null);
+        IPLDObject<?> c = new IPLDObject<>("c", null, context, null);
         objectArrayValueData.links = new IPLDObject<?>[] { a, b, c };
         IPLDObject<ObjectLinkArrayValueData> object = new IPLDObject<>(objectArrayValueData);
         byte[] bytes = writer.write(context, object, null);

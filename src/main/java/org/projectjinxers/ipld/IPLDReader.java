@@ -14,9 +14,13 @@
 package org.projectjinxers.ipld;
 
 import java.lang.reflect.Array;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import org.projectjinxers.model.IPLDObject;
 import org.projectjinxers.model.IPLDSerializable;
+import org.projectjinxers.model.Loader;
+import org.projectjinxers.model.LoaderFactory;
 import org.projectjinxers.model.Metadata;
 import org.projectjinxers.model.ValidationContext;
 
@@ -26,6 +30,26 @@ import org.projectjinxers.model.ValidationContext;
  * @author ProjectJinxers
  */
 public interface IPLDReader {
+
+    /**
+     * Provider for map keys.
+     * 
+     * @author ProjectJinxers
+     * @param <D> the type of the data instance
+     */
+    public static interface KeyProvider<D extends IPLDSerializable> {
+
+        /**
+         * Gets the key from the given object.
+         * 
+         * @param object the object containing the key
+         * @return the key
+         */
+        default String getKey(IPLDObject<D> object) {
+            return object.getMultihash();
+        }
+
+    }
 
     /**
      * Reads (deserializes) the given data.
@@ -38,7 +62,39 @@ public interface IPLDReader {
      * @return the metadata of the read object
      */
     Metadata read(IPLDContext context, ValidationContext validationContext, byte[] bytes,
-            IPLDSerializable emptyInstance, boolean eager);
+            Loader<?> loader, boolean eager);
+
+    /**
+     * Checks if a primitive value for the given key is present.
+     * 
+     * @param key the key
+     * @return true iff there is a primitive value for the given key
+     */
+    boolean hasPrimitiveKey(String key);
+
+    /**
+     * Checks if a link value for the given key is present.
+     * 
+     * @param key the key
+     * @return true iff there is a link value for the given key
+     */
+    boolean hasLinkKey(String key);
+
+    /**
+     * Checks if a primitive array value for the given key is present.
+     * 
+     * @param key the key
+     * @return true iff there is a primitive array value for the given key
+     */
+    boolean hasPrimitiveArrayKey(String key);
+
+    /**
+     * Checks if a link array value for the given key is present.
+     * 
+     * @param key the key
+     * @return true iff there is a link array value for the given key
+     */
+    boolean hasLinkArrayKey(String key);
 
     /**
      * Reads a Boolean value.
@@ -86,14 +142,17 @@ public interface IPLDReader {
      * @param key               the key
      * @param context           the context (not for recursion only, if null, accessing the data instance will fail)
      * @param validationContext the validation context
-     * @param dataClass         the class of the data instances
+     * @param loaderFactory     provides a wrapper for the data instance (might be the data instance itself, though)
      * @param eager             indicates whether or not the link is to be resolved now (as opposed to on-demand)
      * @return the link object value for the given key
      */
     default <D extends IPLDSerializable> IPLDObject<D> readLinkObject(String key, IPLDContext context,
-            ValidationContext validationContext, Class<D> dataClass, boolean eager) {
+            ValidationContext validationContext, LoaderFactory<D> loaderFactory, boolean eager) {
         String linkMultihash = readLink(key);
-        IPLDObject<D> res = new IPLDObject<D>(linkMultihash, context, validationContext, dataClass);
+        if (linkMultihash == null) {
+            return null;
+        }
+        IPLDObject<D> res = new IPLDObject<>(linkMultihash, loaderFactory.createLoader(), context, validationContext);
         if (eager) {
             res.getMapped();
         }
@@ -107,6 +166,15 @@ public interface IPLDReader {
      * @return the boolean array value for the given key
      */
     boolean[] readBooleanArray(String key);
+
+    /**
+     * Reads a byte array value.
+     * 
+     * @param key   the key
+     * @param codec the codec used to decode if the value is actually a string
+     * @return the byte array value for the given key
+     */
+    byte[] readByteArray(String key, ByteCodec codec);
 
     /**
      * Reads a char array value.
@@ -164,22 +232,53 @@ public interface IPLDReader {
      * @param context           the context (not for recursion only, if null, accessing the data instance of each entry
      *                          will fail)
      * @param validationContext the validation context
-     * @param dataClass         the class of the data instances
+     * @param loaderFactory     provides a wrapper for each data instance (might be the data instances itself, though)
      * @param eager             indicates whether or not links are to be resolved now (as opposed to on-demand)
      * @return the link objects array value for the given key
      */
     default <D extends IPLDSerializable> IPLDObject<D>[] readLinkObjectsArray(String key, IPLDContext context,
-            ValidationContext validationContext, Class<D> dataClass, boolean eager) {
+            ValidationContext validationContext, LoaderFactory<D> loaderFactory, boolean eager) {
         String[] linksArray = readLinksArray(key);
+        if (linksArray == null) {
+            return null;
+        }
         @SuppressWarnings("unchecked")
         IPLDObject<D>[] res = (IPLDObject<D>[]) Array.newInstance(IPLDObject.class, linksArray.length);
         int i = 0;
         for (String link : linksArray) {
-            IPLDObject<D> linkObject = new IPLDObject<>(link, context, validationContext, dataClass);
+            IPLDObject<D> linkObject = new IPLDObject<>(link, loaderFactory.createLoader(), context, validationContext);
             if (eager) {
                 linkObject.getMapped();
             }
             res[i++] = linkObject;
+        }
+        return res;
+    }
+
+    /**
+     * Reads a link objects map value. The links are resolved if eager is true (or the key provider requires it). The
+     * default implementation is complete and converts the link objects array to a linked map (preserving order). Actual
+     * maps should be an exception, because arrays are more compact and the key doesn't have to be serialized twice.
+     * 
+     * @param key               the key
+     * @param context           the context (not for recursion only, if null, accessing the data instance of each entry
+     *                          will fail)
+     * @param validationContext the validation context
+     * @param loaderFactory     provides a wrapper for each data instance (might be the data instances itself, though)
+     * @param eager             indicates whether or not links are to be resolved now (as opposed to on-demand)
+     * @param keyProvider       provides the keys for the entries (can trigger recursive reads)
+     * @return the link objects map value for the given key
+     */
+    default <D extends IPLDSerializable> Map<String, IPLDObject<D>> readLinkObjects(String key, IPLDContext context,
+            ValidationContext validationContext, LoaderFactory<D> loaderFactory, boolean eager,
+            KeyProvider<D> keyProvider) {
+        IPLDObject<D>[] links = readLinkObjectsArray(key, context, validationContext, loaderFactory, eager);
+        if (links == null) {
+            return null;
+        }
+        Map<String, IPLDObject<D>> res = new LinkedHashMap<>();
+        for (IPLDObject<D> link : links) {
+            res.put(keyProvider.getKey(link), link);
         }
         return res;
     }
