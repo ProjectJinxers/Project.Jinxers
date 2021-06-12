@@ -70,7 +70,7 @@ test {
         exceptionFormat = TestExceptionFormat.FULL
     }
     filter {
-        excludeTestsMatching "org.projectjinxers.ipld.*IPFSAccessTest" // depend on locally running node or Infura
+        excludeTestsMatching "org.projectjinxers.controller.*IPFSAccessTest" // depend on locally running node or Infura
     }
     finalizedBy jacocoTestReport
 }
