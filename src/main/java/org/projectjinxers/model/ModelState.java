@@ -14,13 +14,15 @@
 package org.projectjinxers.model;
 
 import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
-import org.projectjinxers.ipld.IPLDReader;
-import org.projectjinxers.ipld.IPLDReader.KeyProvider;
-import org.projectjinxers.ipld.IPLDWriter;
+import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.controller.IPLDReader;
+import org.projectjinxers.controller.IPLDWriter;
+import org.projectjinxers.controller.IPLDReader.KeyProvider;
 
 /**
  * ModelStates are the root instances of a tree, that represents the system at a specific time.
@@ -77,8 +79,44 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         writer.writeLinkObjects(KEY_VOTINGS, votings, signer, context);
     }
 
+    /**
+     * Null-safe check if the given userHash is contained in the user states map.
+     * 
+     * @param userHash the userHash to check
+     * @return true iff the given userHash is contained in the user states map
+     */
     public boolean containsUserState(String userHash) {
         return userStates == null ? false : userStates.containsKey(userHash);
+    }
+
+    /**
+     * @param userHash the userHash
+     * @return the wrapped user state instance for the given hash (no null checks!)
+     */
+    public IPLDObject<UserState> expectUserState(String userHash) {
+        return userStates.get(userHash);
+    }
+
+    /**
+     * Sets a wrapped copy of this instance as the previous version, updates the user states map by replacing the entry
+     * for the key of the updated user state with the updated user state and increments the version. Should only be
+     * called in a transaction.
+     * 
+     * @param updated the updated user state
+     * @param the     current wrapper
+     */
+    public void updateUserState(IPLDObject<UserState> updated, IPLDObject<ModelState> wrapper) {
+        ModelState copy = new ModelState();
+        copy.version = version;
+        copy.timestamp = timestamp;
+        copy.previousVersion = previousVersion;
+        copy.userStates = new LinkedHashMap<>(userStates);
+        if (votings != null) {
+            copy.votings = new LinkedHashMap<>(votings);
+        }
+        this.previousVersion = new IPLDObject<>(wrapper, copy);
+        userStates.put(USER_STATE_KEY_PROVIDER.getKey(updated), updated);
+        this.version++;
     }
 
     @Override

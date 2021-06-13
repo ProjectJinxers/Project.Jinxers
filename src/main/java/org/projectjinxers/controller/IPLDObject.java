@@ -11,14 +11,16 @@
  * You should have received a copy of the GNU General Public License along with this program. If not, see
  * <https://www.gnu.org/licenses/>.
  */
-package org.projectjinxers.model;
+package org.projectjinxers.controller;
 
 import java.io.IOException;
 
 import org.ethereum.crypto.ECKey.ECDSASignature;
 import org.projectjinxers.account.Signer;
-import org.projectjinxers.controller.IPLDContext;
-import org.projectjinxers.ipld.IPLDWriter;
+import org.projectjinxers.model.IPLDSerializable;
+import org.projectjinxers.model.Loader;
+import org.projectjinxers.model.Metadata;
+import org.projectjinxers.model.ValidationContext;
 
 /**
  * Wrapper class for data model objects, that can be saved as IPLD in IPFS. By default, loading/reading an instance from
@@ -35,6 +37,9 @@ public class IPLDObject<D extends IPLDSerializable> {
     private ValidationContext validationContext;
     private Loader<D> loader;
     private Metadata metadata;
+
+    private String rollbackMultihash;
+    private byte[] rollbackBytes;
 
     /**
      * Constructor for locally created objects. Usually the instance will be written to IPFS.
@@ -55,9 +60,21 @@ public class IPLDObject<D extends IPLDSerializable> {
      */
     public IPLDObject(String multihash, Loader<D> loader, IPLDContext context, ValidationContext validationContext) {
         this.multihash = multihash;
+        this.loader = loader;
         this.context = context;
         this.validationContext = validationContext;
-        this.loader = loader;
+    }
+
+    /**
+     * Copy constructor for previousVersion links.
+     * 
+     * @param source the source object
+     * @param data   the copy of the data instance
+     */
+    public IPLDObject(IPLDObject<D> source, D data) {
+        this.multihash = source.multihash;
+        this.mapped = data;
+        this.metadata = source.metadata;
     }
 
     /**
@@ -76,8 +93,20 @@ public class IPLDObject<D extends IPLDSerializable> {
     public D getMapped() {
         if (mapped == null && multihash != null) {
             try {
-                this.metadata = context.loadObject(multihash, loader, validationContext);
-                this.mapped = loader.getLoaded();
+                LoadResult result = context.loadObject(multihash, loader, validationContext);
+                if (result != null) {
+                    IPLDObject<?> fromCache = result.getFromCache();
+                    if (fromCache == null) {
+                        this.metadata = result.getLoadedMetadata();
+                        this.mapped = loader.getLoaded();
+                    }
+                    else {
+                        this.metadata = fromCache.getMetadata();
+                        @SuppressWarnings("unchecked") // obviously correct
+                        D mapped = (D) fromCache.getMapped();
+                        this.mapped = mapped;
+                    }
+                }
             }
             catch (Exception e) {
                 e.printStackTrace();
@@ -97,14 +126,32 @@ public class IPLDObject<D extends IPLDSerializable> {
     }
 
     /**
-     * Writes (serializes) the data instance to IPFS.
+     * Stores this instance in IPFS. This is a recursive operation. Referenced objects, that have not been saved, yet,
+     * will also be saved automatically by calling this method. If one child save operation fails, the root save
+     * operation fails, as well. Of course, if you retry with this exact instance, the successfully saved children won't
+     * be saved again.
+     * 
+     * @param context the context
+     * @param signer  the signer
+     * @return the multihash with which the object can be retrieved
+     * @throws IOException if saving fails
+     */
+    String save(IPLDContext context, Signer signer) throws IOException {
+        this.multihash = context.saveObject(this, signer);
+        return multihash;
+    }
+
+    /**
+     * Writes (serializes) the data instance to IPFS. Referenced objects, that have not been saved, yet, will also be
+     * saved automatically by calling this method. If one child save operation fails, the root save operation fails, as
+     * well. Of course, if you retry with this exact instance, the successfully saved children won't be saved again.
      * 
      * @param writer  takes the single properties by key
      * @param signer  the signer for recursion
      * @param context the context
      * @throws IOException if writing a single property fails
      */
-    public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+    void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
         mapped.write(writer, signer, context);
     }
 
@@ -117,7 +164,7 @@ public class IPLDObject<D extends IPLDSerializable> {
      * @param hashBase the data to hash and sign
      * @return the metadata containing the signature and version
      */
-    public Metadata signIfMandatory(Signer signer, byte[] hashBase) {
+    Metadata signIfMandatory(Signer signer, byte[] hashBase) {
         ECDSASignature signature;
         if (getMapped().isSignatureMandatory()) {
             signature = signer.sign(hashBase);
@@ -127,6 +174,45 @@ public class IPLDObject<D extends IPLDSerializable> {
         }
         this.metadata = new Metadata(mapped.getVersion(), signature);
         return metadata;
+    }
+
+    /**
+     * Saves the current state, so it can be restored in case the transaction has to be rolled back. If there is a
+     * transaction, however, the current rollback data will not be replaced.
+     * 
+     * @param context the context for saving the current state
+     * @return true iff a new transaction has been started (false is returned if there already is a transaction)
+     * @throws IOException if saving the current state fails
+     */
+    boolean beginTransaction(IPLDContext context) throws IOException {
+        if (rollbackBytes == null) {
+            this.rollbackBytes = context.serializeObject(this, null);
+            this.rollbackMultihash = multihash;
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Rolls back to the previous save point marked by the most recent successful invocation of
+     * {@link #beginTransaction(IPLDContext)}.
+     * 
+     * @param context the context
+     */
+    void rollback(IPLDContext context) {
+        this.metadata = context.loadObject(rollbackBytes, loader, null);
+        this.mapped = loader.getLoaded();
+        this.multihash = rollbackMultihash;
+        this.rollbackMultihash = null;
+        this.rollbackBytes = null;
+    }
+
+    /**
+     * Clears the save point, so new transactions can be started.
+     */
+    void commit() {
+        this.rollbackBytes = null;
+        this.rollbackMultihash = null;
     }
 
 }

@@ -14,13 +14,11 @@
 package org.projectjinxers.controller;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.ethereum.crypto.ECKey.ECDSASignature;
 import org.projectjinxers.account.Signer;
-import org.projectjinxers.ipld.IPLDEncoding;
-import org.projectjinxers.ipld.IPLDReader;
-import org.projectjinxers.ipld.IPLDWriter;
-import org.projectjinxers.model.IPLDObject;
 import org.projectjinxers.model.Loader;
 import org.projectjinxers.model.Metadata;
 import org.projectjinxers.model.ValidationContext;
@@ -29,7 +27,8 @@ import io.ipfs.api.MerkleNode;
 import io.ipfs.cid.Cid;
 
 /**
- * Context for IPFS operations on IPLD instances.
+ * Context for IPFS operations on IPLD instances. Successfully saved or loaded and fully validated objects will be
+ * cached.
  * 
  * @author ProjectJinxers
  */
@@ -39,6 +38,8 @@ public class IPLDContext {
     private final IPLDEncoding in;
     private final IPLDEncoding out;
     private final boolean eager;
+
+    private Map<String, IPLDObject<?>> cache = new HashMap<>();
 
     /**
      * Constructor.
@@ -56,7 +57,7 @@ public class IPLDContext {
     }
 
     /**
-     * Serializes and stores the given object in IPFS.
+     * Serializes and stores the given object in IPFS. If successful, the given object will also be added to the cache.
      * 
      * @param object the object to serialize and store
      * @param signer the optional signer key (if present, and the concrete data instance type supports signing, a
@@ -65,26 +66,63 @@ public class IPLDContext {
      * @throws IOException if a single write operation fails
      */
     public String saveObject(IPLDObject<?> object, Signer signer) throws IOException {
-        IPLDWriter writer = in.createWriter();
-        byte[] bytes = writer.write(this, object, signer);
+        byte[] bytes = serializeObject(object, signer);
         MerkleNode node = access.ipfs.dag.put(in.getIn(), bytes, out.getIn());
-        return node.hash.toString();
+        String multihash = node.hash.toString();
+        synchronized (cache) {
+            cache.put(multihash, object);
+        }
+        return multihash;
     }
 
     /**
-     * Reads and deserializes the object addressed under the given multihash.
+     * Serializes the given object. The given object won't be cached, saved children will.
      * 
-     * @param multihash     the multihash of the object to load
-     * @param emptyInstance the empty data instance
-     * @return the metadata of the read object containing the optional signature (read, no signing happens here)
+     * @param object the object to serialize
+     * @param signer the optional signer key (if present, and the concrete data instance type supports signing, a
+     *               signature is created and stored in the metadata of the given object)
+     * @return the serialized bytes
+     * @throws IOException if a single write operation fails
+     */
+    public byte[] serializeObject(IPLDObject<?> object, Signer signer) throws IOException {
+        IPLDWriter writer = in.createWriter();
+        return writer.write(this, object, signer);
+    }
+
+    /**
+     * Reads and deserializes the object addressed under the given multihash. If the cache contains the multihash, the
+     * cached instance is returned instead.
+     * 
+     * @param multihash the multihash of the object to load
+     * @param loader    the loader
+     * @return the load result containing either the metadata of the read object containing the optional signature
+     *         (read, no signing happens here) or the cached object
      * @throws IOException if a single read operation fails
      */
-    public Metadata loadObject(String multihash, Loader<?> loader, ValidationContext validationContext)
+    public LoadResult loadObject(String multihash, Loader<?> loader, ValidationContext validationContext)
             throws IOException {
+        synchronized (cache) {
+            IPLDObject<?> fromCache = cache.get(multihash);
+            if (fromCache != null) {
+                return new LoadResult(fromCache);
+            }
+        }
         byte[] bytes = access.ipfs.dag.get(Cid.decode(multihash));
         if (bytes == null) {
             return null;
         }
+        return new LoadResult(loadObject(bytes, loader, validationContext));
+    }
+
+    /**
+     * Deserializes the given bytes.
+     * 
+     * @param bytes  the bytes to deserialize
+     * @param loader the loader
+     * @return the metadata of the read object containing the optional signature (read, no signing happens here)
+     * @throws IOException if a single read operation fails
+     */
+    public Metadata loadObject(byte[] bytes, Loader<?> loader, ValidationContext validationContext) {
         IPLDReader reader = out.createReader();
         return reader.read(this, validationContext, bytes, loader, eager);
     }
@@ -108,6 +146,14 @@ public class IPLDContext {
             e.printStackTrace();
             return false;
         }
+    }
+
+    /**
+     * @param multihash the multihash
+     * @return the object with the given multihash from the cache
+     */
+    public IPLDObject<?> getCachedObject(String multihash) {
+        return cache.get(multihash);
     }
 
 }

@@ -11,7 +11,7 @@
  * You should have received a copy of the GNU General Public License along with this program. If not, see
  * <https://www.gnu.org/licenses/>.
  */
-package org.projectjinxers.ipld;
+package org.projectjinxers.controller;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
@@ -21,7 +21,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 import org.ethereum.crypto.ECKey.ECDSASignature;
-import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.Loader;
 import org.projectjinxers.model.Metadata;

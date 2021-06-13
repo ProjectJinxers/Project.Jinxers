@@ -19,9 +19,10 @@ import java.util.Map;
 
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
-import org.projectjinxers.ipld.IPLDReader;
-import org.projectjinxers.ipld.IPLDReader.KeyProvider;
-import org.projectjinxers.ipld.IPLDWriter;
+import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.controller.IPLDReader;
+import org.projectjinxers.controller.IPLDWriter;
+import org.projectjinxers.controller.IPLDReader.KeyProvider;
 
 /**
  * OwnershipSelection instances can be voted for if more than one user requests ownership of an abandoned document.

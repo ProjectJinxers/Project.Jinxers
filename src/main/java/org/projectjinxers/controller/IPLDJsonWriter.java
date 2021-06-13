@@ -11,7 +11,7 @@
  * You should have received a copy of the GNU General Public License along with this program. If not, see
  * <https://www.gnu.org/licenses/>.
  */
-package org.projectjinxers.ipld;
+package org.projectjinxers.controller;
 
 import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
@@ -20,8 +20,6 @@ import java.io.OutputStreamWriter;
 
 import org.ethereum.crypto.ECKey.ECDSASignature;
 import org.projectjinxers.account.Signer;
-import org.projectjinxers.controller.IPLDContext;
-import org.projectjinxers.model.IPLDObject;
 import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.Metadata;
 import org.spongycastle.util.Arrays;
@@ -51,7 +49,6 @@ public class IPLDJsonWriter implements IPLDWriter {
         jsonWriter.flush();
         byte[] start = baos.toByteArray();
         baos.reset();
-        // jsonWriter.beginObject();
         object.write(this, signer, context);
         jsonWriter.flush();
         byte[] data = baos.toByteArray();
@@ -209,7 +206,7 @@ public class IPLDJsonWriter implements IPLDWriter {
             for (IPLDObject<?> link : links) {
                 String multihash = link.getMultihash();
                 if (multihash == null) {
-                    multihash = context.saveObject(link, signer);
+                    multihash = link.save(context, signer);
                 }
                 writeLink(multihash);
             }

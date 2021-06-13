@@ -11,15 +11,13 @@
  * You should have received a copy of the GNU General Public License along with this program. If not, see
  * <https://www.gnu.org/licenses/>.
  */
-package org.projectjinxers.ipld;
+package org.projectjinxers.controller;
 
 import java.io.IOException;
 import java.lang.reflect.Array;
 import java.util.Map;
 
 import org.projectjinxers.account.Signer;
-import org.projectjinxers.controller.IPLDContext;
-import org.projectjinxers.model.IPLDObject;
 import org.projectjinxers.model.IPLDSerializable;
 
 /**
@@ -126,7 +124,7 @@ public interface IPLDWriter {
         if (link != null) {
             String multihash = link.getMultihash();
             if (multihash == null) {
-                multihash = context.saveObject(link, signer);
+                multihash = link.save(context, signer);
             }
             writeLink(key, multihash);
         }

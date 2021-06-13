@@ -17,8 +17,9 @@ import java.io.IOException;
 
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
-import org.projectjinxers.ipld.IPLDReader;
-import org.projectjinxers.ipld.IPLDWriter;
+import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.controller.IPLDReader;
+import org.projectjinxers.controller.IPLDWriter;
 
 /**
  * Granted ownerships can be validated by checking the existence of specific instances of this class.

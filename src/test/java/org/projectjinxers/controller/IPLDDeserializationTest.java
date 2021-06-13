@@ -11,7 +11,7 @@
  * You should have received a copy of the GNU General Public License along with this program. If not, see
  * <https://www.gnu.org/licenses/>.
  */
-package org.projectjinxers.ipld;
+package org.projectjinxers.controller;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -27,8 +27,6 @@ import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 import org.projectjinxers.account.Signer;
-import org.projectjinxers.controller.IPLDContext;
-import org.projectjinxers.model.IPLDObject;
 import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.Loader;
 import org.projectjinxers.model.LoaderFactory;
@@ -170,7 +168,7 @@ class IPLDDeserializationTest {
                 return null;
             }
 
-        }).when(spy).loadObject(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(spy).loadObject(Mockito.anyString(), Mockito.any(), Mockito.any());
         reader.read(spy, null, jsonBytes(json), objectLinkValueData, true);
         assertTrue(didRecurse);
         assertEquals("a", objectLinkValueData.link.getMultihash());
@@ -285,7 +283,7 @@ class IPLDDeserializationTest {
                 return null;
             }
 
-        }).when(spy).loadObject(Mockito.any(), Mockito.any(), Mockito.any());
+        }).when(spy).loadObject(Mockito.anyString(), Mockito.any(), Mockito.any());
         reader.read(spy, null, jsonBytes(json), objectLinkArrayValueData, true);
         String[] linkMultihashes = new String[objectLinkArrayValueData.links.length];
         int i = 0;

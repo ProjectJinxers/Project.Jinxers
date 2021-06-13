@@ -13,7 +13,7 @@
  */
 package org.projectjinxers.model;
 
-import org.projectjinxers.ipld.IPLDReader;
+import org.projectjinxers.controller.IPLDReader;
 
 /**
  * Factory for loaders. Those are needed when recursively loading links.

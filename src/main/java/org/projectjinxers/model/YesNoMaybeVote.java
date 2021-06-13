@@ -17,8 +17,8 @@ import java.io.IOException;
 
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
-import org.projectjinxers.ipld.IPLDReader;
-import org.projectjinxers.ipld.IPLDWriter;
+import org.projectjinxers.controller.IPLDReader;
+import org.projectjinxers.controller.IPLDWriter;
 
 /**
  * A simple Vote for an unanonymous Voting where users can select 'yes', 'no' and nothing (e.g. maybe).

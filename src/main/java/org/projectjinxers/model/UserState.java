@@ -14,13 +14,16 @@
 package org.projectjinxers.model;
 
 import java.io.IOException;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
-import org.projectjinxers.ipld.IPLDReader;
-import org.projectjinxers.ipld.IPLDReader.KeyProvider;
-import org.projectjinxers.ipld.IPLDWriter;
+import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.controller.IPLDReader;
+import org.projectjinxers.controller.IPLDReader.KeyProvider;
+import org.projectjinxers.controller.IPLDWriter;
 
 /**
  * Instances of this class represent the state of a user (rating, documents, requests etc.) at a specific time.
@@ -147,6 +150,76 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
      */
     public IPLDObject<User> getUser() {
         return user;
+    }
+
+    /**
+     * Sets a wrapped copy of this instance as the previousVersion, adds the documents and ownership requests to this
+     * instance and increments the version. Should only be called in a transaction.
+     * 
+     * @param docs     the documents to add
+     * @param requests the ownership request to add
+     * @param wrapper  the current wrapper
+     */
+    public void addLinks(Collection<IPLDObject<Document>> docs, Collection<IPLDObject<OwnershipRequest>> requests,
+            IPLDObject<UserState> wrapper) {
+        UserState copy = copy();
+        this.previousVersion = new IPLDObject<>(wrapper, copy);
+        if (docs.size() > 0) {
+            if (documents == null) {
+                this.documents = new LinkedHashMap<>();
+            }
+            for (IPLDObject<Document> document : docs) {
+                documents.put(DOCUMENT_KEY_PROVIDER.getKey(document), document);
+            }
+        }
+        if (requests.size() > 0) {
+            if (ownershipRequests == null) {
+                this.ownershipRequests = new LinkedHashMap<>();
+            }
+            for (IPLDObject<OwnershipRequest> ownershipRequest : requests) {
+                ownershipRequests.put(OWNERSHIP_REQUEST_KEY_PROVIDER.getKey(ownershipRequest), ownershipRequest);
+            }
+        }
+        this.version++;
+    }
+
+    private UserState copy() {
+        UserState copy = new UserState();
+        copy.version = version;
+        copy.rating = rating;
+        copy.user = user;
+        copy.previousVersion = previousVersion;
+        if (documents != null) {
+            copy.documents = new LinkedHashMap<>(documents);
+        }
+        if (removedDocuments != null) {
+            copy.removedDocuments = new LinkedHashMap<>(removedDocuments);
+        }
+        if (falseClaims != null) {
+            copy.falseClaims = new LinkedHashMap<>(falseClaims);
+        }
+        if (falseApprovals != null) {
+            copy.falseApprovals = new LinkedHashMap<>(falseApprovals);
+        }
+        if (falseDeclinations != null) {
+            copy.falseDeclinations = new LinkedHashMap<>(falseDeclinations);
+        }
+        if (settlementRequests != null) {
+            copy.settlementRequests = new LinkedHashMap<>(settlementRequests);
+        }
+        if (ownershipRequests != null) {
+            copy.ownershipRequests = new LinkedHashMap<>(ownershipRequests);
+        }
+        if (unbanRequests != null) {
+            copy.unbanRequests = new LinkedHashMap<>(unbanRequests);
+        }
+        if (grantedOwnerships != null) {
+            copy.grantedOwnerships = new LinkedHashMap<>(grantedOwnerships);
+        }
+        if (grantedUnbans != null) {
+            copy.grantedUnbans = new LinkedHashMap<>(grantedUnbans);
+        }
+        return copy;
     }
 
     @Override

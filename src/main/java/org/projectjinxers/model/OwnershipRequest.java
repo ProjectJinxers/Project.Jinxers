@@ -17,8 +17,9 @@ import java.io.IOException;
 
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
-import org.projectjinxers.ipld.IPLDReader;
-import org.projectjinxers.ipld.IPLDWriter;
+import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.controller.IPLDReader;
+import org.projectjinxers.controller.IPLDWriter;
 
 /**
  * Ownership requests can be issued if a user wants to take ownership of an abandoned document.

@@ -21,10 +21,6 @@ import org.junit.Assert;
 import org.junit.jupiter.api.Test;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.config.Config;
-import org.projectjinxers.ipld.IPLDEncoding;
-import org.projectjinxers.ipld.IPLDReader;
-import org.projectjinxers.ipld.IPLDWriter;
-import org.projectjinxers.model.IPLDObject;
 import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.Loader;
 import org.projectjinxers.model.Metadata;
@@ -51,11 +47,22 @@ class LocalIPFSAccessTest {
         testData.text = "Yo!";
         IPLDObject<TestData> wrapper = new IPLDObject<>(testData);
         String multihash;
-        multihash = context.saveObject(wrapper, null);
+        multihash = wrapper.save(context, null);
         Assert.assertNotNull(multihash);
+        Assert.assertEquals(multihash, wrapper.getMultihash());
         TestData read = new TestData();
-        context.loadObject(multihash, read, null);
-        Assert.assertEquals(testData.text, read.text);
+        LoadResult result = context.loadObject(multihash, read, null);
+        Assert.assertSame(result.getFromCache(), wrapper);
+    }
+
+    @Test
+    void testLoad() throws IOException {
+        IPFSAccess access = new IPFSAccess();
+        IPLDContext context = new IPLDContext(access, IPLDEncoding.JSON, IPLDEncoding.CBOR, false);
+        TestData read = new TestData();
+        LoadResult result = context.loadObject("zdpuAzDcDFcSmmSgCtV5hzQrL5JUtXu8BPyz7rvGUVsepLCcs", read, null);
+        Assert.assertNull(result.getFromCache());
+        Assert.assertEquals("Yo!", read.text);
     }
 
     static class TestData implements IPLDSerializable, Loader<TestData> {

@@ -19,8 +19,9 @@ import java.util.Map;
 
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
-import org.projectjinxers.ipld.IPLDReader;
-import org.projectjinxers.ipld.IPLDWriter;
+import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.controller.IPLDReader;
+import org.projectjinxers.controller.IPLDWriter;
 
 /**
  * Documents are one of the central parts of the system. Users can create, review, update and delete documents. If an
@@ -47,6 +48,7 @@ public class Document implements IPLDSerializable {
     private static final String KEY_TAGS = "t";
     private static final String KEY_DATE = "d";
     private static final String KEY_SOURCE = "s";
+    private static final String KEY_USER_STATE = "u";
     private static final String KEY_PREVIOUS_VERSION = "p";
     private static final String KEY_LINKS = "l";
 
@@ -55,6 +57,7 @@ public class Document implements IPLDSerializable {
     private String tags;
     private Date date;
     private String source;
+    private IPLDObject<UserState> userState;
     private IPLDObject<Document> previousVersion;
     private Map<String, IPLDObject<Document>> links;
 
@@ -66,6 +69,8 @@ public class Document implements IPLDSerializable {
         this.tags = reader.readString(KEY_TAGS);
         this.date = new Date(reader.readNumber(KEY_DATE).longValue());
         this.source = reader.readString(KEY_SOURCE);
+        this.userState = reader.readLinkObject(KEY_USER_STATE, context, validationContext, LoaderFactory.USER_STATE,
+                eager);
         this.previousVersion = reader.readLinkObject(KEY_PREVIOUS_VERSION, context, validationContext,
                 LoaderFactory.DOCUMENT, eager);
         this.links = reader.readLinkObjects(KEY_LINKS, context, validationContext, LoaderFactory.DOCUMENT, false, null);
@@ -78,8 +83,16 @@ public class Document implements IPLDSerializable {
         writer.writeString(KEY_TAGS, tags);
         writer.writeNumber(KEY_DATE, date.getTime());
         writer.writeString(KEY_SOURCE, source);
+        writer.writeLink(KEY_USER_STATE, userState, signer, null);
         writer.writeLink(KEY_PREVIOUS_VERSION, previousVersion, signer, null);
         writer.writeLinkObjects(KEY_LINKS, links, signer, context);
+    }
+
+    /**
+     * @return the unwrapped user state (no null check)
+     */
+    public UserState expectUserState() {
+        return userState.getMapped();
     }
 
     @Override

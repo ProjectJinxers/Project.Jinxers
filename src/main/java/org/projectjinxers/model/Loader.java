@@ -13,7 +13,7 @@
  */
 package org.projectjinxers.model;
 
-import org.projectjinxers.ipld.IPLDReader;
+import org.projectjinxers.controller.IPLDReader;
 
 /**
  * Instances create or (in general) provide data object instances. This is useful, because the exact type of a loaded

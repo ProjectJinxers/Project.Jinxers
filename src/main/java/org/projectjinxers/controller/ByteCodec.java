@@ -11,7 +11,7 @@
  * You should have received a copy of the GNU General Public License along with this program. If not, see
  * <https://www.gnu.org/licenses/>.
  */
-package org.projectjinxers.ipld;
+package org.projectjinxers.controller;
 
 import com.github.fzakaria.ascii85.Ascii85;
 

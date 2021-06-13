@@ -17,8 +17,9 @@ import java.io.IOException;
 
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
-import org.projectjinxers.ipld.IPLDReader;
-import org.projectjinxers.ipld.IPLDWriter;
+import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.controller.IPLDReader;
+import org.projectjinxers.controller.IPLDWriter;
 
 /**
  * Base class for user requests, where the active state can be toggled. In order to prevent other users from re-posting
@@ -61,6 +62,13 @@ public abstract class ToggleRequest implements IPLDSerializable {
      */
     public User getUser() {
         return user == null ? null : user.getMapped();
+    }
+
+    /**
+     * @return the multihash for the user (if user is null a NullPointerException will be thrown)
+     */
+    public String expectUserHash() {
+        return user.getMultihash();
     }
 
 }

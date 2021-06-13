@@ -11,25 +11,33 @@
  * You should have received a copy of the GNU General Public License along with this program. If not, see
  * <https://www.gnu.org/licenses/>.
  */
-package org.projectjinxers.model;
+package org.projectjinxers.controller;
 
-import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.model.Metadata;
 
 /**
- * The base interface for all actions, that are related to documents.
- * 
  * @author ProjectJinxers
+ *
  */
-public interface DocumentAction extends IPLDSerializable {
+public class LoadResult {
 
-    @Override
-    default boolean isSignatureMandatory() {
-        return true;
+    private IPLDObject<?> fromCache;
+    private Metadata loadedMetadata;
+
+    LoadResult(IPLDObject<?> fromCache) {
+        this.fromCache = fromCache;
     }
 
-    /**
-     * @return the target document
-     */
-    IPLDObject<Document> getDocument();
+    LoadResult(Metadata loadedMetadata) {
+        this.loadedMetadata = loadedMetadata;
+    }
+
+    public IPLDObject<?> getFromCache() {
+        return fromCache;
+    }
+
+    public Metadata getLoadedMetadata() {
+        return loadedMetadata;
+    }
 
 }

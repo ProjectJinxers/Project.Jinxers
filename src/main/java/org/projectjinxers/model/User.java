@@ -17,10 +17,10 @@ import java.io.IOException;
 import java.util.Date;
 
 import org.projectjinxers.account.Signer;
+import org.projectjinxers.controller.ByteCodec;
 import org.projectjinxers.controller.IPLDContext;
-import org.projectjinxers.ipld.ByteCodec;
-import org.projectjinxers.ipld.IPLDReader;
-import org.projectjinxers.ipld.IPLDWriter;
+import org.projectjinxers.controller.IPLDReader;
+import org.projectjinxers.controller.IPLDWriter;
 
 /**
  * In contrast to {@link UserState} instances, instances of this class don't represent the state of a user at a specific

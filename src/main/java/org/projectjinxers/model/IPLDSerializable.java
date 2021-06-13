@@ -18,8 +18,8 @@ import java.io.IOException;
 import org.ethereum.crypto.ECKey;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
-import org.projectjinxers.ipld.IPLDReader;
-import org.projectjinxers.ipld.IPLDWriter;
+import org.projectjinxers.controller.IPLDReader;
+import org.projectjinxers.controller.IPLDWriter;
 
 /**
  * The base interface for all data model classes, that can be saved as IPLD in IPFS.

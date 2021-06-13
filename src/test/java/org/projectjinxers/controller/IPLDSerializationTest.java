@@ -11,7 +11,7 @@
  * You should have received a copy of the GNU General Public License along with this program. If not, see
  * <https://www.gnu.org/licenses/>.
  */
-package org.projectjinxers.ipld;
+package org.projectjinxers.controller;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -30,8 +30,6 @@ import org.mockito.stubbing.Answer;
 import org.projectjinxers.account.ECCSigner;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.account.Users;
-import org.projectjinxers.controller.IPLDContext;
-import org.projectjinxers.model.IPLDObject;
 import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.Metadata;
 import org.projectjinxers.model.ValidationContext;
