@@ -16,6 +16,7 @@ package org.projectjinxers.model;
 import java.io.IOException;
 import java.util.Date;
 
+import org.ethereum.crypto.ECKey.ECDSASignature;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.ByteCodec;
 import org.projectjinxers.controller.IPLDContext;
@@ -51,6 +52,18 @@ public class User implements IPLDSerializable, Loader<User> {
         writer.writeString(KEY_USERNAME, username);
         writer.writeNumber(KEY_CREATED_AT, createdAt.getTime());
         writer.writeByteArray(KEY_PUBLIC_KEY, publicKey, ByteCodec.DEFAULT);
+    }
+
+    /**
+     * Verifies the signature with this user's public key.
+     * 
+     * @param signature the signature
+     * @param hashBase  the bytes that had been hashed and signed to create the signature
+     * @param signer    the signer used as a verifier
+     * @return true iff the signature has been verified
+     */
+    public boolean verifySignature(ECDSASignature signature, byte[] hashBase, Signer signer) {
+        return signer.verifySignature(signature, hashBase, publicKey);
     }
 
     @Override

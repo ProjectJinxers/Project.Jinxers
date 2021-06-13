@@ -49,9 +49,24 @@ public class Review extends Document implements DocumentAction, Loader<Review> {
         writer.writeLink(KEY_DOCUMENT, document, signer, null);
     }
 
+    /**
+     * @return the approve value
+     */
+    public Boolean getApprove() {
+        return approve;
+    }
+
     @Override
     public IPLDObject<Document> getDocument() {
         return document;
+    }
+
+    @Override
+    protected Document createCopyInstance() {
+        Review res = new Review();
+        res.approve = approve;
+        res.document = document;
+        return res;
     }
 
     @Override

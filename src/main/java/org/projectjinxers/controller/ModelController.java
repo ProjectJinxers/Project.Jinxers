@@ -20,14 +20,21 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.math.BigInteger;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Queue;
+import java.util.Set;
 import java.util.Stack;
 
+import org.ethereum.crypto.ECKey.ECDSASignature;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.config.Config;
 import org.projectjinxers.model.Document;
@@ -61,9 +68,11 @@ public class ModelController {
     private boolean validatingModelState;
     private Stack<String> pendingModelStates;
     private Stack<String> pendingOwnershipRequests;
-    private IPLDObject<UserState> pendingUserState;
-    private Queue<IPLDObject<Document>> queuedDocuments;
-    private Queue<IPLDObject<OwnershipRequest>> queuedOwnershipRequests;
+    private Map<String, IPLDObject<UserState>> pendingUserStates;
+    private Map<String, Queue<IPLDObject<Document>>> queuedDocuments;
+    private Map<String, Queue<IPLDObject<OwnershipRequest>>> queuedOwnershipRequests;
+    private Map<String, Queue<String>> queuedTransferredDocumentHashes;
+    private Queue<OwnershipTransferController> queuedOwnershipTransferControllers;
 
     /**
      * Constructor. If it returns without throwing an exception, the instance is completely initialized and continuously
@@ -152,7 +161,7 @@ public class ModelController {
         }
         validatingModelState = true;
         currentValidationContext = new ValidationContext();
-        String multihash = convertPubSubDataToMultihash(pubSubData);
+        String multihash = convertPubSubDataToOriginal(pubSubData);
         IPLDObject<ModelState> loaded = loadModelState(multihash, true);
         mergeWithValidated(loaded);
         validatingModelState = false;
@@ -165,19 +174,29 @@ public class ModelController {
             storePotentialOwnershipRequestHash(pubSubData);
             return false;
         }
-        validatingModelState = true;
-        currentValidationContext = new ValidationContext();
-        String multihash = convertPubSubDataToMultihash(pubSubData);
-        OwnershipRequest request = new OwnershipRequest();
-        IPLDObject<OwnershipRequest> object = new IPLDObject<>(multihash, request, context, currentValidationContext);
-        object.getMapped();
-        // TODO process ownership request
-        validatingModelState = false;
-        processPending();
+        String decoded = convertPubSubDataToOriginal(pubSubData);
+        String[] parts = decoded.split("|");
+        String[] requestParts = parts[0].split("@");
+        BigInteger r = new BigInteger(parts[1]);
+        BigInteger s = new BigInteger(parts[2]);
+        byte v = Byte.parseByte(parts[3]);
+        ECDSASignature signature = new ECDSASignature(r, s);
+        signature.v = v;
+        IPLDObject<ModelState> currentModelState = currentValidatedState;
+        OwnershipTransferController controller = new OwnershipTransferController(requestParts[1], requestParts[0],
+                currentModelState, context, signature);
+        if (controller.process()) {
+            try {
+                saveLocalChanges(null, controller);
+            }
+            catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
         return true;
     }
 
-    private String convertPubSubDataToMultihash(String pubSubData) {
+    private String convertPubSubDataToOriginal(String pubSubData) {
         byte[] bytes = Base64.decode(pubSubData);
         return new String(bytes, StandardCharsets.UTF_8);
     }
@@ -195,108 +214,286 @@ public class ModelController {
 
     public void saveDocument(IPLDObject<Document> document, Signer signer) throws IOException {
         document.save(context, signer);
-        saveLocalChanges(document.getMapped().expectUserState().getUser().getMultihash(), document, null);
+        saveLocalChanges(document, null);
     }
 
-    public void issueOwnershipRequest(IPLDObject<OwnershipRequest> ownershipRequest, Signer signer) throws IOException {
-        ownershipRequest.save(context, signer);
-        saveLocalChanges(ownershipRequest.getMapped().expectUserHash(), null, ownershipRequest);
+    public void issueOwnershipRequest(String documentHash, String userHash, Signer signer) throws IOException {
+        String topic = PUBSUB_TOPIC_PREFIX_OWNERSHIP_REQUEST + mainIOTAAddress;
+        String request = userHash + "@" + documentHash;
+        byte[] requestBytes = request.getBytes(StandardCharsets.UTF_8);
+        ECDSASignature signature = signer.sign(requestBytes);
+        try {
+            access.ipfs.pubsub.pub(topic, URLEncoder.encode(
+                    request + "|" + signature.r + "|" + signature.s + "|" + signature.v, StandardCharsets.UTF_8));
+        }
+        catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private IPLDObject<UserState> getInstanceToSave(IPLDObject<UserState> local) {
-        if (pendingUserState != null) {
-            synchronized (pendingUserState) {
-                if (pendingUserState != null) {
-                    IPLDObject<UserState> res = pendingUserState;
-                    pendingUserState = null;
-                    return res;
+        if (pendingUserStates != null) {
+            synchronized (pendingUserStates) {
+                if (pendingUserStates != null) {
+                    IPLDObject<UserState> res = pendingUserStates.remove(local.getMapped().getUser().getMultihash());
+                    if (res != null) {
+                        return res;
+                    }
                 }
             }
         }
         return local;
     }
 
-    private boolean saveLocalChanges(String userHash, IPLDObject<Document> document,
-            IPLDObject<OwnershipRequest> ownershipRequest) throws IOException {
+    private boolean saveLocalChanges(IPLDObject<Document> document,
+            OwnershipTransferController ownershipTransferController) throws IOException {
         IPLDObject<ModelState> currentModelState = currentValidatedState;
         ModelState modelState = currentModelState.getMapped();
-        IPLDObject<UserState> userState = modelState.expectUserState(userHash);
-        if (currentModelState.beginTransaction(context)) {
-            Collection<IPLDObject<Document>> documents = new ArrayList<>();
-            if (queuedDocuments != null) {
-                synchronized (queuedDocuments) {
-                    documents.addAll(queuedDocuments);
-                    queuedDocuments.clear();
-                }
+        Set<String> userHashes = new HashSet<>();
+        Map<String, Queue<IPLDObject<Document>>> documents = new HashMap<>();
+        Map<String, Queue<IPLDObject<OwnershipRequest>>> ownershipRequests = new HashMap<>();
+        Map<String, Queue<String>> transferredDocumentHashes = new HashMap<>();
+        Collection<OwnershipTransferController> transferControllers = new ArrayList<>();
+        if (queuedOwnershipTransferControllers != null) {
+            synchronized (queuedOwnershipTransferControllers) {
+                transferControllers.addAll(queuedOwnershipTransferControllers);
             }
-            if (document != null) {
-                documents.add(document);
-            }
-            Collection<IPLDObject<OwnershipRequest>> requests = new ArrayList<>();
-            if (queuedOwnershipRequests != null) {
-                synchronized (queuedOwnershipRequests) {
-                    requests.addAll(queuedOwnershipRequests);
-                    queuedOwnershipRequests.clear();
-                }
-            }
-            if (ownershipRequest != null) {
-                requests.add(ownershipRequest);
-            }
-            boolean userStateTransactionStarted = false;
-            boolean userStateSaved = false;
-            userState = getInstanceToSave(userState);
-            try {
-                if (documents.size() > 0 || requests.size() > 0) {
-                    userState.beginTransaction(context);
-                    userStateTransactionStarted = true;
-                    userState.getMapped().addLinks(documents, requests, userState);
-                    userState.save(context, null);
-                    userStateSaved = true;
-                }
-                modelState.updateUserState(userState, currentModelState);
-                currentModelState.save(context, null);
-                if (userStateTransactionStarted) {
-                    userState.commit();
-                }
-                currentModelState.commit();
-            }
-            catch (Exception e) {
-                currentModelState.rollback(context);
-                if (userStateTransactionStarted) {
-                    if (userStateSaved) {
-                        this.pendingUserState = userState;
+        }
+        if (ownershipTransferController != null) {
+            transferControllers.add(ownershipTransferController);
+        }
+        if (transferControllers.size() > 0) {
+            for (OwnershipTransferController controller : transferControllers) {
+                IPLDObject<OwnershipRequest> ownershipRequest = controller.getOwnershipRequest();
+                if (ownershipRequest == null) {
+                    IPLDObject<Document> transferredDocument = controller.getDocument();
+                    if (transferredDocument == null) {
+                        // Voting
                     }
                     else {
-                        userState.rollback(context);
-                        requeue(documents, requests);
+                        Document transferredDoc = transferredDocument.getMapped();
+                        IPLDObject<UserState> previousOwner = controller.getPreviousOwner();
+                        String key = previousOwner.getMapped().getUser().getMultihash();
+                        Queue<String> transferredDocHashes = transferredDocumentHashes.get(key);
+                        if (transferredDocHashes == null) {
+                            transferredDocHashes = new ArrayDeque<>();
+                            transferredDocumentHashes.put(key, transferredDocHashes);
+                        }
+                        transferredDocHashes.add(transferredDocument.getMultihash());
+                        userHashes.add(key);
+                        IPLDObject<UserState> newOwner = controller.getNewOwner();
+                        key = newOwner.getMapped().getUser().getMultihash();
+                        Queue<IPLDObject<Document>> docs = documents.get(key);
+                        if (docs == null) {
+                            docs = new ArrayDeque<>();
+                            documents.put(key, docs);
+                        }
+                        IPLDObject<Document> transferred = transferredDoc.transferTo(newOwner, transferredDocument);
+                        try {
+                            transferred.save(context, null);
+                            docs.add(transferred);
+                            userHashes.add(key);
+                        }
+                        catch (Exception e) {
+                            handleOwnershipTransferControllerException(e, ownershipTransferController);
+                            return false;
+                        }
                     }
                 }
                 else {
-                    requeue(documents, requests);
+                    String key = ownershipRequest.getMapped().expectUserHash();
+                    try {
+                        ownershipRequest.save(context, null);
+                        Queue<IPLDObject<OwnershipRequest>> ownershipReqs = ownershipRequests.get(key);
+                        if (ownershipReqs == null) {
+                            ownershipReqs = new ArrayDeque<>();
+                            ownershipRequests.put(key, ownershipReqs);
+                        }
+                        ownershipReqs.add(ownershipRequest);
+                    }
+                    catch (Exception e) {
+                        handleOwnershipTransferControllerException(e, ownershipTransferController);
+                        return false;
+                    }
+                }
+            }
+        }
+        if (currentModelState.beginTransaction(context)) {
+            if (queuedOwnershipTransferControllers != null) {
+                synchronized (queuedOwnershipTransferControllers) {
+                    queuedOwnershipTransferControllers.clear();
+                }
+            }
+            if (pendingUserStates != null) {
+                synchronized (pendingUserStates) {
+                    userHashes.addAll(pendingUserStates.keySet());
+                }
+            }
+            if (queuedDocuments != null) {
+                synchronized (queuedDocuments) {
+                    for (Entry<String, Queue<IPLDObject<Document>>> entry : queuedDocuments.entrySet()) {
+                        String key = entry.getKey();
+                        userHashes.add(key);
+                        Queue<IPLDObject<Document>> docs = documents.get(key);
+                        if (docs == null) {
+                            docs = new ArrayDeque<>();
+                            documents.put(key, docs);
+                        }
+                        docs.addAll(entry.getValue());
+                        documents.put(key, docs);
+                    }
+                }
+            }
+            if (queuedOwnershipRequests != null) {
+                synchronized (queuedOwnershipRequests) {
+                    for (Entry<String, Queue<IPLDObject<OwnershipRequest>>> entry : queuedOwnershipRequests
+                            .entrySet()) {
+                        String key = entry.getKey();
+                        userHashes.add(key);
+                        Queue<IPLDObject<OwnershipRequest>> reqs = ownershipRequests.get(key);
+                        if (reqs == null) {
+                            reqs = new ArrayDeque<>();
+                            ownershipRequests.put(key, reqs);
+                        }
+                        reqs.addAll(entry.getValue());
+                    }
+                }
+            }
+            if (queuedTransferredDocumentHashes != null) {
+                synchronized (queuedTransferredDocumentHashes) {
+                    for (Entry<String, Queue<String>> entry : queuedTransferredDocumentHashes.entrySet()) {
+                        String key = entry.getKey();
+                        userHashes.add(key);
+                        Queue<String> hashes = transferredDocumentHashes.get(key);
+                        if (hashes == null) {
+                            hashes = new ArrayDeque<>();
+                            transferredDocumentHashes.put(key, hashes);
+                        }
+                        hashes.addAll(entry.getValue());
+                    }
+                }
+            }
+            if (document != null) {
+                userHashes.add(document.getMapped().expectUserState().getUser().getMultihash());
+            }
+            Collection<IPLDObject<UserState>> updatedUserStates = new ArrayList<>();
+            for (String userHash : userHashes) {
+                IPLDObject<UserState> userState = modelState.expectUserState(userHash);
+                Queue<IPLDObject<Document>> docs = documents.get(userHash);
+                if (queuedDocuments != null) {
+                    synchronized (queuedDocuments) {
+                        queuedDocuments.remove(userHash);
+                    }
+                }
+                Queue<IPLDObject<OwnershipRequest>> requests = ownershipRequests.get(userHash);
+                if (queuedOwnershipRequests != null) {
+                    synchronized (queuedOwnershipRequests) {
+                        queuedOwnershipRequests.remove(userHash);
+                    }
+                }
+                Queue<String> hashes = transferredDocumentHashes.get(userHash);
+                if (queuedTransferredDocumentHashes != null) {
+                    synchronized (queuedTransferredDocumentHashes) {
+                        queuedTransferredDocumentHashes.remove(userHash);
+                    }
+                }
+                boolean userStateTransactionStarted = false;
+                boolean userStateSaved = false;
+                userState = getInstanceToSave(userState);
+                try {
+                    if (docs != null && docs.size() > 0 || requests != null && requests.size() > 0
+                            || hashes != null && hashes.size() > 0) {
+                        if (userState.beginTransaction(context)) {
+                            userStateTransactionStarted = true;
+                            userState.getMapped().updateLinks(docs, requests, hashes, userState);
+                            userState.save(context, null);
+                            updatedUserStates.add(userState);
+                            userStateSaved = true;
+                            userState.commit();
+                        }
+                        else {
+                            requeue(userHash, docs, requests, hashes);
+                        }
+                    }
+                }
+                catch (Exception e) {
+                    if (userStateTransactionStarted) {
+                        if (!userStateSaved) {
+                            userState.rollback(context);
+                            requeue(userHash, docs, requests, hashes);
+                        }
+                    }
+                    else {
+                        requeue(userHash, docs, requests, hashes);
+                    }
+                    if (pendingUserStates == null) {
+                        pendingUserStates = new HashMap<>();
+                    }
+                    synchronized (pendingUserStates) {
+                        pendingUserStates.put(userHash, userState);
+                    }
+                    if (updatedUserStates.size() > 0) {
+                        if (pendingUserStates == null) {
+                            pendingUserStates = new HashMap<>();
+                        }
+                        synchronized (pendingUserStates) {
+                            for (IPLDObject<UserState> updated : updatedUserStates) {
+                                pendingUserStates.put(updated.getMapped().getUser().getMultihash(), updated);
+                            }
+                        }
+                    }
+                    // at this point everything but the document parameter has been handled if its owner has not been
+                    // processed
+                    if (document != null) {
+                        String ownerHash = document.getMapped().expectUserState().getUser().getMultihash();
+                        if (pendingUserStates == null || !pendingUserStates.containsKey(ownerHash)) {
+                            enqueueDocument(document);
+                        }
+                    }
+                    return false;
+                }
+            }
+            for (IPLDObject<UserState> userState : updatedUserStates) {
+                modelState.updateUserState(userState, currentModelState);
+            }
+            try {
+                currentModelState.save(context, null);
+                currentModelState.commit();
+                publishLocalState(currentModelState);
+                return true;
+            }
+            catch (Exception e) {
+                currentModelState.rollback(context);
+                if (pendingUserStates == null) {
+                    pendingUserStates = new HashMap<>();
+                }
+                synchronized (pendingUserStates) {
+                    for (IPLDObject<UserState> userState : updatedUserStates) {
+                        pendingUserStates.put(userState.getMapped().getUser().getMultihash(), userState);
+                    }
                 }
                 return false;
             }
-            if (requests.size() > 0) {
-                String topic = PUBSUB_TOPIC_PREFIX_OWNERSHIP_REQUEST + mainIOTAAddress;
-                requests.parallelStream().forEach(request -> {
-                    try {
-                        access.ipfs.pubsub.pub(topic,
-                                URLEncoder.encode(request.getMultihash(), StandardCharsets.UTF_8));
-                    }
-                    catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                });
-            }
-            return true;
         }
         if (document != null) {
             enqueueDocument(document);
         }
-        else if (ownershipRequest != null) {
-            enqueueOwnershipRequest(ownershipRequest);
+        else if (ownershipTransferController != null) {
+            enqueueOwnershipTransferController(ownershipTransferController);
         }
         return false;
+    }
+
+    private void handleOwnershipTransferControllerException(Exception e, OwnershipTransferController controller) {
+        e.printStackTrace();
+        if (controller != null) {
+            if (queuedOwnershipTransferControllers == null) {
+                queuedOwnershipTransferControllers = new ArrayDeque<>();
+            }
+            synchronized (queuedOwnershipTransferControllers) {
+                queuedOwnershipTransferControllers.add(controller);
+            }
+        }
     }
 
     private void storePotentialModelStateHash(String pubSubData) {
@@ -319,61 +516,80 @@ public class ModelController {
 
     private void enqueueDocument(IPLDObject<Document> document) {
         if (queuedDocuments == null) {
-            queuedDocuments = new ArrayDeque<>();
+            queuedDocuments = new HashMap<>();
         }
+        String key = document.getMapped().expectUserState().getUser().getMultihash();
         synchronized (queuedDocuments) {
-            queuedDocuments.add(document);
+            Queue<IPLDObject<Document>> queue = queuedDocuments.get(key);
+            if (queue == null) {
+                queue = new ArrayDeque<>();
+                queuedDocuments.put(key, queue);
+            }
+            queue.add(document);
         }
     }
 
-    private void enqueueOwnershipRequest(IPLDObject<OwnershipRequest> ownershipRequest) {
-        if (queuedOwnershipRequests == null) {
-            queuedOwnershipRequests = new ArrayDeque<>();
+    private void enqueueOwnershipTransferController(OwnershipTransferController controller) {
+        if (queuedOwnershipTransferControllers == null) {
+            queuedOwnershipTransferControllers = new ArrayDeque<>();
         }
-        synchronized (queuedOwnershipRequests) {
-            queuedOwnershipRequests.add(ownershipRequest);
+        synchronized (queuedOwnershipTransferControllers) {
+            queuedOwnershipTransferControllers.add(controller);
         }
     }
 
-    private void requeue(Collection<IPLDObject<Document>> documents,
-            Collection<IPLDObject<OwnershipRequest>> requests) {
-        if (queuedDocuments != null) {
+    private void requeue(String userHash, Queue<IPLDObject<Document>> documents,
+            Queue<IPLDObject<OwnershipRequest>> requests, Queue<String> transferredOwnershipHashes) {
+        if (documents != null && documents.size() > 0) {
+            if (queuedDocuments == null) {
+                queuedDocuments = new HashMap<>();
+            }
             synchronized (queuedDocuments) {
-                queuedDocuments.addAll(documents);
+                Queue<IPLDObject<Document>> queue = queuedDocuments.get(userHash);
+                if (queue == null) {
+                    queuedDocuments.put(userHash, documents);
+                }
+                else {
+                    queue.addAll(documents);
+                }
             }
         }
-        if (queuedOwnershipRequests != null) {
+        if (requests != null && requests.size() > 0) {
+            if (queuedOwnershipRequests == null) {
+                queuedOwnershipRequests = new HashMap<>();
+            }
             synchronized (queuedOwnershipRequests) {
-                queuedOwnershipRequests.addAll(requests);
+                Queue<IPLDObject<OwnershipRequest>> queue = queuedOwnershipRequests.get(userHash);
+                if (queue == null) {
+                    queuedOwnershipRequests.put(userHash, queue);
+                }
+                else {
+                    queue.addAll(requests);
+                }
+            }
+        }
+        if (transferredOwnershipHashes != null && transferredOwnershipHashes.size() > 0) {
+            if (queuedTransferredDocumentHashes == null) {
+                queuedTransferredDocumentHashes = new HashMap<>();
+            }
+            synchronized (queuedTransferredDocumentHashes) {
+                Queue<String> queue = queuedTransferredDocumentHashes.get(userHash);
+                if (queue == null) {
+                    queuedTransferredDocumentHashes.put(userHash, queue);
+                }
+                else {
+                    queue.addAll(transferredOwnershipHashes);
+                }
             }
         }
     }
 
     private boolean executePendingChanges() throws IOException {
-        if (pendingUserState != null) {
-            synchronized (pendingUserState) {
-                if (pendingUserState != null) {
-                    return saveLocalChanges(pendingUserState.getMapped().getUser().getMultihash(), null, null);
-                }
-            }
-        }
-        if (queuedDocuments != null) {
-            IPLDObject<Document> first;
-            synchronized (queuedDocuments) {
-                first = queuedDocuments.peek();
-            }
-            if (first != null) {
-                return saveLocalChanges(first.getMapped().expectUserState().getUser().getMultihash(), null, null);
-            }
-        }
-        if (queuedOwnershipRequests != null) {
-            IPLDObject<OwnershipRequest> first;
-            synchronized (queuedOwnershipRequests) {
-                first = queuedOwnershipRequests.peek();
-            }
-            if (first != null) {
-                return saveLocalChanges(first.getMapped().expectUserHash(), null, null);
-            }
+        if (pendingUserStates != null && pendingUserStates.size() > 0
+                || queuedDocuments != null && queuedDocuments.size() > 0
+                || queuedOwnershipRequests != null && queuedOwnershipRequests.size() > 0
+                || queuedOwnershipTransferControllers != null && queuedOwnershipTransferControllers.size() > 0) {
+            return saveLocalChanges(null, null);
         }
         return false;
     }
@@ -422,11 +638,20 @@ public class ModelController {
                     }
                 }
                 catch (Exception e) {
-                    System.out.println("Couldn't handle received ownership request hash: " + pubSubData);
+                    System.out.println("Couldn't handle received ownership request: " + pubSubData);
                     e.printStackTrace();
                 }
             }
             while (true);
+        }
+    }
+
+    private void publishLocalState(IPLDObject<ModelState> localState) {
+        try {
+            access.ipfs.pubsub.pub(mainIOTAAddress, localState.getMultihash());
+        }
+        catch (Exception e) {
+            e.printStackTrace();
         }
     }
 

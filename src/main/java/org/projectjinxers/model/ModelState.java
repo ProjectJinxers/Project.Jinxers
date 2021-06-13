@@ -21,8 +21,8 @@ import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.IPLDReader;
-import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.IPLDReader.KeyProvider;
+import org.projectjinxers.controller.IPLDWriter;
 
 /**
  * ModelStates are the root instances of a tree, that represents the system at a specific time.
@@ -87,6 +87,14 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
      */
     public boolean containsUserState(String userHash) {
         return userStates == null ? false : userStates.containsKey(userHash);
+    }
+
+    /**
+     * @param userHash the userHash
+     * @return the wrapped user state instance for the given hash (null-safe)
+     */
+    public IPLDObject<UserState> getUserState(String userHash) {
+        return userStates == null ? null : userStates.get(userHash);
     }
 
     /**

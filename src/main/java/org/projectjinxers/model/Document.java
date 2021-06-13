@@ -89,15 +89,64 @@ public class Document implements IPLDSerializable {
     }
 
     /**
+     * @return the user state
+     */
+    public IPLDObject<UserState> getUserState() {
+        return userState;
+    }
+
+    /**
      * @return the unwrapped user state (no null check)
      */
     public UserState expectUserState() {
         return userState.getMapped();
     }
 
+    /**
+     * Transfers this document to another owner.
+     * 
+     * @param newOwner       the new owner
+     * @param currentWrapper the current wrapper object (will be set as the new previousVersion)
+     * @return the new object (must be saved)
+     */
+    public IPLDObject<Document> transferTo(IPLDObject<UserState> newOwner, IPLDObject<Document> currentWrapper) {
+        Document copy = copy();
+        copy.userState = newOwner;
+        copy.previousVersion = currentWrapper;
+        IPLDObject<Document> res = new IPLDObject<Document>(this);
+        return res;
+    }
+
+    /**
+     * @return the previous version (null-safe)
+     */
+    public Document getPreviousVersion() {
+        return previousVersion == null ? null : previousVersion.getMapped();
+    }
+
     @Override
     public boolean isSignatureMandatory() {
         return true;
+    }
+
+    private Document copy() {
+        Document res = createCopyInstance();
+        res.contents = contents;
+        res.version = version;
+        res.tags = tags;
+        res.date = date;
+        res.source = source;
+        res.links = links;
+        res.userState = userState;
+        res.previousVersion = previousVersion;
+        return res;
+    }
+
+    /**
+     * @return a new instance for copying the values
+     */
+    protected Document createCopyInstance() {
+        return new Document();
     }
 
 }

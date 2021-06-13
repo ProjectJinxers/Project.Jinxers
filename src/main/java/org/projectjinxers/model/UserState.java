@@ -146,6 +146,13 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
     }
 
     /**
+     * @return the rating
+     */
+    public int getRating() {
+        return rating;
+    }
+
+    /**
      * @return the user
      */
     public IPLDObject<User> getUser() {
@@ -156,15 +163,21 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
      * Sets a wrapped copy of this instance as the previousVersion, adds the documents and ownership requests to this
      * instance and increments the version. Should only be called in a transaction.
      * 
-     * @param docs     the documents to add
-     * @param requests the ownership request to add
-     * @param wrapper  the current wrapper
+     * @param docs                       the documents to add
+     * @param requests                   the ownership request to add
+     * @param transferredOwnershipHashes the hashes of documents that have been transferred to another user
+     * @param wrapper                    the current wrapper
      */
-    public void addLinks(Collection<IPLDObject<Document>> docs, Collection<IPLDObject<OwnershipRequest>> requests,
-            IPLDObject<UserState> wrapper) {
+    public void updateLinks(Collection<IPLDObject<Document>> docs, Collection<IPLDObject<OwnershipRequest>> requests,
+            Collection<String> transferredOwnershipHashes, IPLDObject<UserState> wrapper) {
         UserState copy = copy();
         this.previousVersion = new IPLDObject<>(wrapper, copy);
-        if (docs.size() > 0) {
+        if (transferredOwnershipHashes != null && transferredOwnershipHashes.size() > 0) {
+            for (String hash : transferredOwnershipHashes) {
+                documents.remove(hash);
+            }
+        }
+        if (docs != null && docs.size() > 0) {
             if (documents == null) {
                 this.documents = new LinkedHashMap<>();
             }
@@ -172,7 +185,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
                 documents.put(DOCUMENT_KEY_PROVIDER.getKey(document), document);
             }
         }
-        if (requests.size() > 0) {
+        if (requests != null && requests.size() > 0) {
             if (ownershipRequests == null) {
                 this.ownershipRequests = new LinkedHashMap<>();
             }

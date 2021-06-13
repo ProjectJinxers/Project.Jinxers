@@ -25,6 +25,16 @@ import org.projectjinxers.model.Hasher;
 public interface Signer extends Hasher {
 
     /**
+     * A special Signer that uses default implementations for hashing and verifying. Signing is not supported.
+     */
+    public static final Signer VERIFIER = new Signer() {
+        @Override
+        public ECDSASignature signHash(byte[] hash) {
+            return null;
+        }
+    };
+
+    /**
      * Signs the given bytes after hashing them. The default implementation calls {@link #signHash(byte[])} passing the
      * result of {@link #hash(byte[])}.
      * 
