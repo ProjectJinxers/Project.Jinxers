@@ -106,25 +106,41 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
     }
 
     /**
-     * Sets a wrapped copy of this instance as the previous version, updates the user states map by replacing the entry
-     * for the key of the updated user state with the updated user state and increments the version. Should only be
-     * called in a transaction.
+     * Sets a wrapped copy of this instance as the previous version (if current is not null only), updates the user
+     * states map by replacing the entry for the key of the updated user state with the updated user state and
+     * increments the version if there is a previousVersion (i.e. if current is not null). Should only be called in a
+     * transaction, unless this a a completely new instance (no previous version).
      * 
-     * @param updated the updated user state
-     * @param the     current wrapper
+     * @param updated the updated (or new) user state
+     * @param current the current wrapper (pass null, if you want to update without setting a previous version and
+     *                increasing the version - make sure to call this with the previous version for the first update, if
+     *                this is not the first version, as the copies would contain new state objects later)
      */
-    public void updateUserState(IPLDObject<UserState> updated, IPLDObject<ModelState> wrapper) {
-        ModelState copy = new ModelState();
-        copy.version = version;
-        copy.timestamp = timestamp;
-        copy.previousVersion = previousVersion;
-        copy.userStates = new LinkedHashMap<>(userStates);
-        if (votings != null) {
-            copy.votings = new LinkedHashMap<>(votings);
+    public void updateUserState(IPLDObject<UserState> updated, IPLDObject<ModelState> current) {
+        ModelState copy;
+        if (current == null) {
+            copy = null;
         }
-        this.previousVersion = new IPLDObject<>(wrapper, copy);
+        else {
+            copy = new ModelState();
+            copy.version = version;
+            copy.timestamp = timestamp;
+            copy.previousVersion = previousVersion;
+            if (votings != null) {
+                copy.votings = new LinkedHashMap<>(votings);
+            }
+        }
+        if (userStates == null) {
+            this.userStates = new LinkedHashMap<>();
+        }
+        else if (copy != null) {
+            copy.userStates = new LinkedHashMap<>(userStates);
+        }
+        if (current != null) {
+            this.previousVersion = new IPLDObject<>(current, copy);
+            this.version++;
+        }
         userStates.put(USER_STATE_KEY_PROVIDER.getKey(updated), updated);
-        this.version++;
     }
 
     @Override

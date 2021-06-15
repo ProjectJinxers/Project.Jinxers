@@ -99,7 +99,12 @@ public class InfuraIPFSAccessTest {
     @Test
     public void testSave() throws Exception {
         IPFSAccess access = new IPFSAccess();
-        IPFS.Dag spy = PowerMockito.spy(access.ipfs.dag);
+        access.configure();
+        Field field = IPFSAccess.class.getDeclaredField("ipfs");
+        field.setAccessible(true);
+        IPFS ipfs = (IPFS) field.get(access);
+
+        IPFS.Dag spy = PowerMockito.spy(ipfs.dag);
         IPLDContext context = new IPLDContext(access, IPLDEncoding.JSON, IPLDEncoding.CBOR, false) {
             @Override
             public String saveObject(IPLDObject<?> object, Signer signer) throws IOException {
@@ -116,7 +121,7 @@ public class InfuraIPFSAccessTest {
             @Override
             public MerkleNode answer(InvocationOnMock invocation) throws Throwable {
                 String version = Config.getSharedInstance().getIPFSVersion();
-                String prefix = access.ipfs.protocol + "://" + access.ipfs.host + ":" + access.ipfs.port
+                String prefix = ipfs.protocol + "://" + ipfs.host + ":" + ipfs.port
                         + (version == null ? "/api/v0/" : version);
 
                 Multipart m = new Multipart(prefix + "dag/put/?stream-channels=true&input-enc="

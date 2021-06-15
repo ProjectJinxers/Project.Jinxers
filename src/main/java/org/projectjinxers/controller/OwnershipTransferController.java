@@ -76,7 +76,7 @@ public class OwnershipTransferController {
                         context, null);
                 Document loaded = document.getMapped();
                 if (loaded != null) {
-                    if (userHash.equals(getFirstVersion(loaded).expectUserState().getUser().getMultihash())) { // OP
+                    if (userHash.equals(loaded.getFirstVersion().expectUserState().getUser().getMultihash())) { // OP
                         return prepareTransfer(userState, document, true);
                     }
                     else {
@@ -104,17 +104,6 @@ public class OwnershipTransferController {
             }
         }
         return false;
-    }
-
-    private Document getFirstVersion(Document document) {
-        Document doc = document;
-        do {
-            Document previous = doc.getPreviousVersion();
-            if (previous == null) {
-                return doc;
-            }
-        }
-        while (true);
     }
 
     private boolean prepareTransfer(IPLDObject<UserState> resolvedUser, IPLDObject<Document> resolvedDocument,

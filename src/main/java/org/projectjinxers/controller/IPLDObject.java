@@ -37,6 +37,7 @@ public class IPLDObject<D extends IPLDSerializable> {
     private ValidationContext validationContext;
     private Loader<D> loader;
     private Metadata metadata;
+    private ECDSASignature foreignSignature;
 
     private String rollbackMultihash;
     private byte[] rollbackBytes;
@@ -48,6 +49,18 @@ public class IPLDObject<D extends IPLDSerializable> {
      */
     public IPLDObject(D data) {
         this.mapped = data;
+    }
+
+    /**
+     * Constructor for locally created objects with signatures of related objects (e.g. ownership transfer requests),
+     * that don't even have to be stored in IPFS. That signature is used as this instance's signature.
+     * 
+     * @param data             the data instance
+     * @param foreignSignature the foreign signature
+     */
+    public IPLDObject(D data, ECDSASignature foreignSignature) {
+        this.mapped = data;
+        this.foreignSignature = foreignSignature;
     }
 
     /**
@@ -156,23 +169,20 @@ public class IPLDObject<D extends IPLDSerializable> {
     }
 
     /**
-     * This method is called after serializing the data. If the data indicates that signing be mandatory, the data is
-     * hashed and signed and the signature is stored in the returned metadata instance, which is stored in this object,
-     * as well.
+     * This method is called after serializing the data. If there is no foreign signature and the data indicates that
+     * signing be mandatory, the data is hashed and signed and the signature (or foreign signature) is stored in the
+     * returned metadata instance, which is stored in this object, as well.
      * 
      * @param signer   the signer (in case signing is mandatory)
      * @param hashBase the data to hash and sign
      * @return the metadata containing the signature and version
      */
     Metadata signIfMandatory(Signer signer, byte[] hashBase) {
-        ECDSASignature signature;
-        if (getMapped().isSignatureMandatory()) {
+        ECDSASignature signature = foreignSignature;
+        if (signature == null && getMapped().isSignatureMandatory()) {
             signature = signer.sign(hashBase);
         }
-        else {
-            signature = null;
-        }
-        this.metadata = new Metadata(mapped.getVersion(), signature);
+        this.metadata = new Metadata(mapped.getMetaVersion(), signature);
         return metadata;
     }
 

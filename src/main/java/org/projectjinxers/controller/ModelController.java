@@ -13,15 +13,9 @@
  */
 package org.projectjinxers.controller;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.math.BigInteger;
-import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -55,13 +49,11 @@ public class ModelController {
     private static final String PUBSUB_SUB_KEY_DATA = "data";
     private static final String PUBSUB_TOPIC_PREFIX_OWNERSHIP_REQUEST = "or";
 
-    private IPFSAccess access = new IPFSAccess();
-    private IPLDContext context = new IPLDContext(access, IPLDEncoding.JSON, IPLDEncoding.CBOR, false);
+    private final IPFSAccess access;
+    private final IPLDContext context;
 
-    private String mainIOTAAddress;
+    private final String mainIOTAAddress;
     private IPLDObject<ModelState> currentValidatedState;
-
-    private Config config;
 
     private ValidationContext currentValidationContext;
 
@@ -78,14 +70,20 @@ public class ModelController {
      * Constructor. If it returns without throwing an exception, the instance is completely initialized and continuously
      * listens for model states and ownership requests from peers.
      * 
+     * @param access the access to the IPFS API
+     * @param config the config (provides initialization and configuration parameters, pass null for defaults)
      * @throws Exception if initialization failed and the application should not continue running.
      */
-    public ModelController() throws Exception {
-        config = Config.getSharedInstance();
+    public ModelController(IPFSAccess access, Config config) throws Exception {
+        this.access = access;
+        if (config == null) {
+            config = Config.getSharedInstance();
+        }
+        this.context = new IPLDContext(access, IPLDEncoding.JSON, IPLDEncoding.CBOR, false);
         mainIOTAAddress = config.getIOTAMainAddress();
         String currentModelStateHash;
         try {
-            currentModelStateHash = readModelStateHash(mainIOTAAddress);
+            currentModelStateHash = access.readModelStateHash(mainIOTAAddress);
             if (currentModelStateHash != null) {
                 this.currentValidatedState = loadModelState(currentModelStateHash, false);
             }
@@ -97,7 +95,7 @@ public class ModelController {
                     try {
                         this.currentValidationContext = new ValidationContext();
                         this.currentValidatedState = loadModelState(currentModelStateHash, true);
-                        saveModelStateHash(currentModelStateHash);
+                        access.saveModelStateHash(mainIOTAAddress, currentModelStateHash);
                         break;
                     }
                     catch (Exception e2) {
@@ -107,14 +105,42 @@ public class ModelController {
             }
             while (currentModelStateHash != null);
         }
-        access.ipfs.pubsub.sub(mainIOTAAddress).forEach(map -> {
-            String pubSubData = (String) map.get(PUBSUB_SUB_KEY_DATA);
-            handleIncomingModelState(pubSubData);
-        });
-        access.ipfs.pubsub.sub(PUBSUB_TOPIC_PREFIX_OWNERSHIP_REQUEST + mainIOTAAddress).forEach(map -> {
-            String pubSubData = (String) map.get(PUBSUB_SUB_KEY_DATA);
-            handleIncomingOwnershipRequest(pubSubData);
-        });
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    access.subscribe(mainIOTAAddress).forEach(map -> {
+                        String pubSubData = (String) map.get(PUBSUB_SUB_KEY_DATA);
+                        handleIncomingModelState(pubSubData);
+                    });
+                }
+                catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    access.subscribe(PUBSUB_TOPIC_PREFIX_OWNERSHIP_REQUEST + mainIOTAAddress).forEach(map -> {
+                        String pubSubData = (String) map.get(PUBSUB_SUB_KEY_DATA);
+                        handleIncomingOwnershipRequest(pubSubData);
+                    });
+                }
+                catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+
+    }
+
+    /**
+     * @return the context
+     */
+    public IPLDContext getContext() {
+        return context;
     }
 
     /**
@@ -122,17 +148,6 @@ public class ModelController {
      */
     public IPLDObject<ModelState> getCurrentValidatedState() {
         return currentValidatedState;
-    }
-
-    private String readModelStateHash(String address) throws IOException {
-        File storage = new File(address);
-        BufferedReader br = new BufferedReader(new FileReader(storage));
-        try {
-            return br.readLine();
-        }
-        finally {
-            br.close();
-        }
     }
 
     private String readNextModelStateHashFromTangle(String address) {
@@ -145,13 +160,6 @@ public class ModelController {
                 validate ? currentValidationContext : null);
         object.getMapped();
         return object;
-    }
-
-    private void saveModelStateHash(String address) throws IOException {
-        File storage = new File(address);
-        BufferedWriter writer = new BufferedWriter(new FileWriter(storage));
-        writer.write(address);
-        writer.close();
     }
 
     boolean handleIncomingModelState(String pubSubData) {
@@ -219,12 +227,11 @@ public class ModelController {
 
     public void issueOwnershipRequest(String documentHash, String userHash, Signer signer) throws IOException {
         String topic = PUBSUB_TOPIC_PREFIX_OWNERSHIP_REQUEST + mainIOTAAddress;
-        String request = userHash + "@" + documentHash;
+        String request = userHash + "." + documentHash;
         byte[] requestBytes = request.getBytes(StandardCharsets.UTF_8);
         ECDSASignature signature = signer.sign(requestBytes);
         try {
-            access.ipfs.pubsub.pub(topic, URLEncoder.encode(
-                    request + "|" + signature.r + "|" + signature.s + "|" + signature.v, StandardCharsets.UTF_8));
+            access.publish(topic, request + "|" + signature.r + "|" + signature.s + "|" + signature.v);
         }
         catch (Exception e) {
             e.printStackTrace();
@@ -374,7 +381,14 @@ public class ModelController {
                 }
             }
             if (document != null) {
-                userHashes.add(document.getMapped().expectUserState().getUser().getMultihash());
+                String userHash = document.getMapped().expectUserState().getUser().getMultihash();
+                userHashes.add(userHash);
+                Queue<IPLDObject<Document>> queue = documents.get(userHash);
+                if (queue == null) {
+                    queue = new ArrayDeque<>();
+                    documents.put(userHash, queue);
+                }
+                queue.add(document);
             }
             Collection<IPLDObject<UserState>> updatedUserStates = new ArrayList<>();
             for (String userHash : userHashes) {
@@ -417,6 +431,7 @@ public class ModelController {
                     }
                 }
                 catch (Exception e) {
+                    currentModelState.rollback(context);
                     if (userStateTransactionStarted) {
                         if (!userStateSaved) {
                             userState.rollback(context);
@@ -453,8 +468,10 @@ public class ModelController {
                     return false;
                 }
             }
+            boolean first = true;
             for (IPLDObject<UserState> userState : updatedUserStates) {
-                modelState.updateUserState(userState, currentModelState);
+                modelState.updateUserState(userState, first ? currentModelState : null);
+                first = false;
             }
             try {
                 currentModelState.save(context, null);
@@ -648,7 +665,7 @@ public class ModelController {
 
     private void publishLocalState(IPLDObject<ModelState> localState) {
         try {
-            access.ipfs.pubsub.pub(mainIOTAAddress, localState.getMultihash());
+            access.publish(mainIOTAAddress, localState.getMultihash());
         }
         catch (Exception e) {
             e.printStackTrace();

@@ -28,7 +28,7 @@ import org.projectjinxers.controller.IPLDWriter;
  */
 public class Review extends Document implements DocumentAction, Loader<Review> {
 
-    private static final String KEY_APPROVE = "a";
+    private static final String KEY_APPROVE = "r";
     static final String KEY_DOCUMENT = "o";
 
     private Boolean approve;

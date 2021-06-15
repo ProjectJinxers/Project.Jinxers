@@ -23,9 +23,6 @@ import org.projectjinxers.model.Loader;
 import org.projectjinxers.model.Metadata;
 import org.projectjinxers.model.ValidationContext;
 
-import io.ipfs.api.MerkleNode;
-import io.ipfs.cid.Cid;
-
 /**
  * Context for IPFS operations on IPLD instances. Successfully saved or loaded and fully validated objects will be
  * cached.
@@ -47,7 +44,7 @@ public class IPLDContext {
      * @param access the access to the IPFS API
      * @param in     the encoding for submitting data to the IPFS node (IPFS' point of view)
      * @param out    the encoding for saving data in and reading data from IPFS (IPFS' point of view)
-     * @param eager  indicates whether or not links are to be resolved now (as opposed to on-demand)
+     * @param eager  indicates whether or not links are to be resolved instantly (as opposed to on-demand)
      */
     public IPLDContext(IPFSAccess access, IPLDEncoding in, IPLDEncoding out, boolean eager) {
         this.access = access;
@@ -67,8 +64,7 @@ public class IPLDContext {
      */
     public String saveObject(IPLDObject<?> object, Signer signer) throws IOException {
         byte[] bytes = serializeObject(object, signer);
-        MerkleNode node = access.ipfs.dag.put(in.getIn(), bytes, out.getIn());
-        String multihash = node.hash.toString();
+        String multihash = access.saveObject(in.getIn(), bytes, out.getIn());
         synchronized (cache) {
             cache.put(multihash, object);
         }
@@ -107,7 +103,7 @@ public class IPLDContext {
                 return new LoadResult(fromCache);
             }
         }
-        byte[] bytes = access.ipfs.dag.get(Cid.decode(multihash));
+        byte[] bytes = access.loadObject(multihash);
         if (bytes == null) {
             return null;
         }
@@ -138,7 +134,7 @@ public class IPLDContext {
     public boolean verifySignature(IPLDObject<?> object, Signer verifier, byte[] publicKey) {
         IPLDWriter writer = in.createWriter();
         try {
-            byte[] hashBase = writer.hashBase(this, object.getMapped());
+            byte[] hashBase = object.getMapped().hashBase(writer, this);
             ECDSASignature signature = object.getMetadata().getSignature();
             return signature != null && verifier.verifySignature(signature, hashBase, publicKey);
         }

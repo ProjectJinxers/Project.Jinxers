@@ -66,7 +66,7 @@ public class Config extends YamlConfig<Config.Root> {
     private static Config sharedInstance;
 
     /**
-     * @return the singleton shared instance
+     * @return the singleton shared instance for default values
      */
     public static Config getSharedInstance() {
         if (sharedInstance == null) {
@@ -77,6 +77,15 @@ public class Config extends YamlConfig<Config.Root> {
 
     private Config() {
         super("config.yml", Root.class);
+    }
+
+    /**
+     * Constructor for custom configuration values.
+     * 
+     * @param filePath the path to the YAML file containing the custom configuration values (must be on the classpath)
+     */
+    public Config(String filePath) {
+        super(filePath, Root.class);
     }
 
     /**

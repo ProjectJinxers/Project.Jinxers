@@ -39,6 +39,22 @@ public class User implements IPLDSerializable, Loader<User> {
     private Date createdAt;
     private byte[] publicKey;
 
+    User() {
+
+    }
+
+    /**
+     * Constructor. The value for createdAt will be set to now.
+     * 
+     * @param username  the username
+     * @param publicKey the public key
+     */
+    public User(String username, byte[] publicKey) {
+        this.username = username;
+        this.createdAt = new Date();
+        this.publicKey = publicKey;
+    }
+
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {

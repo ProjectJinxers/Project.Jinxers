@@ -29,14 +29,14 @@ import org.projectjinxers.controller.IPLDWriter;
 public interface IPLDSerializable {
 
     /**
-     * The version of a stored instance is stored with it in the metadata object. This enables code changes in data
+     * The meta version of a stored instance is stored with it in the metadata object. This enables code changes in data
      * model classes, that also change hashes (the ones for signatures and multihashes, as well). Method implementations
      * of {@link #read(IPLDReader, IPLDContext, boolean)} and {@link #write(IPLDWriter, ECKey, IPLDContext)} must
-     * respect the version value. The default implementation returns 0.
+     * respect the meta version value. The default implementation returns 0.
      * 
-     * @return the version (default 0)
+     * @return the meta version (default 0)
      */
-    default int getVersion() {
+    default int getMetaVersion() {
         return 0;
     }
 
@@ -59,7 +59,7 @@ public interface IPLDSerializable {
      * @param validationContext the validationContext
      * @param eager             if true, links should be resolved with the help of the context (not with the given
      *                          reader!)
-     * @param metadata          the metadata (contains the stored version)
+     * @param metadata          the metadata (contains the stored meta version)
      */
     void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata);
@@ -73,5 +73,18 @@ public interface IPLDSerializable {
      * @throws IOException if writing a single property fails
      */
     void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException;
+
+    /**
+     * Calculates the bytes to hash for creating or verifying a signature. The default implementation forwards the call
+     * to the given writer.
+     * 
+     * @param writer  the writer that usually writes the bytes to hash
+     * @param context the context
+     * @return the bytes to hash
+     * @throws IOException if writing the bytes fails
+     */
+    default byte[] hashBase(IPLDWriter writer, IPLDContext context) throws IOException {
+        return writer.hashBase(context, this);
+    }
 
 }

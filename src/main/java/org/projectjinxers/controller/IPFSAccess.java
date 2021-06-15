@@ -13,9 +13,22 @@
  */
 package org.projectjinxers.controller;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.stream.Stream;
+
 import org.projectjinxers.config.Config;
 
 import io.ipfs.api.IPFS;
+import io.ipfs.api.MerkleNode;
+import io.ipfs.cid.Cid;
 
 /**
  * Provides access to the IPFS API.
@@ -27,12 +40,19 @@ public class IPFSAccess {
     /**
      * The access to the IPFS API.
      */
-    final IPFS ipfs;
+    private IPFS ipfs;
+
+    /**
+     * Constructor.
+     */
+    public IPFSAccess() {
+
+    }
 
     /**
      * Reads the config and configures the {@link IPFS} instance appropriately.
      */
-    public IPFSAccess() {
+    void configure() {
         Config config = Config.getSharedInstance();
         String multiaddr = config.getIPFSMultiaddr();
         if (multiaddr != null) {
@@ -51,6 +71,41 @@ public class IPFSAccess {
                 ipfs = new IPFS(config.getIPFSHost(), config.getIPFSPort(), version, config.isIPFSSecure());
             }
         }
+    }
+
+    public byte[] loadObject(String multihash) throws IOException {
+        return ipfs.dag.get(Cid.decode(multihash));
+    }
+
+    public String saveObject(String inputFormat, byte[] bytes, String outputFormat) throws IOException {
+        MerkleNode node = ipfs.dag.put(inputFormat, bytes, outputFormat);
+        return node.hash.toString();
+    }
+
+    public void publish(String topic, String message) throws Exception {
+        ipfs.pubsub.pub(topic, URLEncoder.encode(message, StandardCharsets.UTF_8));
+    }
+
+    public Stream<Map<String, Object>> subscribe(String topic) throws Exception {
+        return ipfs.pubsub.sub(topic);
+    }
+
+    public String readModelStateHash(String address) throws IOException {
+        File storage = new File(address);
+        BufferedReader br = new BufferedReader(new FileReader(storage));
+        try {
+            return br.readLine();
+        }
+        finally {
+            br.close();
+        }
+    }
+
+    public void saveModelStateHash(String address, String hash) throws IOException {
+        File storage = new File(address);
+        BufferedWriter writer = new BufferedWriter(new FileWriter(storage));
+        writer.write(hash);
+        writer.close();
     }
 
 }

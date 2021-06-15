@@ -42,6 +42,7 @@ class LocalIPFSAccessTest {
     @Test
     void testSave() throws IOException {
         IPFSAccess access = new IPFSAccess();
+        access.configure();
         IPLDContext context = new IPLDContext(access, IPLDEncoding.JSON, IPLDEncoding.CBOR, false);
         TestData testData = new TestData();
         testData.text = "Yo!";
@@ -58,6 +59,7 @@ class LocalIPFSAccessTest {
     @Test
     void testLoad() throws IOException {
         IPFSAccess access = new IPFSAccess();
+        access.configure();
         IPLDContext context = new IPLDContext(access, IPLDEncoding.JSON, IPLDEncoding.CBOR, false);
         TestData read = new TestData();
         LoadResult result = context.loadObject("zdpuAzDcDFcSmmSgCtV5hzQrL5JUtXu8BPyz7rvGUVsepLCcs", read, null);

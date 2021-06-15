@@ -32,6 +32,8 @@ import org.projectjinxers.controller.IPLDWriter;
  */
 public class UserState implements IPLDSerializable, Loader<UserState> {
 
+    private static final int INITIAL_RATING = 50;
+
     private static final String KEY_VERSION = "v";
     private static final String KEY_RATING = "r";
     private static final String KEY_USER = "u";
@@ -97,6 +99,18 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
     private Map<String, IPLDObject<GrantedOwnership>> grantedOwnerships;
     private Map<String, IPLDObject<GrantedUnban>> grantedUnbans;
 
+    UserState() {
+
+    }
+
+    public UserState(IPLDObject<User> user, IPLDObject<UserState> previousVersion) {
+        if (previousVersion != null) {
+            this.version = previousVersion.getMapped().version + 1;
+        }
+        this.rating = INITIAL_RATING;
+        this.user = user;
+    }
+
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {
@@ -160,21 +174,52 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
     }
 
     /**
-     * Sets a wrapped copy of this instance as the previousVersion, adds the documents and ownership requests to this
-     * instance and increments the version. Should only be called in a transaction.
+     * @param documentHash the document hash
+     * @return the document wrapper stored in this instance with the given hash (null-safe)
+     */
+    public IPLDObject<Document> getDocument(String documentHash) {
+        return documents == null ? null : documents.get(documentHash);
+    }
+
+    /**
+     * @param documentHash the document hash
+     * @return the document stored in this instance with the given hash (no null checks!)
+     */
+    public Document expectDocument(String documentHash) {
+        return documents.get(documentHash).getMapped();
+    }
+
+    /**
+     * Sets a wrapped copy of this instance as the previousVersion (if current is not null only), adds the documents and
+     * ownership requests to this instance and increments the version if there is a previousVersion (i.e. if current is
+     * not null). Should only be called in a transaction, unless this a a completely new instance (no previous version).
      * 
      * @param docs                       the documents to add
      * @param requests                   the ownership request to add
      * @param transferredOwnershipHashes the hashes of documents that have been transferred to another user
-     * @param wrapper                    the current wrapper
+     * @param current                    the current wrapper (pass null, if you want to update without setting a
+     *                                   previous version and increasing the version - make sure to call this with the
+     *                                   previous version for the first update, if this is not the first version, as the
+     *                                   copies would contain new state objects later)
      */
     public void updateLinks(Collection<IPLDObject<Document>> docs, Collection<IPLDObject<OwnershipRequest>> requests,
-            Collection<String> transferredOwnershipHashes, IPLDObject<UserState> wrapper) {
-        UserState copy = copy();
-        this.previousVersion = new IPLDObject<>(wrapper, copy);
-        if (transferredOwnershipHashes != null && transferredOwnershipHashes.size() > 0) {
-            for (String hash : transferredOwnershipHashes) {
-                documents.remove(hash);
+            Collection<String> transferredOwnershipHashes, IPLDObject<UserState> current) {
+        if (current != null) {
+            UserState copy = copy();
+            this.previousVersion = new IPLDObject<>(current, copy);
+            this.version++;
+            if (transferredOwnershipHashes != null && transferredOwnershipHashes.size() > 0) {
+                for (String hash : transferredOwnershipHashes) {
+                    documents.remove(hash);
+                }
+            }
+            if (requests != null && requests.size() > 0) {
+                if (ownershipRequests == null) {
+                    this.ownershipRequests = new LinkedHashMap<>();
+                }
+                for (IPLDObject<OwnershipRequest> ownershipRequest : requests) {
+                    ownershipRequests.put(OWNERSHIP_REQUEST_KEY_PROVIDER.getKey(ownershipRequest), ownershipRequest);
+                }
             }
         }
         if (docs != null && docs.size() > 0) {
@@ -185,15 +230,6 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
                 documents.put(DOCUMENT_KEY_PROVIDER.getKey(document), document);
             }
         }
-        if (requests != null && requests.size() > 0) {
-            if (ownershipRequests == null) {
-                this.ownershipRequests = new LinkedHashMap<>();
-            }
-            for (IPLDObject<OwnershipRequest> ownershipRequest : requests) {
-                ownershipRequests.put(OWNERSHIP_REQUEST_KEY_PROVIDER.getKey(ownershipRequest), ownershipRequest);
-            }
-        }
-        this.version++;
     }
 
     private UserState copy() {

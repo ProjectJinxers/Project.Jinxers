@@ -14,6 +14,7 @@
 package org.projectjinxers.model;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.Map;
 
@@ -43,15 +44,21 @@ import org.projectjinxers.controller.IPLDWriter;
  */
 public class Document implements IPLDSerializable {
 
+    private static final String KEY_TITLE = "t";
+    private static final String KEY_SUBTITLE = "b";
+    private static final String KEY_ABSTRACT = "a";
     private static final String KEY_CONTENTS = "c";
     private static final String KEY_VERSION = "v";
-    private static final String KEY_TAGS = "t";
+    private static final String KEY_TAGS = "g";
     private static final String KEY_DATE = "d";
     private static final String KEY_SOURCE = "s";
     private static final String KEY_USER_STATE = "u";
     private static final String KEY_PREVIOUS_VERSION = "p";
     private static final String KEY_LINKS = "l";
 
+    private String title;
+    private String subtitle;
+    private String abstr;
     private String contents;
     private String version;
     private String tags;
@@ -61,9 +68,41 @@ public class Document implements IPLDSerializable {
     private IPLDObject<Document> previousVersion;
     private Map<String, IPLDObject<Document>> links;
 
+    Document() {
+
+    }
+
+    /**
+     * Constructor for a new document (for a new version call an appropriate method on the current version).
+     * 
+     * @param title     the title
+     * @param subtitle  the subtitle
+     * @param abstr     the abstract
+     * @param contents  the contents
+     * @param version   the version
+     * @param tags      the tags
+     * @param source    the source
+     * @param userState the current user state (before adding the document)
+     */
+    public Document(String title, String subtitle, String abstr, String contents, String version, String tags,
+            String source, IPLDObject<UserState> userState) {
+        this.title = title;
+        this.subtitle = subtitle;
+        this.abstr = abstr;
+        this.contents = contents;
+        this.version = version;
+        this.tags = tags;
+        this.date = new Date();
+        this.source = source;
+        this.userState = userState;
+    }
+
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {
+        this.title = reader.readString(KEY_TITLE);
+        this.subtitle = reader.readString(KEY_SUBTITLE);
+        this.abstr = reader.readString(KEY_ABSTRACT);
         this.contents = reader.readString(KEY_CONTENTS);
         this.version = reader.readString(KEY_VERSION);
         this.tags = reader.readString(KEY_TAGS);
@@ -78,6 +117,9 @@ public class Document implements IPLDSerializable {
 
     @Override
     public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+        writer.writeString(KEY_TITLE, title);
+        writer.writeString(KEY_SUBTITLE, subtitle);
+        writer.writeString(KEY_ABSTRACT, abstr);
         writer.writeString(KEY_CONTENTS, contents);
         writer.writeString(KEY_VERSION, version);
         writer.writeString(KEY_TAGS, tags);
@@ -86,6 +128,13 @@ public class Document implements IPLDSerializable {
         writer.writeLink(KEY_USER_STATE, userState, signer, null);
         writer.writeLink(KEY_PREVIOUS_VERSION, previousVersion, signer, null);
         writer.writeLinkObjects(KEY_LINKS, links, signer, context);
+    }
+
+    /**
+     * @return the title
+     */
+    public String getTitle() {
+        return title;
     }
 
     /**
@@ -124,13 +173,41 @@ public class Document implements IPLDSerializable {
         return previousVersion == null ? null : previousVersion.getMapped();
     }
 
+    /**
+     * @return the first version (null-safe)
+     */
+    public Document getFirstVersion() {
+        Document doc = this;
+        do {
+            Document previous = doc.getPreviousVersion();
+            if (previous == null) {
+                return doc;
+            }
+        }
+        while (true);
+    }
+
     @Override
     public boolean isSignatureMandatory() {
         return true;
     }
 
+    @Override
+    public byte[] hashBase(IPLDWriter writer, IPLDContext context) throws IOException {
+        if (previousVersion != null) {
+            String currentOwnerHash = userState.getMapped().getUser().getMultihash();
+            if (!currentOwnerHash.equals(previousVersion.getMapped().expectUserState().getUser().getMultihash())) {
+                return (currentOwnerHash + "." + previousVersion.getMultihash()).getBytes(StandardCharsets.UTF_8);
+            }
+        }
+        return IPLDSerializable.super.hashBase(writer, context);
+    }
+
     private Document copy() {
         Document res = createCopyInstance();
+        res.title = title;
+        res.subtitle = subtitle;
+        res.abstr = abstr;
         res.contents = contents;
         res.version = version;
         res.tags = tags;

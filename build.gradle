@@ -71,6 +71,7 @@ test {
     }
     filter {
         excludeTestsMatching "org.projectjinxers.controller.*IPFSAccessTest" // depend on locally running node or Infura
+        excludeTestsMatching "org.projectjinxers.controller.TestIPFSAccessUtil" // local utility
     }
     finalizedBy jacocoTestReport
 }
