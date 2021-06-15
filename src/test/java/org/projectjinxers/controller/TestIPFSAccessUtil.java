@@ -16,12 +16,16 @@ package org.projectjinxers.controller;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.projectjinxers.account.ECCSigner;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.account.Users;
+import org.projectjinxers.model.Document;
 import org.projectjinxers.model.Loader;
 import org.projectjinxers.model.LoaderFactory;
 import org.projectjinxers.model.ModelState;
@@ -42,8 +46,58 @@ import com.google.gson.JsonParser;
  */
 class TestIPFSAccessUtil {
 
+    /**
+     * Interface for updating models in memory. The updated models will be printed out to the console.
+     * 
+     * @author ProjectJinxers
+     */
+    static interface ModelUpdater {
+
+        /**
+         * Updates the model with the given hash in memory. If the model needs to be signed with a different signer,
+         * than the main signer in the test method, you can save it here and return null. Non-null return values will be
+         * saved using the default signer. Referenced links, that have to be signed with a different signer, must also
+         * be signed here. Every updated link must be wrapped in a new IPLDObject instance, otherwise the link will not
+         * be saved, since it already has a multihash.
+         * 
+         * @param hash    the hash
+         * @param context the context
+         * @return the model to save or null if the model has already been saved or should be removed (if called during
+         *         a replace operation)
+         * @throws IOException if saving a referenced link or the updated model fails
+         */
+        IPLDObject<?> update(String hash, IPLDContext context) throws IOException;
+
+    }
+
+    private static final Map<String, ModelUpdater> UPDATERS = new HashMap<>();
+    static {
+        UPDATERS.put("3b7438a6421038c3c55c2c9521a011fbd99570f01a38947bd4d52ebb4a0479ae", new ModelUpdater() {
+            @Override
+            public IPLDObject<?> update(String hash, IPLDContext context) throws IOException {
+                Loader<ModelState> loader = LoaderFactory.MODEL_STATE.createLoader();
+                IPLDObject<ModelState> modelState = new IPLDObject<>(hash, loader, context, null);
+                ModelState mapped = modelState.getMapped();
+                IPLDObject<UserState> userState = mapped
+                        .expectUserState("4426c8164350e8ec0d2750e2f492aa6016fab43d147810970f25fceb96c69765");
+                Document document = new Document("Title", "Subtitle", "Abstract", "Contents", "Version", "Tags",
+                        "Source", userState);
+                userState.getMapped().updateLinks(Arrays.asList(new IPLDObject<Document>(document)), null, null, null);
+                IPLDObject<User> secondUser = new IPLDObject<>(
+                        new User("newOwner", Users.createAccount("newOwner", "newpass").getPubKey()));
+                secondUser.save(context, new ECCSigner("newOwner", "newpass"));
+                UserState secondUserState = new UserState(secondUser, null);
+                mapped.updateUserState(new IPLDObject<UserState>(userState.getMapped()), null);
+                mapped.updateUserState(new IPLDObject<UserState>(secondUserState), null);
+                return modelState;
+            }
+        });
+    }
+
+    private static final Signer DEFAULT_SIGNER = new ECCSigner("user", "pass");
+
     private static final boolean PRETTY_PRINTING = true;
-    private static final Gson PRETTY_GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Gson PRETTY_GSON = new GsonBuilder().disableHtmlEscaping().setPrettyPrinting().create();
 
     private static final String HEADER = "\n\n********************************************\n%s\n\n";
     private static final String FOOTER = "\n\n********************************************\n\n";
@@ -91,13 +145,44 @@ class TestIPFSAccessUtil {
     @Test
     void updateFileContentsForSingleObject() throws FileNotFoundException, IOException {
         String filepath = "model.json";
-        System.out.printf(HEADER, filepath);
-        access.readObjects(filepath);
-        Signer signer = null;
+        System.out.printf(HEADER, "update " + filepath);
+        updateObject(filepath, false);
+        System.out.println(FOOTER);
+    }
+
+    @Test
+    void updateFileContentsForMultipleObjects() throws FileNotFoundException, IOException {
+        String filepath = "model/modelController/saveDocument/simple.json";
+        System.out.printf(HEADER, "update " + filepath);
+        updateObjects(filepath, false);
+        System.out.println(FOOTER);
+    }
+
+    @Test
+    void replaceFileContentsForSingleObject() throws FileNotFoundException, IOException {
+        String filepath = "model.json";
+        System.out.printf(HEADER, "replace " + filepath);
+        updateObject(filepath, true);
+        System.out.println(FOOTER);
+    }
+
+    @Test
+    void replaceFileContentsForMultipleObjects() throws FileNotFoundException, IOException {
+        String filepath = "model/modelController/saveDocument/simple.json";
+        System.out.printf(HEADER, "replace " + filepath);
+        updateObjects(filepath, true);
+        System.out.println(FOOTER);
+    }
+
+    private void updateObject(String filepath, boolean replace) throws IOException {
+        String[] hashes = access.readObjects(filepath);
+        Signer signer = DEFAULT_SIGNER;
+        String hash = hashes[0];
+        updateObject(hash, signer, replace);
+        if (replace) {
+            access.removeObject(hash);
+        }
         byte[][] allObjects = access.getAllObjects();
-        String hash = access.getHash(allObjects[0]);
-        updateObject(hash, signer);
-        allObjects = access.getAllObjects();
         if (allObjects.length == 1) {
             String json = getJSONString(allObjects[0]);
             System.out.println(json);
@@ -105,22 +190,20 @@ class TestIPFSAccessUtil {
         else {
             printObjects(allObjects);
         }
-        System.out.println(FOOTER);
     }
 
-    @Test
-    void updateFileContentsForMultipleObjects() throws FileNotFoundException, IOException {
-        String filepath = "models.json";
-        System.out.printf(HEADER, filepath);
-        access.readObjects(filepath);
-        Signer signer = null;
-        byte[][] allObjects = access.getAllObjects();
-        for (byte[] object : allObjects) {
-            String hash = access.getHash(object);
-            updateObject(hash, signer);
+    private void updateObjects(String filepath, boolean replace) throws FileNotFoundException, IOException {
+        String[] hashes = access.readObjects(filepath);
+        Signer signer = DEFAULT_SIGNER;
+        for (String hash : hashes) {
+            updateObject(hash, signer, replace);
+        }
+        if (replace) {
+            for (String hash : hashes) {
+                access.removeObject(hash);
+            }
         }
         printObjects(access.getAllObjects());
-        System.out.println(FOOTER);
     }
 
     private void printObjects(byte[][] objects) {
@@ -146,13 +229,18 @@ class TestIPFSAccessUtil {
         }
     }
 
-    private void updateObject(String hash, Signer signer) throws IOException {
-        access.removeObject(hash);
-        Loader<ModelState> loader = LoaderFactory.MODEL_STATE.createLoader();
-        IPLDObject<ModelState> modelState = new IPLDObject<>(hash, loader, context, null);
-        modelState.getMapped();
-        // update modelState using standard method calls
-        modelState.save(context, signer);
+    private void updateObject(String hash, Signer signer, boolean replace) throws IOException {
+        System.out.println("Hash: " + hash);
+        ModelUpdater updater = UPDATERS.get(hash);
+        if (updater != null) {
+            IPLDObject<?> updated = updater.update(hash, context);
+            if (updated != null) {
+                updated.save(context, signer);
+            }
+        }
+        if (replace) {
+            access.removeObject(hash);
+        }
     }
 
     private String getJSONString(byte[] bytes) {

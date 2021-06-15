@@ -30,6 +30,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.Stream;
 
+import org.ethereum.crypto.ECKey.ECDSASignature;
 import org.projectjinxers.account.Signer;
 import org.spongycastle.util.encoders.Base64;
 import org.spongycastle.util.encoders.Hex;
@@ -45,6 +46,7 @@ import com.google.gson.JsonParser;
  * simulated, so the subscriber actually receives them. Publishing a message simply stores it in a map and does not
  * forward it to the subscriber. The most recent published message for a given topic can be queried for assertions.
  * Hashes used in this class are not actually multihashes. They are simply hex-strings of the SHA3 hash of the bytes.
+ * Save failures can be simulated via whitelists and blacklists, where blacklists take precedence over whitelists.
  * 
  * @author ProjectJinxers
  */
@@ -210,6 +212,26 @@ public class TestIPFSAccess extends IPFSAccess {
     }
 
     /**
+     * Simulates a received ownership request message. The subsciber for the topic will receive that message.
+     * 
+     * @param mainIOTAAddress the main IOTA address (part of the topic)
+     * @param userHash        the user hash
+     * @param documentHash    the doument hash
+     * @param signer          the signer
+     */
+    public void simulateOwnershipRequestMessage(String mainIOTAAddress, String userHash, String documentHash,
+            Signer signer) {
+        String topic = "or" + mainIOTAAddress;
+        String request = userHash + "." + documentHash;
+        byte[] requestBytes = request.getBytes(StandardCharsets.UTF_8);
+        ECDSASignature signature = signer.sign(requestBytes);
+        simulateMessage(topic,
+                Map.of("data",
+                        Base64.toBase64String((request + "|" + signature.r + "|" + signature.s + "|" + signature.v)
+                                .getBytes(StandardCharsets.UTF_8))));
+    }
+
+    /**
      * @param topic the topic
      * @return the most recent published message for the given topic
      */
@@ -246,8 +268,8 @@ public class TestIPFSAccess extends IPFSAccess {
 
     /**
      * Makes the next calls of {@link #saveObject(String, byte[], String)}, where the hash of the bytes to save is the
-     * given hash, succeed unless the hash has been added to the save failures (the save black list). If the save black
-     * list is empty, all save operations, where the hashes are not on the white list, will fail.
+     * given hash, succeed unless the hash has been added to the save failures (the save blacklist). If the save
+     * blacklist is empty, all save operations, where the hashes are not on the whitelist, will fail.
      * 
      * @param hash the hash
      */
@@ -257,8 +279,8 @@ public class TestIPFSAccess extends IPFSAccess {
 
     /**
      * Makes the next calls of {@link #saveObject(String, byte[], String)}, where the hash of the bytes to save is the
-     * calculated hash of the given object, succeed unless the hash has been added to the save failures (the save black
-     * list). If the save black list is empty, all save operations where the hashes are not on the white list, will
+     * calculated hash of the given object, succeed unless the hash has been added to the save failures (the save
+     * blacklist). If the save blacklist is empty, all save operations where the hashes are not on the whitelist, will
      * fail. The parameters must be the same as for the save operation. The object will not be saved. Nor will any of
      * its links.
      * 
@@ -275,8 +297,8 @@ public class TestIPFSAccess extends IPFSAccess {
     }
 
     /**
-     * Removes the given hash from the save black list. If the black list is empty afterwards, and there is a non-empty
-     * save white list, and the hash is not on that list, there will still be save failures for that hash.
+     * Removes the given hash from the save blacklist. If the black list is empty afterwards, and there is a non-empty
+     * save whitelist, and the hash is not on that list, there will still be save failures for that hash.
      * 
      * @param hash the hash
      */
@@ -285,16 +307,16 @@ public class TestIPFSAccess extends IPFSAccess {
     }
 
     /**
-     * Clears the save black list. If there is a non-empty save white list, that list now becomes effective (the black
-     * list took precedence over the white list).
+     * Clears the save black list. If there is a non-empty save whitelist, that list now becomes effective (the
+     * blacklist took precedence over the white list).
      */
     public void clearSaveFailures() {
         saveFailures.clear();
     }
 
     /**
-     * Removes the given hash from the save white list (i.e. the list of all hashes where the corresponding objects will
-     * be saved successfully, unless they have been added to the black list).
+     * Removes the given hash from the save whitelist (i.e. the list of all hashes where the corresponding objects will
+     * be saved successfully, unless they have been added to the blacklist).
      * 
      * @param hash the hash
      */
@@ -303,8 +325,8 @@ public class TestIPFSAccess extends IPFSAccess {
     }
 
     /**
-     * Clears the save white list (i.e. the list of all hashes where the corresponding objects will be saved
-     * successfully, unless they have been added to the black list). The save black list already took precedence, so if
+     * Clears the save whitelist (i.e. the list of all hashes where the corresponding objects will be saved
+     * successfully, unless they have been added to the blacklist). The save blacklist already took precedence, so if
      * the black list is not empty, nothing changes.
      */
     public void clearNoSaveFailures() {

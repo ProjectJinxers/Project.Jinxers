@@ -105,35 +105,54 @@ public class ModelController {
             }
             while (currentModelStateHash != null);
         }
+        subscribeToModelStatesTopic();
+        subscribeToOwnershipRequestsTopic();
+    }
+
+    void subscribeToModelStatesTopic() {
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
                     access.subscribe(mainIOTAAddress).forEach(map -> {
-                        String pubSubData = (String) map.get(PUBSUB_SUB_KEY_DATA);
-                        handleIncomingModelState(pubSubData);
+                        try {
+                            String pubSubData = (String) map.get(PUBSUB_SUB_KEY_DATA);
+                            handleIncomingModelState(pubSubData);
+                        }
+                        catch (Exception e) {
+                            e.printStackTrace();
+                        }
                     });
                 }
                 catch (Exception e) {
                     e.printStackTrace();
+                    subscribeToModelStatesTopic();
                 }
             }
         }).start();
+    }
+
+    void subscribeToOwnershipRequestsTopic() {
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
                     access.subscribe(PUBSUB_TOPIC_PREFIX_OWNERSHIP_REQUEST + mainIOTAAddress).forEach(map -> {
-                        String pubSubData = (String) map.get(PUBSUB_SUB_KEY_DATA);
-                        handleIncomingOwnershipRequest(pubSubData);
+                        try {
+                            String pubSubData = (String) map.get(PUBSUB_SUB_KEY_DATA);
+                            handleIncomingOwnershipRequest(pubSubData);
+                        }
+                        catch (Exception e) {
+                            e.printStackTrace();
+                        }
                     });
                 }
                 catch (Exception e) {
                     e.printStackTrace();
+                    subscribeToOwnershipRequestsTopic();
                 }
             }
         }).start();
-
     }
 
     /**
@@ -158,8 +177,7 @@ public class ModelController {
         ModelState modelState = new ModelState();
         IPLDObject<ModelState> object = new IPLDObject<>(multihash, modelState, context,
                 validate ? currentValidationContext : null);
-        object.getMapped();
-        return object;
+        return object.getMapped() == null ? null : object;
     }
 
     boolean handleIncomingModelState(String pubSubData) {
@@ -168,11 +186,15 @@ public class ModelController {
             return false;
         }
         validatingModelState = true;
-        currentValidationContext = new ValidationContext();
-        String multihash = convertPubSubDataToOriginal(pubSubData);
-        IPLDObject<ModelState> loaded = loadModelState(multihash, true);
-        mergeWithValidated(loaded);
-        validatingModelState = false;
+        try {
+            currentValidationContext = new ValidationContext();
+            String multihash = convertPubSubDataToOriginal(pubSubData);
+            IPLDObject<ModelState> loaded = loadModelState(multihash, true);
+            mergeWithValidated(loaded);
+        }
+        finally {
+            validatingModelState = false;
+        }
         processPending();
         return true;
     }
@@ -183,8 +205,8 @@ public class ModelController {
             return false;
         }
         String decoded = convertPubSubDataToOriginal(pubSubData);
-        String[] parts = decoded.split("|");
-        String[] requestParts = parts[0].split("@");
+        String[] parts = decoded.split("\\|");
+        String[] requestParts = parts[0].split("\\.");
         BigInteger r = new BigInteger(parts[1]);
         BigInteger s = new BigInteger(parts[2]);
         byte v = Byte.parseByte(parts[3]);
@@ -220,11 +242,31 @@ public class ModelController {
         processPendingOwnershipRequests();
     }
 
+    /**
+     * Saves the document and updates the local state. If successful, the resulting state will be published to other
+     * peers for validation. The validated model state is not changed (no new instance) during this call. It will be
+     * changed after one of the peers, that validated the published model state, published the new state.
+     * 
+     * @param document the document to save
+     * @param signer   the signer for creating mandatory signatures
+     * @throws IOException if writing the properties fails
+     */
     public void saveDocument(IPLDObject<Document> document, Signer signer) throws IOException {
         document.save(context, signer);
         saveLocalChanges(document, null);
     }
 
+    /**
+     * Composes a new message, which represents the ownership request, and publishes it for the current main IOTA
+     * address. The request part of the message is signed and the signature is appended to the message.
+     * 
+     * @param documentHash the hash of the document the user wants to request ownership for
+     * @param userHash     the hash of the user, who wants to request ownership
+     * @param signer       the signer (it is recommended to not keep this in memory for ever, instead ask the user for
+     *                     their credentials or keep them (not the signer) in a secure keystore and create a new signer
+     *                     for this call and discard it right after)
+     * @throws IOException if publishing the ownership request fails
+     */
     public void issueOwnershipRequest(String documentHash, String userHash, Signer signer) throws IOException {
         String topic = PUBSUB_TOPIC_PREFIX_OWNERSHIP_REQUEST + mainIOTAAddress;
         String request = userHash + "." + documentHash;
@@ -612,6 +654,7 @@ public class ModelController {
     }
 
     private void mergeWithValidated(IPLDObject<ModelState> modelState) {
+        modelState.getMapped();
         // TODO: merge with currentValidatedState
     }
 

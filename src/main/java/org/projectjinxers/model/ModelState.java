@@ -141,6 +141,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
             this.version++;
         }
         userStates.put(USER_STATE_KEY_PROVIDER.getKey(updated), updated);
+        this.timestamp = System.currentTimeMillis();
     }
 
     @Override

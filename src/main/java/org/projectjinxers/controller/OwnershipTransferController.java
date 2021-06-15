@@ -13,6 +13,8 @@
  */
 package org.projectjinxers.controller;
 
+import java.nio.charset.StandardCharsets;
+
 import org.ethereum.crypto.ECKey.ECDSASignature;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.model.Document;
@@ -71,7 +73,8 @@ public class OwnershipTransferController {
     boolean process() {
         IPLDObject<UserState> userState = modelState.getMapped().getUserState(userHash);
         if (userState != null) {
-            if (userState.getMapped().getUser().getMapped().verifySignature(signature, null, Signer.VERIFIER)) {
+            byte[] hashBase = (userHash + "." + documentHash).getBytes(StandardCharsets.UTF_8);
+            if (userState.getMapped().getUser().getMapped().verifySignature(signature, hashBase, Signer.VERIFIER)) {
                 IPLDObject<Document> document = new IPLDObject<>(documentHash, LoaderFactory.DOCUMENT.createLoader(),
                         context, null);
                 Document loaded = document.getMapped();
