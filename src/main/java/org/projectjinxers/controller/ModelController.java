@@ -36,6 +36,7 @@ import org.projectjinxers.model.ModelState;
 import org.projectjinxers.model.OwnershipRequest;
 import org.projectjinxers.model.UserState;
 import org.projectjinxers.model.ValidationContext;
+import org.projectjinxers.model.Voting;
 import org.spongycastle.util.encoders.Base64;
 
 /**
@@ -60,11 +61,13 @@ public class ModelController {
     private boolean validatingModelState;
     private Stack<String> pendingModelStates;
     private Stack<String> pendingOwnershipRequests;
+
     private Map<String, IPLDObject<UserState>> pendingUserStates;
     private Map<String, Queue<IPLDObject<Document>>> queuedDocuments;
     private Map<String, Queue<IPLDObject<OwnershipRequest>>> queuedOwnershipRequests;
     private Map<String, Queue<String>> queuedTransferredDocumentHashes;
     private Queue<OwnershipTransferController> queuedOwnershipTransferControllers;
+    private Queue<IPLDObject<Voting>> queuedVotings;
 
     /**
      * Constructor. If it returns without throwing an exception, the instance is completely initialized and continuously
@@ -205,16 +208,19 @@ public class ModelController {
             return false;
         }
         String decoded = convertPubSubDataToOriginal(pubSubData);
-        String[] parts = decoded.split("\\|");
-        String[] requestParts = parts[0].split("\\.");
+        String[] parts = decoded
+                .split(OwnershipTransferController.PUBSUB_MESSAGE_OWNERSHIP_REQUEST_MAIN_SEPARATOR_REGEX);
+        String[] requestParts = parts[0]
+                .split(OwnershipTransferController.PUBSUB_MESSAGE_OWNERSHIP_REQUEST_REQUEST_SEPARATOR_REGEX);
         BigInteger r = new BigInteger(parts[1]);
         BigInteger s = new BigInteger(parts[2]);
         byte v = Byte.parseByte(parts[3]);
         ECDSASignature signature = new ECDSASignature(r, s);
         signature.v = v;
         IPLDObject<ModelState> currentModelState = currentValidatedState;
-        OwnershipTransferController controller = new OwnershipTransferController(requestParts[1], requestParts[0],
-                currentModelState, context, signature);
+        OwnershipTransferController controller = new OwnershipTransferController(requestParts[2], requestParts[1],
+                OwnershipTransferController.OWNERSHIP_VOTING_ANONYMOUS.equals(requestParts[0]), currentModelState,
+                context, signature);
         if (controller.process()) {
             try {
                 saveLocalChanges(null, controller);
@@ -267,13 +273,14 @@ public class ModelController {
      *                     for this call and discard it right after)
      * @throws IOException if publishing the ownership request fails
      */
-    public void issueOwnershipRequest(String documentHash, String userHash, Signer signer) throws IOException {
+    public void issueOwnershipRequest(String documentHash, String userHash, boolean anonymousVoting, Signer signer)
+            throws IOException {
         String topic = PUBSUB_TOPIC_PREFIX_OWNERSHIP_REQUEST + mainIOTAAddress;
-        String request = userHash + "." + documentHash;
+        String request = OwnershipTransferController.composePubMessageRequest(anonymousVoting, userHash, documentHash);
         byte[] requestBytes = request.getBytes(StandardCharsets.UTF_8);
         ECDSASignature signature = signer.sign(requestBytes);
         try {
-            access.publish(topic, request + "|" + signature.r + "|" + signature.s + "|" + signature.v);
+            access.publish(topic, OwnershipTransferController.composePubMessage(request, signature));
         }
         catch (Exception e) {
             e.printStackTrace();
@@ -303,9 +310,15 @@ public class ModelController {
         Map<String, Queue<IPLDObject<OwnershipRequest>>> ownershipRequests = new HashMap<>();
         Map<String, Queue<String>> transferredDocumentHashes = new HashMap<>();
         Collection<OwnershipTransferController> transferControllers = new ArrayList<>();
+        Collection<IPLDObject<Voting>> votings = new ArrayList<>();
         if (queuedOwnershipTransferControllers != null) {
             synchronized (queuedOwnershipTransferControllers) {
                 transferControllers.addAll(queuedOwnershipTransferControllers);
+            }
+        }
+        if (queuedVotings != null) {
+            synchronized (queuedVotings) {
+                votings.addAll(queuedVotings);
             }
         }
         if (ownershipTransferController != null) {
@@ -317,7 +330,14 @@ public class ModelController {
                 if (ownershipRequest == null) {
                     IPLDObject<Document> transferredDocument = controller.getDocument();
                     if (transferredDocument == null) {
-                        // Voting
+                        IPLDObject<Voting> voting = controller.getVoting();
+                        try {
+                            voting.save(context, null);
+                            votings.add(voting);
+                        }
+                        catch (Exception e) {
+                            handleOwnershipTransferControllerException(e, ownershipTransferController);
+                        }
                     }
                     else {
                         Document transferredDoc = transferredDocument.getMapped();
@@ -513,12 +533,19 @@ public class ModelController {
             }
             boolean first = true;
             for (IPLDObject<UserState> userState : updatedUserStates) {
-                modelState.updateUserState(userState, first ? currentModelState : null);
+                modelState.updateUserState(userState,
+                        ownershipRequests.get(userState.getMapped().getUser().getMultihash()), first ? votings : null,
+                        first ? currentModelState : null);
                 first = false;
             }
             try {
                 currentModelState.save(context, null);
                 currentModelState.commit();
+                if (queuedVotings != null) {
+                    synchronized (queuedVotings) {
+                        queuedVotings.clear();
+                    }
+                }
                 publishLocalState(currentModelState);
                 return true;
             }

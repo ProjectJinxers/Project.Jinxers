@@ -235,4 +235,7 @@ public interface IPLDWriter {
         }
     }
 
+    <D extends IPLDSerializable> void writeLinkObjectArrays(String key, Map<String, IPLDObject<D>[]> linkArrays,
+            Signer signer, IPLDContext context) throws IOException;
+
 }

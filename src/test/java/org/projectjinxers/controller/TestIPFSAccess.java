@@ -220,9 +220,9 @@ public class TestIPFSAccess extends IPFSAccess {
      * @param signer          the signer
      */
     public Map<String, Object> simulateOwnershipRequestMessage(String mainIOTAAddress, String userHash,
-            String documentHash, Signer signer) {
+            String documentHash, boolean anonymousVoting, Signer signer) {
 
-        String request = userHash + "." + documentHash;
+        String request = (anonymousVoting ? "-" : "+") + "." + userHash + "." + documentHash;
         byte[] requestBytes = request.getBytes(StandardCharsets.UTF_8);
         ECDSASignature signature = signer.sign(requestBytes);
         Map<String, Object> res = Map.of("data",

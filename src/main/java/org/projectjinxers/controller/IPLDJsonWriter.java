@@ -17,6 +17,7 @@ import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
+import java.util.Map;
 
 import org.ethereum.crypto.ECKey.ECDSASignature;
 import org.projectjinxers.account.Signer;
@@ -212,6 +213,29 @@ public class IPLDJsonWriter implements IPLDWriter {
             }
             jsonWriter.endArray();
         }
+    }
+
+    @Override
+    public <D extends IPLDSerializable> void writeLinkObjectArrays(String key, Map<String, IPLDObject<D>[]> linkArrays,
+            Signer signer, IPLDContext context) throws IOException {
+        if (linkArrays != null) {
+            jsonWriter.name(key).beginArray();
+            for (IPLDObject<D>[] linkArray : linkArrays.values()) {
+                if (linkArray.length > 0) {
+                    jsonWriter.beginArray();
+                    for (IPLDObject<?> link : linkArray) {
+                        String multihash = link.getMultihash();
+                        if (multihash == null) {
+                            multihash = link.save(context, signer);
+                        }
+                        writeLink(multihash);
+                    }
+                    jsonWriter.endArray();
+                }
+            }
+            jsonWriter.endArray();
+        }
+
     }
 
     private void writeLink(String link) throws IOException {

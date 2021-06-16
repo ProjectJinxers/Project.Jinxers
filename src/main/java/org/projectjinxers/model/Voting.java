@@ -23,8 +23,8 @@ import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.IPLDReader;
-import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.IPLDReader.KeyProvider;
+import org.projectjinxers.controller.IPLDWriter;
 
 /**
  * Votings can be initiated by eligible users. They can be anonymous. They are executed without any external factors or
@@ -45,7 +45,7 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
             return Base64.encodeBase64String(object.getMapped().getInvitationKey());
         }
     };
-    private static final KeyProvider<Vote> UNANONYMOUS_VOTE_KEY_PROVIDER = new KeyProvider<Vote>() {
+    private static final KeyProvider<Vote> NON_ANONYMOUS_VOTE_KEY_PROVIDER = new KeyProvider<Vote>() {
         @Override
         public String getKey(IPLDObject<Vote> object) {
             return new String(object.getMapped().getInvitationKey(), StandardCharsets.UTF_8);
@@ -57,6 +57,22 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
     private IPLDObject<Votable> subject;
     private Map<String, IPLDObject<Vote>> votes;
 
+    Voting() {
+
+    }
+
+    /**
+     * Constructor.
+     * 
+     * @param subject            the subject
+     * @param obfuscationVersion the version of the hash obfuscation algorithm
+     */
+    public Voting(IPLDObject<Votable> subject, int obfuscationVersion) {
+        this.seed = (int) (Math.random() * Integer.MAX_VALUE);
+        this.obfuscationVersion = obfuscationVersion;
+        this.subject = subject;
+    }
+
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {
@@ -65,7 +81,7 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
         this.subject = reader.readLinkObject(KEY_OBFUSCATION_VERSION, context, validationContext, LoaderFactory.VOTABLE,
                 eager);
         this.votes = reader.readLinkObjects(KEY_VOTES, context, validationContext, LoaderFactory.VOTE, eager,
-                subject.getMapped().isAnonymous() ? ANONYMOUS_VOTE_KEY_PROVIDER : UNANONYMOUS_VOTE_KEY_PROVIDER);
+                subject.getMapped().isAnonymous() ? ANONYMOUS_VOTE_KEY_PROVIDER : NON_ANONYMOUS_VOTE_KEY_PROVIDER);
     }
 
     @Override

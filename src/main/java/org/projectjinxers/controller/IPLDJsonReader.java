@@ -15,14 +15,17 @@ package org.projectjinxers.controller;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
+import java.lang.reflect.Array;
 import java.math.BigInteger;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 
 import org.ethereum.crypto.ECKey.ECDSASignature;
 import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.Loader;
+import org.projectjinxers.model.LoaderFactory;
 import org.projectjinxers.model.Metadata;
 import org.projectjinxers.model.ValidationContext;
 
@@ -53,6 +56,7 @@ public class IPLDJsonReader implements IPLDReader {
     private Map<String, JsonPrimitive[]> primitiveArrays = new HashMap<>();
     private Map<String, String> links = new HashMap<>();
     private Map<String, String[]> linkArrays = new HashMap<>();
+    private Map<String, String[][]> linkArrayArrays = new HashMap<>();
 
     IPLDJsonReader() {
 
@@ -103,8 +107,10 @@ public class IPLDJsonReader implements IPLDReader {
             else if (value.isJsonArray()) {
                 int i = 0;
                 boolean isLink = false;
+                boolean isLinkArray = false;
                 JsonPrimitive[] primitiveValues = null;
                 String[] linkValues = null;
+                String[][] linkArrayValues = null;
                 JsonArray jsonArray = value.getAsJsonArray();
                 for (JsonElement item : jsonArray) {
                     if (i == 0) {
@@ -114,6 +120,12 @@ public class IPLDJsonReader implements IPLDReader {
                             linkValues[i] = getLink(item);
                             linkArrays.put(key, linkValues);
                         }
+                        else if (item.isJsonArray()) {
+                            isLinkArray = true;
+                            linkArrayValues = new String[jsonArray.size()][];
+                            linkArrayValues[i] = getLinkArray(item.getAsJsonArray());
+                            linkArrayArrays.put(key, linkArrayValues);
+                        }
                         else {
                             primitiveValues = new JsonPrimitive[jsonArray.size()];
                             primitiveValues[i] = item.getAsJsonPrimitive();
@@ -122,6 +134,9 @@ public class IPLDJsonReader implements IPLDReader {
                     }
                     else if (isLink) {
                         linkValues[i] = getLink(item);
+                    }
+                    else if (isLinkArray) {
+                        linkArrayValues[i] = getLinkArray(item.getAsJsonArray());
                     }
                     else {
                         primitiveValues[i] = item.getAsJsonPrimitive();
@@ -137,6 +152,15 @@ public class IPLDJsonReader implements IPLDReader {
 
     private String getLink(JsonElement element) {
         return element.getAsJsonObject().get(KEY_INNER_LINK).getAsString();
+    }
+
+    private String[] getLinkArray(JsonArray array) {
+        String[] res = new String[array.size()];
+        int i = 0;
+        for (JsonElement element : array) {
+            res[i++] = getLink(element);
+        }
+        return res;
     }
 
     @Override
@@ -281,6 +305,37 @@ public class IPLDJsonReader implements IPLDReader {
     @Override
     public String[] readLinksArray(String key) {
         return linkArrays.get(key);
+    }
+
+    @Override
+    public <D extends IPLDSerializable> Map<String, IPLDObject<D>[]> readLinkObjectCollections(String key,
+            IPLDContext context, ValidationContext validationContext, LoaderFactory<D> loaderFactory, boolean eager,
+            KeyProvider<D> keyProvider) {
+        String[][] linkArrays = linkArrayArrays.get(key);
+        if (linkArrays == null) {
+            return null;
+        }
+        Map<String, IPLDObject<D>[]> res = new LinkedHashMap<>();
+        for (String[] linkArray : linkArrays) {
+            boolean first = true;
+            @SuppressWarnings("unchecked")
+            IPLDObject<D>[] array = (IPLDObject<D>[]) Array.newInstance(IPLDObject.class, linkArray.length);
+            int i = 0;
+            for (String link : linkArray) {
+                IPLDObject<D> linkObject = new IPLDObject<>(link, loaderFactory.createLoader(), context,
+                        validationContext);
+                if (eager) {
+                    linkObject.getMapped();
+                }
+                array[i++] = linkObject;
+                if (first) {
+                    String mapKey = keyProvider.getKey(linkObject);
+                    res.put(mapKey, array);
+                    first = false;
+                }
+            }
+        }
+        return res;
     }
 
 }

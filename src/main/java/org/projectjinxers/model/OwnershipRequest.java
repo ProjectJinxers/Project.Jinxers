@@ -30,11 +30,30 @@ public class OwnershipRequest extends ToggleRequest implements DocumentAction, L
 
     private static final String KEY_ANONYMOUS_VOTING = "n";
     private static final String KEY_VOTING_HASH_SEED = "h";
+    private static final String KEY_TIMESTAMP = "t";
     private static final String KEY_DOCUMENT = "d";
 
     private boolean anonymousVoting;
     private int votingHashSeed;
+    private long timestamp;
     private IPLDObject<Document> document;
+
+    OwnershipRequest() {
+
+    }
+
+    /**
+     * Constructor.
+     * 
+     * @param document        the document
+     * @param anonymousVoting indicates whether or not a voting, if necessary, has to be anonymous
+     */
+    public OwnershipRequest(IPLDObject<Document> document, boolean anonymousVoting) {
+        this.document = document;
+        this.anonymousVoting = anonymousVoting;
+        this.votingHashSeed = (int) (Math.random() * Integer.MAX_VALUE);
+        this.timestamp = System.currentTimeMillis();
+    }
 
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
@@ -42,6 +61,7 @@ public class OwnershipRequest extends ToggleRequest implements DocumentAction, L
         super.read(reader, context, validationContext, eager, metadata);
         this.anonymousVoting = Boolean.TRUE.equals(reader.readBoolean(KEY_ANONYMOUS_VOTING));
         this.votingHashSeed = reader.readNumber(KEY_VOTING_HASH_SEED).intValue();
+        this.timestamp = reader.readNumber(KEY_TIMESTAMP).longValue();
         this.document = reader.readLinkObject(KEY_DOCUMENT, context, validationContext, LoaderFactory.DOCUMENT, eager);
     }
 
@@ -50,7 +70,22 @@ public class OwnershipRequest extends ToggleRequest implements DocumentAction, L
         super.write(writer, signer, context);
         writer.writeIfTrue(KEY_ANONYMOUS_VOTING, anonymousVoting);
         writer.writeNumber(KEY_VOTING_HASH_SEED, votingHashSeed);
+        writer.writeNumber(KEY_TIMESTAMP, timestamp);
         writer.writeLink(KEY_DOCUMENT, document, signer, null);
+    }
+
+    /**
+     * @return whether or not the voting, if necessary, is to be anonymous
+     */
+    public boolean isAnonymousVoting() {
+        return anonymousVoting;
+    }
+
+    /**
+     * @return the creation timestamp
+     */
+    public long getTimestamp() {
+        return timestamp;
     }
 
     @Override

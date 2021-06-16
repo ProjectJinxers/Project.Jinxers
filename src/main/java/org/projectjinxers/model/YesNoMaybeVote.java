@@ -21,7 +21,7 @@ import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDWriter;
 
 /**
- * A simple Vote for an unanonymous Voting where users can select 'yes', 'no' and nothing (e.g. maybe).
+ * A simple Vote for a non-anonymous Voting where users can select 'yes', 'no' and nothing (e.g. maybe).
  * 
  * @author ProjectJinxers
  */

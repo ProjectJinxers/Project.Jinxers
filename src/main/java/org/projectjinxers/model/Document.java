@@ -159,6 +159,13 @@ public class Document implements IPLDSerializable {
     }
 
     /**
+     * @return the date when the document has been added
+     */
+    public Date getDate() {
+        return date;
+    }
+
+    /**
      * @return the user state
      */
     public IPLDObject<UserState> getUserState() {
@@ -187,6 +194,13 @@ public class Document implements IPLDSerializable {
         copy.previousVersion = currentWrapper;
         IPLDObject<Document> res = new IPLDObject<Document>(this, foreignSignature);
         return res;
+    }
+
+    /**
+     * @return the hash of the previous version (null-safe)
+     */
+    public String getPreviousVersionHash() {
+        return previousVersion == null ? null : previousVersion.getMultihash();
     }
 
     /**

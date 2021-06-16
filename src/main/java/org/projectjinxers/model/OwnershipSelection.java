@@ -14,15 +14,17 @@
 package org.projectjinxers.model;
 
 import java.io.IOException;
+import java.util.Collection;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.IPLDReader;
-import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.IPLDReader.KeyProvider;
+import org.projectjinxers.controller.IPLDWriter;
 
 /**
  * OwnershipSelection instances can be voted for if more than one user requests ownership of an abandoned document.
@@ -31,20 +33,40 @@ import org.projectjinxers.controller.IPLDReader.KeyProvider;
  */
 public class OwnershipSelection implements Votable {
 
+    private static final int DURATION = 1000 * 60 * 60 * 24 * 10;
+
     private static final String KEY_ANONYMOUS = "a";
     private static final String KEY_HASH_SEED = "h";
     private static final String KEY_DEADLINE = "d";
+    private static final String KEY_DOCUMENT = "o";
     static final String KEY_SELECTION = "s";
 
-    private static final KeyProvider<OwnershipRequest> SELECTION_KEY_PROVIDER = new KeyProvider<OwnershipRequest>() {
+    private static final KeyProvider<OwnershipRequest> SELECTION_KEY_PROVIDER = new KeyProvider<>() {
     };
 
     private boolean anonymous;
     private int hashSeed;
     private Date deadline;
+    private IPLDObject<Document> document;
     private Map<String, IPLDObject<OwnershipRequest>> selection;
 
     private Object[] allValues;
+
+    OwnershipSelection() {
+
+    }
+
+    public OwnershipSelection(IPLDObject<Document> document, Collection<IPLDObject<OwnershipRequest>> selection,
+            boolean anonymous) {
+        this.anonymous = anonymous;
+        this.hashSeed = (int) (Math.random() * Integer.MAX_VALUE);
+        this.deadline = new Date(System.currentTimeMillis() + DURATION);
+        this.document = document;
+        this.selection = new LinkedHashMap<>();
+        for (IPLDObject<OwnershipRequest> request : selection) {
+            this.selection.put(request.getMultihash(), request);
+        }
+    }
 
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
@@ -52,6 +74,7 @@ public class OwnershipSelection implements Votable {
         this.anonymous = Boolean.TRUE.equals(reader.readBoolean(KEY_ANONYMOUS));
         this.hashSeed = reader.readNumber(KEY_HASH_SEED).intValue();
         this.deadline = new Date(reader.readNumber(KEY_DEADLINE).longValue());
+        this.document = reader.readLinkObject(KEY_DOCUMENT, context, validationContext, LoaderFactory.DOCUMENT, eager);
         this.selection = reader.readLinkObjects(KEY_SELECTION, context, validationContext,
                 LoaderFactory.OWNERSHIP_REQUEST, eager, SELECTION_KEY_PROVIDER);
     }
@@ -61,6 +84,7 @@ public class OwnershipSelection implements Votable {
         writer.writeIfTrue(KEY_ANONYMOUS, anonymous);
         writer.writeNumber(KEY_HASH_SEED, hashSeed);
         writer.writeNumber(KEY_DEADLINE, deadline.getTime());
+        writer.writeLink(KEY_DOCUMENT, document, signer, null);
         writer.writeLinkObjects(KEY_SELECTION, selection, signer, null);
     }
 
@@ -77,6 +101,13 @@ public class OwnershipSelection implements Votable {
     @Override
     public Date getDeadline() {
         return deadline;
+    }
+
+    /**
+     * @return the abandoned document
+     */
+    public IPLDObject<Document> getDocument() {
+        return document;
     }
 
     @Override

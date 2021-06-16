@@ -58,6 +58,13 @@ public abstract class ToggleRequest implements IPLDSerializable {
     }
 
     /**
+     * @return whether or not this request is (currently) active
+     */
+    public boolean isActive() {
+        return active;
+    }
+
+    /**
      * @return the unwrapped user
      */
     public User getUser() {

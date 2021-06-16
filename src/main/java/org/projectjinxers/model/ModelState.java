@@ -14,6 +14,9 @@
 package org.projectjinxers.model;
 
 import java.io.IOException;
+import java.lang.reflect.Array;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -36,18 +39,31 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
     private static final String KEY_PREVIOUS_VERSION = "p";
     private static final String KEY_USER_STATES = "u";
     private static final String KEY_VOTINGS = "v";
+    private static final String KEY_SEALED_DOCUMENTS = "d";
+    private static final String KEY_OWNERSHIP_REQUESTS = "o";
 
-    private static final KeyProvider<UserState> USER_STATE_KEY_PROVIDER = new KeyProvider<UserState>() {
+    private static final KeyProvider<UserState> USER_STATE_KEY_PROVIDER = new KeyProvider<>() {
         @Override
         public String getKey(IPLDObject<UserState> object) {
             return object.getMapped().getUser().getMultihash();
         }
     };
 
-    private static final KeyProvider<Voting> VOTING_KEY_PROVIDER = new KeyProvider<Voting>() {
+    private static final KeyProvider<Voting> VOTING_KEY_PROVIDER = new KeyProvider<>() {
         @Override
         public String getKey(IPLDObject<Voting> object) {
             return object.getMapped().getSubject().getMultihash();
+        }
+    };
+
+    private static final KeyProvider<Document> SEALED_DOCUMENT_KEY_PROVIDER = new KeyProvider<>() {
+
+    };
+
+    private static final KeyProvider<OwnershipRequest> OWNERSHIP_REQUESTS_KEY_PROVIDER = new KeyProvider<>() {
+        @Override
+        public String getKey(IPLDObject<OwnershipRequest> object) {
+            return object.getMapped().getDocument().getMultihash();
         }
     };
 
@@ -56,6 +72,8 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
     private IPLDObject<ModelState> previousVersion;
     private Map<String, IPLDObject<UserState>> userStates;
     private Map<String, IPLDObject<Voting>> votings;
+    private Map<String, IPLDObject<Document>> sealedDocuments;
+    private Map<String, IPLDObject<OwnershipRequest>[]> ownershipRequests;
 
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
@@ -68,6 +86,10 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
                 eager, USER_STATE_KEY_PROVIDER);
         this.votings = reader.readLinkObjects(KEY_VOTINGS, context, validationContext, LoaderFactory.VOTING, eager,
                 VOTING_KEY_PROVIDER);
+        this.sealedDocuments = reader.readLinkObjects(KEY_SEALED_DOCUMENTS, context, validationContext,
+                LoaderFactory.DOCUMENT, eager, SEALED_DOCUMENT_KEY_PROVIDER);
+        this.ownershipRequests = reader.readLinkObjectCollections(KEY_OWNERSHIP_REQUESTS, context, validationContext,
+                LoaderFactory.OWNERSHIP_REQUEST, eager, OWNERSHIP_REQUESTS_KEY_PROVIDER);
     }
 
     @Override
@@ -77,6 +99,8 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         writer.writeLink(KEY_PREVIOUS_VERSION, previousVersion, signer, null);
         writer.writeLinkObjects(KEY_USER_STATES, userStates, signer, context);
         writer.writeLinkObjects(KEY_VOTINGS, votings, signer, context);
+        writer.writeLinkObjects(KEY_SEALED_DOCUMENTS, sealedDocuments, signer, null);
+        writer.writeLinkObjectArrays(KEY_OWNERSHIP_REQUESTS, ownershipRequests, signer, context);
     }
 
     /**
@@ -106,6 +130,51 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
     }
 
     /**
+     * Checks if the document with the given hash has been sealed.
+     * 
+     * @param documentHash the document hash
+     * @return true iff the document has been sealed
+     */
+    public boolean isSealedDocument(String documentHash) {
+        return sealedDocuments != null && sealedDocuments.containsKey(documentHash);
+    }
+
+    /**
+     * @param documentHash the document hash
+     * @return the sealed document with the given hash (no null checks!)
+     */
+    public Document expectSealedDocument(String documentHash) {
+        return sealedDocuments.get(documentHash).getMapped();
+    }
+
+    /**
+     * @param documentHash the hash of the document to check
+     * @return true iff there is a voting for transfer of ownership of the document with the given hash
+     */
+    public boolean hasVotingForOwnershipTransfer(String documentHash) {
+        if (votings != null) {
+            for (IPLDObject<Voting> voting : votings.values()) {
+                Votable votable = voting.getMapped().getSubject().getMapped();
+                if (votable instanceof OwnershipSelection) {
+                    OwnershipSelection ownershipSelection = (OwnershipSelection) votable;
+                    if (documentHash.equals(ownershipSelection.getDocument().getMultihash())) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * @param documentHash the document hash
+     * @return the ownership requests for the document with the given hash (no null checks!)
+     */
+    public IPLDObject<OwnershipRequest>[] expectOwnershipRequests(String documentHash) {
+        return ownershipRequests.get(documentHash);
+    }
+
+    /**
      * Sets a wrapped copy of this instance as the previous version (if current is not null only), updates the user
      * states map by replacing the entry for the key of the updated user state with the updated user state and
      * increments the version if there is a previousVersion (i.e. if current is not null). Should only be called in a
@@ -116,7 +185,9 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
      *                increasing the version - make sure to call this with the previous version for the first update, if
      *                this is not the first version, as the copies would contain new state objects later)
      */
-    public void updateUserState(IPLDObject<UserState> updated, IPLDObject<ModelState> current) {
+    public void updateUserState(IPLDObject<UserState> updated,
+            Collection<IPLDObject<OwnershipRequest>> ownershipRequests, Collection<IPLDObject<Voting>> votings,
+            IPLDObject<ModelState> current) {
         ModelState copy;
         if (current == null) {
             copy = null;
@@ -126,8 +197,8 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
             copy.version = version;
             copy.timestamp = timestamp;
             copy.previousVersion = previousVersion;
-            if (votings != null) {
-                copy.votings = new LinkedHashMap<>(votings);
+            if (this.votings != null) {
+                copy.votings = new LinkedHashMap<>(this.votings);
             }
         }
         if (userStates == null) {
@@ -141,6 +212,31 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
             this.version++;
         }
         userStates.put(USER_STATE_KEY_PROVIDER.getKey(updated), updated);
+        if (ownershipRequests != null) {
+            if (this.ownershipRequests == null) {
+                this.ownershipRequests = new LinkedHashMap<>();
+            }
+            for (IPLDObject<OwnershipRequest> ownershipRequest : ownershipRequests) {
+                String key = OWNERSHIP_REQUESTS_KEY_PROVIDER.getKey(ownershipRequest);
+                IPLDObject<OwnershipRequest>[] requests = this.ownershipRequests.get(key);
+                if (requests == null) {
+                    @SuppressWarnings("unchecked")
+                    IPLDObject<OwnershipRequest>[] array = (IPLDObject<OwnershipRequest>[]) Array
+                            .newInstance(IPLDObject.class, 1);
+                    array[0] = ownershipRequest;
+                    this.ownershipRequests.put(key, array);
+                }
+                else {
+                    IPLDObject<OwnershipRequest>[] arrayCopy = Arrays.copyOf(requests, requests.length + 1);
+                    arrayCopy[requests.length] = ownershipRequest;
+                }
+            }
+        }
+        if (votings != null) {
+            for (IPLDObject<Voting> voting : votings) {
+                this.votings.put(VOTING_KEY_PROVIDER.getKey(voting), voting);
+            }
+        }
         this.timestamp = System.currentTimeMillis();
     }
 

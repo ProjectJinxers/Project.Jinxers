@@ -88,8 +88,8 @@ class TestIPFSAccessUtil {
                         .expectUserState("71b363800b13b92f7bd2262618c192bbfcfd8b21c59ce022f9eb33ea6bfeefa5");
                 secondUserState.getMapped().updateLinks(
                         Arrays.asList(new IPLDObject<>(new Document(secondUserState, document))), null, null, null);
-                mapped.updateUserState(new IPLDObject<>(userState.getMapped()), null);
-                mapped.updateUserState(new IPLDObject<>(secondUserState.getMapped()), null);
+                mapped.updateUserState(new IPLDObject<>(userState.getMapped()), null, null, null);
+                mapped.updateUserState(new IPLDObject<>(secondUserState.getMapped()), null, null, null);
                 return modelState;
             }
         });
@@ -121,7 +121,7 @@ class TestIPFSAccessUtil {
         UserState userState = new UserState(userObject, null);
         IPLDObject<UserState> userStateObject = new IPLDObject<>(userState);
         IPLDObject<ModelState> modelStateObject = new IPLDObject<>(modelState);
-        modelState.updateUserState(userStateObject, null);
+        modelState.updateUserState(userStateObject, null, null, null);
         Signer signer = new ECCSigner("user", "pass");
         modelStateObject.save(context, signer);
         byte[][] allObjects = access.getAllObjects();

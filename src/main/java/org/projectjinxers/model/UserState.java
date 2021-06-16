@@ -15,8 +15,11 @@ package org.projectjinxers.model;
 
 import java.io.IOException;
 import java.util.Collection;
+import java.util.Date;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
@@ -187,6 +190,113 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
      */
     public Document expectDocument(String documentHash) {
         return documents.get(documentHash).getMapped();
+    }
+
+    /**
+     * Checks if the user has posted a non-negative review, that has not been followed by a negative review, for the
+     * document with the given hash. Neutral reviews are currently included.
+     * 
+     * @param documentHash the document hash
+     * @return true iff the user has posted a non-negative review and there is no negative review afterwards
+     */
+    public boolean checkNonNegativeReview(String documentHash) {
+        return checkReview(documentHash, Boolean.FALSE);
+    }
+
+    /**
+     * Checks if the user has posted a non-positive review, that has not been followed by a positive review, for the
+     * document with the given hash. Neutral reviews are currently included.
+     * 
+     * @param documentHash the document hash
+     * @return true iff the user has posted a non-positive review and there is no positive review afterwards
+     */
+    public boolean checkNonPositiveReview(String documentHash) {
+        return checkReview(documentHash, Boolean.TRUE);
+    }
+
+    private boolean checkReview(String documentHash, Boolean disallowedApproveValue) {
+        boolean res = false;
+        if (documents != null) {
+            for (IPLDObject<Document> document : documents.values()) {
+                Document doc = document.getMapped();
+                if (doc instanceof Review) {
+                    Review review = (Review) doc;
+                    if (documentHash.equals(review.getDocument().getMultihash())) {
+                        Boolean approve = review.getApprove();
+                        if (disallowedApproveValue.equals(approve)) {
+                            res = false;
+                        }
+                        else { // neutral reviews allowed - currently, might change
+                            res = true;
+                        }
+                    }
+                }
+            }
+        }
+        return res;
+    }
+
+    /**
+     * Finds related documents and returns the date of the most recent one or null, if there is none (in which case the
+     * date of the document with the given hash can be assumed as the last activity date).
+     * 
+     * @param documentHash the document hash
+     * @return the last activity date or null, if the document itself is the last activity
+     */
+    public Date getLastActivityDate(String documentHash) {
+        Set<String> relatedHashes = new HashSet<>();
+        Set<String> unrelatedHashes = new HashSet<>();
+        relatedHashes.add(documentHash);
+        Document lastActivity = null;
+        main: for (IPLDObject<Document> document : documents.values()) {
+            String docHash = document.getMultihash();
+            if (unrelatedHashes.contains(docHash)) {
+                continue;
+            }
+            Document doc = document.getMapped();
+            String hash = doc.getPreviousVersionHash();
+            if (hash != null) {
+                if (relatedHashes.contains(hash)) {
+                    relatedHashes.add(docHash);
+                    lastActivity = doc;
+                    continue;
+                }
+                unrelatedHashes.add(hash);
+            }
+            if (doc instanceof Review) {
+                Review review = (Review) doc;
+                do {
+                    IPLDObject<Document> reviewed = review.getDocument();
+                    hash = reviewed.getMultihash();
+                    if (unrelatedHashes.contains(hash)) {
+                        continue main;
+                    }
+                    if (relatedHashes.contains(hash)) {
+                        relatedHashes.add(docHash);
+                        lastActivity = doc;
+                        continue main;
+                    }
+                    Document reviewedDoc = reviewed.getMapped();
+                    if (reviewedDoc instanceof Review) {
+                        review = (Review) reviewedDoc;
+                    }
+                    else {
+                        break;
+                    }
+                }
+                while (true);
+                unrelatedHashes.add(hash);
+            }
+        }
+        return lastActivity == null ? null : lastActivity.getDate();
+    }
+
+    /**
+     * @param documentHash the document hash
+     * @return the ownership request for the document with the given hash (null-safe)
+     */
+    public IPLDObject<OwnershipRequest> getOwnershipRequest(String documentHash) {
+        return ownershipRequests == null ? null : ownershipRequests.get(documentHash);
     }
 
     /**

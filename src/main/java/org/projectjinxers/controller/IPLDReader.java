@@ -282,4 +282,8 @@ public interface IPLDReader {
         return res;
     }
 
+    <D extends IPLDSerializable> Map<String, IPLDObject<D>[]> readLinkObjectCollections(String key,
+            IPLDContext context, ValidationContext validationContext, LoaderFactory<D> loaderFactory, boolean eager,
+            KeyProvider<D> keyProvider);
+
 }

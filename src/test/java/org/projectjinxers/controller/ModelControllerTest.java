@@ -378,7 +378,8 @@ class ModelControllerTest {
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
 
-        access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), userHash, documentHash, NEW_OWNER_SIGNER);
+        access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), userHash, documentHash, false,
+                NEW_OWNER_SIGNER);
         waitFor(100);
     }
 
@@ -398,7 +399,7 @@ class ModelControllerTest {
         modelStateObject.beginTransaction(controller.getContext()); // causes update to be deferred
 
         Map<String, Object> msg = access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), userHash,
-                documentHash, NEW_OWNER_SIGNER);
+                documentHash, false, NEW_OWNER_SIGNER);
         waitFor(100);
         modelStateObject.commit();
 
@@ -422,7 +423,7 @@ class ModelControllerTest {
         modelStateObject.beginTransaction(controller.getContext()); // causes update to be deferred
 
         Map<String, Object> msg = access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), userHash,
-                documentHash, NEW_OWNER_SIGNER);
+                documentHash, false, NEW_OWNER_SIGNER);
         waitFor(100);
         access.simulateOwnershipRequestMessage(documentHash, msg);
         waitFor(100);
@@ -444,7 +445,8 @@ class ModelControllerTest {
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
 
-        access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), userHash, documentHash, DEFAULT_SIGNER);
+        access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), userHash, documentHash, false,
+                DEFAULT_SIGNER);
         waitFor(100);
     }
 
@@ -464,7 +466,7 @@ class ModelControllerTest {
         modelStateObject.beginTransaction(controller.getContext()); // causes update to be deferred
 
         Map<String, Object> msg = access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), userHash,
-                documentHash, DEFAULT_SIGNER);
+                documentHash, false, DEFAULT_SIGNER);
         waitFor(100);
 
         modelStateObject.commit();
@@ -488,7 +490,7 @@ class ModelControllerTest {
         modelStateObject.beginTransaction(controller.getContext()); // causes update to be deferred
 
         Map<String, Object> msg = access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), userHash,
-                documentHash, DEFAULT_SIGNER);
+                documentHash, false, DEFAULT_SIGNER);
         waitFor(100);
 
         access.simulateOwnershipRequestMessage(documentHash, msg);
@@ -516,7 +518,7 @@ class ModelControllerTest {
         userState.beginTransaction(controller.getContext()); // causes update to be deferred
 
         Map<String, Object> msg = access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), userHash,
-                documentHash, DEFAULT_SIGNER);
+                documentHash, false, DEFAULT_SIGNER);
         waitFor(100);
 
         userState.commit();
@@ -541,7 +543,7 @@ class ModelControllerTest {
         userState.beginTransaction(controller.getContext()); // causes update to be deferred
 
         Map<String, Object> msg = access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), userHash,
-                documentHash, DEFAULT_SIGNER);
+                documentHash, false, DEFAULT_SIGNER);
         waitFor(100);
 
         access.simulateOwnershipRequestMessage(documentHash, msg);
@@ -568,7 +570,7 @@ class ModelControllerTest {
         access.addNoSaveFailure("");
 
         Map<String, Object> msg = access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), userHash,
-                documentHash, DEFAULT_SIGNER);
+                documentHash, false, DEFAULT_SIGNER);
         waitFor(100);
 
         access.clearNoSaveFailures();
@@ -592,7 +594,7 @@ class ModelControllerTest {
         access.addNoSaveFailure("");
 
         Map<String, Object> msg = access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), userHash,
-                documentHash, DEFAULT_SIGNER);
+                documentHash, false, DEFAULT_SIGNER);
         waitFor(100);
 
         access.simulateOwnershipRequestMessage(documentHash, msg);
