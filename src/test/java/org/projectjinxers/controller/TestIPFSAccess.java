@@ -212,23 +212,35 @@ public class TestIPFSAccess extends IPFSAccess {
     }
 
     /**
-     * Simulates a received ownership request message. The subsciber for the topic will receive that message.
+     * Simulates a received ownership request message. The subscriber for the topic will receive that message.
      * 
      * @param mainIOTAAddress the main IOTA address (part of the topic)
      * @param userHash        the user hash
      * @param documentHash    the doument hash
      * @param signer          the signer
      */
-    public void simulateOwnershipRequestMessage(String mainIOTAAddress, String userHash, String documentHash,
-            Signer signer) {
-        String topic = "or" + mainIOTAAddress;
+    public Map<String, Object> simulateOwnershipRequestMessage(String mainIOTAAddress, String userHash,
+            String documentHash, Signer signer) {
+
         String request = userHash + "." + documentHash;
         byte[] requestBytes = request.getBytes(StandardCharsets.UTF_8);
         ECDSASignature signature = signer.sign(requestBytes);
-        simulateMessage(topic,
-                Map.of("data",
-                        Base64.toBase64String((request + "|" + signature.r + "|" + signature.s + "|" + signature.v)
-                                .getBytes(StandardCharsets.UTF_8))));
+        Map<String, Object> res = Map.of("data",
+                Base64.toBase64String((request + "|" + signature.r + "|" + signature.s + "|" + signature.v)
+                        .getBytes(StandardCharsets.UTF_8)));
+        simulateOwnershipRequestMessage(mainIOTAAddress, res);
+        return res;
+    }
+
+    /**
+     * Simulates a received ownership request message. The subscriber for the topic will receive that message.
+     * 
+     * @param mainIOTAAddress the main IOTA address (part of the topic)
+     * @param message         the message
+     */
+    public void simulateOwnershipRequestMessage(String mainIOTAAddress, Map<String, Object> message) {
+        String topic = "or" + mainIOTAAddress;
+        simulateMessage(topic, message);
     }
 
     /**

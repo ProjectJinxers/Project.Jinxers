@@ -72,7 +72,7 @@ class TestIPFSAccessUtil {
 
     private static final Map<String, ModelUpdater> UPDATERS = new HashMap<>();
     static {
-        UPDATERS.put("3b7438a6421038c3c55c2c9521a011fbd99570f01a38947bd4d52ebb4a0479ae", new ModelUpdater() {
+        UPDATERS.put("?b9bd96bbf941ae554b73a77c4701b4bba6c73dddeaa7b1b2a27529e82dea6987", new ModelUpdater() {
             @Override
             public IPLDObject<?> update(String hash, IPLDContext context) throws IOException {
                 Loader<ModelState> loader = LoaderFactory.MODEL_STATE.createLoader();
@@ -80,15 +80,16 @@ class TestIPFSAccessUtil {
                 ModelState mapped = modelState.getMapped();
                 IPLDObject<UserState> userState = mapped
                         .expectUserState("4426c8164350e8ec0d2750e2f492aa6016fab43d147810970f25fceb96c69765");
-                Document document = new Document("Title", "Subtitle", "Abstract", "Contents", "Version", "Tags",
-                        "Source", userState);
-                userState.getMapped().updateLinks(Arrays.asList(new IPLDObject<Document>(document)), null, null, null);
-                IPLDObject<User> secondUser = new IPLDObject<>(
-                        new User("newOwner", Users.createAccount("newOwner", "newpass").getPubKey()));
-                secondUser.save(context, new ECCSigner("newOwner", "newpass"));
-                UserState secondUserState = new UserState(secondUser, null);
-                mapped.updateUserState(new IPLDObject<UserState>(userState.getMapped()), null);
-                mapped.updateUserState(new IPLDObject<UserState>(secondUserState), null);
+                IPLDObject<Document> document = userState.getMapped()
+                        .getDocument("d7125adf8e58b52181edeefbb874aa5d40c6037df9a7fc6d8f81e66e3669cbe7");
+                userState.getMapped().updateLinks(null, null,
+                        Arrays.asList("d7125adf8e58b52181edeefbb874aa5d40c6037df9a7fc6d8f81e66e3669cbe7"), null);
+                IPLDObject<UserState> secondUserState = mapped
+                        .expectUserState("71b363800b13b92f7bd2262618c192bbfcfd8b21c59ce022f9eb33ea6bfeefa5");
+                secondUserState.getMapped().updateLinks(
+                        Arrays.asList(new IPLDObject<>(new Document(secondUserState, document))), null, null, null);
+                mapped.updateUserState(new IPLDObject<>(userState.getMapped()), null);
+                mapped.updateUserState(new IPLDObject<>(secondUserState.getMapped()), null);
                 return modelState;
             }
         });
@@ -152,7 +153,7 @@ class TestIPFSAccessUtil {
 
     @Test
     void updateFileContentsForMultipleObjects() throws FileNotFoundException, IOException {
-        String filepath = "model/modelController/saveDocument/simple.json";
+        String filepath = "model/modelController/transferOwnership/reclaim.json";
         System.out.printf(HEADER, "update " + filepath);
         updateObjects(filepath, false);
         System.out.println(FOOTER);
@@ -168,7 +169,7 @@ class TestIPFSAccessUtil {
 
     @Test
     void replaceFileContentsForMultipleObjects() throws FileNotFoundException, IOException {
-        String filepath = "model/modelController/saveDocument/simple.json";
+        String filepath = "model/modelController/transferOwnership/simple.json";
         System.out.printf(HEADER, "replace " + filepath);
         updateObjects(filepath, true);
         System.out.println(FOOTER);

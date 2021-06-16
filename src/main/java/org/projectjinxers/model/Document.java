@@ -18,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.Map;
 
+import org.ethereum.crypto.ECKey.ECDSASignature;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.controller.IPLDObject;
@@ -97,6 +98,26 @@ public class Document implements IPLDSerializable {
         this.userState = userState;
     }
 
+    /**
+     * Constructor for a transferring a document.
+     * 
+     * @param userState       the current user state for the new owner
+     * @param previousVersion the transferred document
+     */
+    public Document(IPLDObject<UserState> userState, IPLDObject<Document> previousVersion) {
+        Document doc = previousVersion.getMapped();
+        this.title = doc.title;
+        this.subtitle = doc.subtitle;
+        this.abstr = doc.abstr;
+        this.contents = doc.contents;
+        this.version = doc.version;
+        this.tags = doc.tags;
+        this.date = doc.date;
+        this.source = doc.source;
+        this.userState = userState;
+        this.previousVersion = previousVersion;
+    }
+
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {
@@ -152,17 +173,19 @@ public class Document implements IPLDSerializable {
     }
 
     /**
-     * Transfers this document to another owner.
+     * Prepares transfer of this document to another owner. This instance's state is not changed.
      * 
-     * @param newOwner       the new owner
-     * @param currentWrapper the current wrapper object (will be set as the new previousVersion)
+     * @param newOwner         the new owner
+     * @param currentWrapper   the current wrapper object (will be set as the new previousVersion)
+     * @param foreignSignature the signature of the pub data
      * @return the new object (must be saved)
      */
-    public IPLDObject<Document> transferTo(IPLDObject<UserState> newOwner, IPLDObject<Document> currentWrapper) {
+    public IPLDObject<Document> transferTo(IPLDObject<UserState> newOwner, IPLDObject<Document> currentWrapper,
+            ECDSASignature foreignSignature) {
         Document copy = copy();
         copy.userState = newOwner;
         copy.previousVersion = currentWrapper;
-        IPLDObject<Document> res = new IPLDObject<Document>(this);
+        IPLDObject<Document> res = new IPLDObject<Document>(this, foreignSignature);
         return res;
     }
 
@@ -183,6 +206,7 @@ public class Document implements IPLDSerializable {
             if (previous == null) {
                 return doc;
             }
+            doc = previous;
         }
         while (true);
     }

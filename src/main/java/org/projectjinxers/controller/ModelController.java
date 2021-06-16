@@ -235,7 +235,7 @@ public class ModelController {
         try {
             executePendingChanges();
         }
-        catch (IOException e) {
+        catch (Exception e) {
             e.printStackTrace();
         }
         processPendingModelStates();
@@ -337,7 +337,8 @@ public class ModelController {
                             docs = new ArrayDeque<>();
                             documents.put(key, docs);
                         }
-                        IPLDObject<Document> transferred = transferredDoc.transferTo(newOwner, transferredDocument);
+                        IPLDObject<Document> transferred = transferredDoc.transferTo(newOwner, transferredDocument,
+                                controller.getSignature());
                         try {
                             transferred.save(context, null);
                             docs.add(transferred);
@@ -546,12 +547,7 @@ public class ModelController {
     private void handleOwnershipTransferControllerException(Exception e, OwnershipTransferController controller) {
         e.printStackTrace();
         if (controller != null) {
-            if (queuedOwnershipTransferControllers == null) {
-                queuedOwnershipTransferControllers = new ArrayDeque<>();
-            }
-            synchronized (queuedOwnershipTransferControllers) {
-                queuedOwnershipTransferControllers.add(controller);
-            }
+            enqueueOwnershipTransferController(controller);
         }
     }
 
@@ -620,7 +616,7 @@ public class ModelController {
             synchronized (queuedOwnershipRequests) {
                 Queue<IPLDObject<OwnershipRequest>> queue = queuedOwnershipRequests.get(userHash);
                 if (queue == null) {
-                    queuedOwnershipRequests.put(userHash, queue);
+                    queuedOwnershipRequests.put(userHash, requests);
                 }
                 else {
                     queue.addAll(requests);
@@ -634,7 +630,7 @@ public class ModelController {
             synchronized (queuedTransferredDocumentHashes) {
                 Queue<String> queue = queuedTransferredDocumentHashes.get(userHash);
                 if (queue == null) {
-                    queuedTransferredDocumentHashes.put(userHash, queue);
+                    queuedTransferredDocumentHashes.put(userHash, transferredOwnershipHashes);
                 }
                 else {
                     queue.addAll(transferredOwnershipHashes);

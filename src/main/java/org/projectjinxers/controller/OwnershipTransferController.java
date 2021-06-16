@@ -156,4 +156,11 @@ public class OwnershipTransferController {
         return document;
     }
 
+    /**
+     * @return the signature of the pub message
+     */
+    public ECDSASignature getSignature() {
+        return signature;
+    }
+
 }
