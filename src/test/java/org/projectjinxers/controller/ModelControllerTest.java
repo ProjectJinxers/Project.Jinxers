@@ -819,14 +819,14 @@ class ModelControllerTest {
 
         Map<String, Object> msg = access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), reviewerHash,
                 documentHash, false, NEW_OWNER_SIGNER);
-        waitFor(200);
+        waitFor(400);
         assertNull(access.getPublishedMessage(config.getIOTAMainAddress()));
 
         IPLDObject<UserState> rolledBackReviewerState = modelState.expectUserState(reviewerHash);
         assertNotSame(rolledBackReviewerState, reviewerState);
         rolledBackReviewerState.beginTransaction(controller.getContext());
         access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), msg);
-        waitFor(200);
+        waitFor(400);
         assertNull(access.getPublishedMessage(config.getIOTAMainAddress()));
 
         IPLDObject<UserState> next = modelState.expectUserState(reviewerHash);
