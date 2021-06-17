@@ -551,7 +551,7 @@ class ModelControllerTest {
 
         userState.commit();
         access.simulateOwnershipRequestMessage(documentHash, msg);
-        assertNotNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 800));
+        assertNotNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 1600));
     }
 
     @Test
