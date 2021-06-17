@@ -21,6 +21,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -518,7 +519,7 @@ public class ModelController {
             catch (Exception e) {
                 currentModelState.rollback(context);
                 if (pendingUserStates == null) {
-                    pendingUserStates = new HashMap<>();
+                    pendingUserStates = new LinkedHashMap<>();
                 }
                 synchronized (pendingUserStates) {
                     for (IPLDObject<UserState> userState : updatedUserStates) {
@@ -558,7 +559,7 @@ public class ModelController {
 
         if (updatedUserStates.size() > 0) {
             if (pendingUserStates == null) {
-                pendingUserStates = new HashMap<>();
+                pendingUserStates = new LinkedHashMap<>();
             }
             synchronized (pendingUserStates) {
                 for (IPLDObject<UserState> updated : updatedUserStates) {
