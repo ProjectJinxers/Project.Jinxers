@@ -447,7 +447,7 @@ class ModelControllerTest {
 
         access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), userHash, documentHash, false,
                 DEFAULT_SIGNER);
-        assertNotNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 2000));
+        assertNotNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 8000));
     }
 
     @Test
@@ -545,14 +545,14 @@ class ModelControllerTest {
 
         Map<String, Object> msg = access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), userHash,
                 documentHash, false, DEFAULT_SIGNER);
-        waitFor(100);
+        waitFor(400);
 
         assertNull(access.getPublishedMessage(config.getIOTAMainAddress()));
         IPLDObject<UserState> rolledBackUserState = modelState.expectUserState(hashes[6]);
         assertNotSame(rolledBackUserState, userState);
         rolledBackUserState.beginTransaction(controller.getContext());
         access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), msg);
-        waitFor(100);
+        waitFor(400);
 
         assertNull(access.getPublishedMessage(config.getIOTAMainAddress()));
         IPLDObject<UserState> next = modelState.expectUserState(hashes[6]);
