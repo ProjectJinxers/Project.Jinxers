@@ -21,7 +21,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Queue;
@@ -305,7 +305,7 @@ public class ModelController {
             OwnershipTransferController ownershipTransferController) throws IOException {
         IPLDObject<ModelState> currentModelState = currentValidatedState;
         ModelState modelState = currentModelState.getMapped();
-        Set<String> userHashes = new HashSet<>();
+        Set<String> userHashes = new LinkedHashSet<>();
         Map<String, Queue<IPLDObject<Document>>> documents = new HashMap<>();
         Map<String, Queue<IPLDObject<OwnershipRequest>>> ownershipRequests = new HashMap<>();
         Map<String, Queue<String>> transferredDocumentHashes = new HashMap<>();
