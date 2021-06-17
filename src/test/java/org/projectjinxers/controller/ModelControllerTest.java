@@ -447,7 +447,7 @@ class ModelControllerTest {
 
         access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), userHash, documentHash, false,
                 DEFAULT_SIGNER);
-        assertNotNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 200));
+        assertNotNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 400));
     }
 
     @Test
@@ -551,7 +551,7 @@ class ModelControllerTest {
 
         userState.commit();
         access.simulateOwnershipRequestMessage(documentHash, msg);
-        assertNotNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 400));
+        assertNotNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 800));
     }
 
     @Test
