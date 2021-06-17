@@ -447,7 +447,7 @@ class ModelControllerTest {
 
         access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), userHash, documentHash, false,
                 DEFAULT_SIGNER);
-        assertNotNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 400));
+        assertNotNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 800));
     }
 
     @Test
@@ -688,7 +688,7 @@ class ModelControllerTest {
 
         access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), reviewerHash, documentHash, false,
                 NEW_OWNER_SIGNER);
-        String published = access.waitForPublishedMessage(config.getIOTAMainAddress(), 200);
+        String published = access.waitForPublishedMessage(config.getIOTAMainAddress(), 400);
         assertNotNull(published);
         IPLDObject<ModelState> updated = new IPLDObject<>(published, new ModelState(), controller.getContext(), null);
         ModelState updatedState = updated.getMapped();
