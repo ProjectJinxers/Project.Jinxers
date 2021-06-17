@@ -349,6 +349,7 @@ public class ModelController {
                             transferredDocumentHashes.put(key, transferredDocHashes);
                         }
                         transferredDocHashes.add(transferredDocument.getMultihash());
+                        userHashes.add(key);
                         IPLDObject<UserState> newOwner = controller.getNewOwner();
                         key = newOwner.getMapped().getUser().getMultihash();
                         Queue<IPLDObject<Document>> docs = documents.get(key);
