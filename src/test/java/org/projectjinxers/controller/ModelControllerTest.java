@@ -545,14 +545,14 @@ class ModelControllerTest {
 
         Map<String, Object> msg = access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), userHash,
                 documentHash, false, DEFAULT_SIGNER);
-        waitFor(1600);
+        waitFor(3200);
 
         assertNull(access.getPublishedMessage(config.getIOTAMainAddress()));
         IPLDObject<UserState> rolledBackUserState = modelState.expectUserState(hashes[6]);
         assertNotSame(rolledBackUserState, userState);
         rolledBackUserState.beginTransaction(controller.getContext());
         access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), msg);
-        waitFor(1600);
+        waitFor(3200);
 
         assertNull(access.getPublishedMessage(config.getIOTAMainAddress()));
         IPLDObject<UserState> next = modelState.expectUserState(hashes[6]);
@@ -688,7 +688,7 @@ class ModelControllerTest {
 
         access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), reviewerHash, documentHash, false,
                 NEW_OWNER_SIGNER);
-        String published = access.waitForPublishedMessage(config.getIOTAMainAddress(), 16000);
+        String published = access.waitForPublishedMessage(config.getIOTAMainAddress(), 32000);
         assertNotNull(published);
         IPLDObject<ModelState> updated = new IPLDObject<>(published, new ModelState(), controller.getContext(), null);
         ModelState updatedState = updated.getMapped();
@@ -819,14 +819,14 @@ class ModelControllerTest {
 
         Map<String, Object> msg = access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), reviewerHash,
                 documentHash, false, NEW_OWNER_SIGNER);
-        waitFor(1600);
+        waitFor(3200);
         assertNull(access.getPublishedMessage(config.getIOTAMainAddress()));
 
         IPLDObject<UserState> rolledBackReviewerState = modelState.expectUserState(reviewerHash);
         assertNotSame(rolledBackReviewerState, reviewerState);
         rolledBackReviewerState.beginTransaction(controller.getContext());
         access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), msg);
-        waitFor(1600);
+        waitFor(3200);
         assertNull(access.getPublishedMessage(config.getIOTAMainAddress()));
 
         IPLDObject<UserState> next = modelState.expectUserState(reviewerHash);
