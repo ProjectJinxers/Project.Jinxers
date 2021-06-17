@@ -37,6 +37,20 @@ public abstract class ToggleRequest implements IPLDSerializable {
     private int payload;
     private IPLDObject<User> user;
 
+    protected ToggleRequest() {
+
+    }
+
+    /**
+     * Constructor for a new toggle request.
+     * 
+     * @param user the user
+     */
+    protected ToggleRequest(IPLDObject<User> user) {
+        this.active = true;
+        this.user = user;
+    }
+
     @Override
     public boolean isSignatureMandatory() {
         return true;

@@ -250,9 +250,6 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         Document lastActivity = null;
         main: for (IPLDObject<Document> document : documents.values()) {
             String docHash = document.getMultihash();
-            if (unrelatedHashes.contains(docHash)) {
-                continue;
-            }
             Document doc = document.getMapped();
             String hash = doc.getPreviousVersionHash();
             if (hash != null) {
@@ -261,17 +258,18 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
                     lastActivity = doc;
                     continue;
                 }
-                unrelatedHashes.add(hash);
+                unrelatedHashes.add(docHash);
             }
-            if (doc instanceof Review) {
+            else if (doc instanceof Review) {
                 Review review = (Review) doc;
                 do {
                     IPLDObject<Document> reviewed = review.getDocument();
-                    hash = reviewed.getMultihash();
-                    if (unrelatedHashes.contains(hash)) {
+                    String reviewedHash = reviewed.getMultihash();
+                    if (unrelatedHashes.contains(reviewedHash)) {
+                        unrelatedHashes.add(docHash);
                         continue main;
                     }
-                    if (relatedHashes.contains(hash)) {
+                    if (relatedHashes.contains(reviewedHash)) {
                         relatedHashes.add(docHash);
                         lastActivity = doc;
                         continue main;
@@ -285,7 +283,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
                     }
                 }
                 while (true);
-                unrelatedHashes.add(hash);
+                unrelatedHashes.add(docHash);
             }
         }
         return lastActivity == null ? null : lastActivity.getDate();

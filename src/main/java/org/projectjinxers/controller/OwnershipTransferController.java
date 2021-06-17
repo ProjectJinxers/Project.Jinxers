@@ -38,8 +38,8 @@ import org.projectjinxers.model.Voting;
 public class OwnershipTransferController {
 
     private static final int REQUIRED_RATING = 40;
-    private static final long REQUIRED_INACTIVITY = 1000 * 60 * 60 * 24 * 30;
-    private static final long MIN_REQUEST_PHASE_DURATION = 1000 * 60 * 60 * 24 * 10;
+    private static final long REQUIRED_INACTIVITY = 1000L * 60 * 60 * 24 * 30;
+    private static final long MIN_REQUEST_PHASE_DURATION = 1000L * 60 * 60 * 24 * 10;
 
     private static final String PUBSUB_MESSAGE_OWNERSHIP_REQUEST_MAIN_SEPARATOR = "|";
     private static final String PUBSUB_MESSAGE_OWNERSHIP_REQUEST_REQUEST_SEPARATOR = ".";
@@ -173,7 +173,8 @@ public class OwnershipTransferController {
         long inactivity = now - lastActivityDate.getTime();
         if (inactivity >= REQUIRED_INACTIVITY) {
             if (request == null) {
-                this.ownershipRequest = new IPLDObject<>(new OwnershipRequest(resolvedDocument, anonymousVoting),
+                this.ownershipRequest = new IPLDObject<>(
+                        new OwnershipRequest(resolvedUser.getMapped().getUser(), resolvedDocument, anonymousVoting),
                         signature);
                 return true;
             }
@@ -190,10 +191,8 @@ public class OwnershipTransferController {
                     }
                 }
                 if (activeRequests.size() > 1) {
-                    this.voting = new IPLDObject<Voting>(new Voting(
-                            new IPLDObject<Votable>(
-                                    new OwnershipSelection(resolvedDocument, activeRequests, anonymous)),
-                            0));
+                    this.voting = new IPLDObject<Voting>(new Voting(new IPLDObject<Votable>(
+                            new OwnershipSelection(resolvedDocument, activeRequests, anonymous)), 0));
                 }
                 else if (request.getMapped().isActive()) {
                     this.document = resolvedDocument;

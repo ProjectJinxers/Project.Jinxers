@@ -18,7 +18,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,6 +31,7 @@ import org.projectjinxers.model.Document;
 import org.projectjinxers.model.Loader;
 import org.projectjinxers.model.LoaderFactory;
 import org.projectjinxers.model.ModelState;
+import org.projectjinxers.model.Review;
 import org.projectjinxers.model.User;
 import org.projectjinxers.model.UserState;
 
@@ -46,8 +49,15 @@ import com.google.gson.JsonParser;
  */
 class TestIPFSAccessUtil {
 
+    private static final String[] PRINT_HASHES_FILEPATHS = {
+            "model/modelController/transferOwnership/simpleRequest.json" };
+
     /**
-     * Interface for updating models in memory. The updated models will be printed out to the console.
+     * Interface for updating models in memory. The updated models will be printed out to the console. Please note, that
+     * the JSON files in the resources folder for the tests, don't have to contain a valid overall state. They just
+     * represent a good enough state, such that the tests do what they're supposed to do. They might have been edited
+     * manually before and/or after using this utility. Reading these files and having certain objects being processed
+     * by an updater might lead to crashes.
      * 
      * @author ProjectJinxers
      */
@@ -72,7 +82,7 @@ class TestIPFSAccessUtil {
 
     private static final Map<String, ModelUpdater> UPDATERS = new HashMap<>();
     static {
-        UPDATERS.put("?b9bd96bbf941ae554b73a77c4701b4bba6c73dddeaa7b1b2a27529e82dea6987", new ModelUpdater() {
+        UPDATERS.put("5f0c79b199ec906bb53db3b856b7c4662a44eb7ce796aea4a41523070f82e707", new ModelUpdater() {
             @Override
             public IPLDObject<?> update(String hash, IPLDContext context) throws IOException {
                 Loader<ModelState> loader = LoaderFactory.MODEL_STATE.createLoader();
@@ -81,15 +91,13 @@ class TestIPFSAccessUtil {
                 IPLDObject<UserState> userState = mapped
                         .expectUserState("4426c8164350e8ec0d2750e2f492aa6016fab43d147810970f25fceb96c69765");
                 IPLDObject<Document> document = userState.getMapped()
-                        .getDocument("d7125adf8e58b52181edeefbb874aa5d40c6037df9a7fc6d8f81e66e3669cbe7");
-                userState.getMapped().updateLinks(null, null,
-                        Arrays.asList("d7125adf8e58b52181edeefbb874aa5d40c6037df9a7fc6d8f81e66e3669cbe7"), null);
-                IPLDObject<UserState> secondUserState = mapped
+                        .getDocument("7a54a98b83e5b944578d2da4c17d6e5c673faf8333c2e6ef4f3a5d179a528511");
+                Review review = new Review(null, null, null, null, null, null, null, document, Boolean.FALSE, null);
+                IPLDObject<UserState> reviewerState = mapped
                         .expectUserState("71b363800b13b92f7bd2262618c192bbfcfd8b21c59ce022f9eb33ea6bfeefa5");
-                secondUserState.getMapped().updateLinks(
-                        Arrays.asList(new IPLDObject<>(new Document(secondUserState, document))), null, null, null);
-                mapped.updateUserState(new IPLDObject<>(userState.getMapped()), null, null, null);
-                mapped.updateUserState(new IPLDObject<>(secondUserState.getMapped()), null, null, null);
+                reviewerState.getMapped().updateLinks(Arrays.asList(new IPLDObject<>(review)), null, null, null);
+
+                mapped.updateUserState(new IPLDObject<>(reviewerState.getMapped()), null, null, null);
                 return modelState;
             }
         });
@@ -100,8 +108,8 @@ class TestIPFSAccessUtil {
     private static final boolean PRETTY_PRINTING = true;
     private static final Gson PRETTY_GSON = new GsonBuilder().disableHtmlEscaping().setPrettyPrinting().create();
 
-    private static final String HEADER = "\n\n********************************************\n%s\n\n";
-    private static final String FOOTER = "\n\n********************************************\n\n";
+    private static final String HEADER = "\n****************************************************************\n%s\n\n";
+    private static final String FOOTER = "\n****************************************************************\n";
 
     private TestIPFSAccess access;
     private IPLDContext context;
@@ -110,6 +118,18 @@ class TestIPFSAccessUtil {
     void setup() {
         access = new TestIPFSAccess();
         context = new IPLDContext(access, IPLDEncoding.JSON, IPLDEncoding.JSON, false);
+    }
+
+    @Test
+    void printHashes() throws FileNotFoundException, IOException {
+        for (String filepath : PRINT_HASHES_FILEPATHS) {
+            System.out.printf(HEADER, "Hashes of " + filepath);
+            String[] hashes = access.readObjects(filepath);
+            for (String hash : hashes) {
+                System.out.println(hash);
+            }
+            System.out.println(FOOTER);
+        }
     }
 
     @Test
@@ -179,8 +199,7 @@ class TestIPFSAccessUtil {
         String[] hashes = access.readObjects(filepath);
         Signer signer = DEFAULT_SIGNER;
         String hash = hashes[0];
-        updateObject(hash, signer, replace);
-        if (replace) {
+        if (!updateObject(hash, signer) && replace) {
             access.removeObject(hash);
         }
         byte[][] allObjects = access.getAllObjects();
@@ -196,11 +215,14 @@ class TestIPFSAccessUtil {
     private void updateObjects(String filepath, boolean replace) throws FileNotFoundException, IOException {
         String[] hashes = access.readObjects(filepath);
         Signer signer = DEFAULT_SIGNER;
+        Set<String> remove = replace ? new HashSet<>() : null;
         for (String hash : hashes) {
-            updateObject(hash, signer, replace);
+            if (!updateObject(hash, signer) && replace) {
+                remove.add(hash);
+            }
         }
-        if (replace) {
-            for (String hash : hashes) {
+        if (remove != null) {
+            for (String hash : remove) {
                 access.removeObject(hash);
             }
         }
@@ -230,18 +252,17 @@ class TestIPFSAccessUtil {
         }
     }
 
-    private void updateObject(String hash, Signer signer, boolean replace) throws IOException {
-        System.out.println("Hash: " + hash);
+    private boolean updateObject(String hash, Signer signer) throws IOException {
         ModelUpdater updater = UPDATERS.get(hash);
         if (updater != null) {
             IPLDObject<?> updated = updater.update(hash, context);
             if (updated != null) {
                 updated.save(context, signer);
+                return true;
             }
+            return false;
         }
-        if (replace) {
-            access.removeObject(hash);
-        }
+        return true;
     }
 
     private String getJSONString(byte[] bytes) {

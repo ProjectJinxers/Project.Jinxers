@@ -58,6 +58,7 @@ public class TestIPFSAccess extends IPFSAccess {
     private Map<String, BlockingQueue<Map<String, Object>>> messageQueues = new HashMap<>();
 
     private Map<String, String> publishedMessages = new HashMap<>();
+    private String publishedMessageTopic;
 
     private Set<String> saveFailures = new HashSet<>();
     private Set<String> noSaveFailures = new HashSet<>();
@@ -90,7 +91,11 @@ public class TestIPFSAccess extends IPFSAccess {
 
     @Override
     public void publish(String topic, String message) throws Exception {
-        publishedMessages.put(topic, message);
+        synchronized (publishedMessages) {
+            publishedMessages.put(topic, message);
+            publishedMessageTopic = topic;
+            publishedMessages.notifyAll();
+        }
     }
 
     @Override
@@ -249,6 +254,43 @@ public class TestIPFSAccess extends IPFSAccess {
      */
     public String getPublishedMessage(String topic) {
         return publishedMessages.get(topic);
+    }
+
+    /**
+     * Blocks until a message for the given topic is published or the timeout hits. If a message for another topic is
+     * published, the timeout is reset and waiting begins again. The returned message is consumed, i.e.
+     * {@link #getPublishedMessage(String)} with the same topic will return null, until another message is published for
+     * the topic.
+     * 
+     * @param topic         the topic
+     * @param timeoutMillis the timeout in milliseconds
+     * @return the published message
+     */
+    public String waitForPublishedMessage(String topic, long timeoutMillis) {
+        do {
+            synchronized (publishedMessages) {
+                if (topic.equals(publishedMessageTopic)) {
+                    String msg = publishedMessages.remove(topic);
+                    if (msg != null) {
+                        return msg;
+                    }
+                }
+                publishedMessageTopic = null;
+                try {
+                    publishedMessages.wait(timeoutMillis);
+                }
+                catch (InterruptedException e) {
+
+                }
+                if (publishedMessageTopic == null) {
+                    return null;
+                }
+                if (topic.equals(publishedMessageTopic)) {
+                    return publishedMessages.remove(topic);
+                }
+            }
+        }
+        while (true);
     }
 
     /**

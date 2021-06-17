@@ -16,6 +16,7 @@ package org.projectjinxers.model;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.ethereum.crypto.ECKey.ECDSASignature;
@@ -223,6 +224,40 @@ public class Document implements IPLDSerializable {
             doc = previous;
         }
         while (true);
+    }
+
+    /**
+     * Updates the properties of this document. Whether or not that is done in a copy depends on the parameter
+     * 'current'. If that parameter's value is null, this object will be updated. Otherwise a copy of this object, where
+     * the previous version is set as this object, will be updated.
+     * 
+     * @param title    the updated title
+     * @param subtitle the updated subtitle
+     * @param abstr    the updated abstract
+     * @param contents the updated contents
+     * @param version  the updated version
+     * @param tags     the updated tags
+     * @param source   the updated source
+     * @param current  the current wrapper (pass null for updating this object, non-null for creating a new version
+     *                 copy)
+     * @return the updated object
+     */
+    public Document update(String title, String subtitle, String abstr, String contents, String version, String tags,
+            String source, IPLDObject<Document> current) {
+        Document updated = current == null ? this : createCopyInstance();
+        updated.title = title;
+        updated.subtitle = subtitle;
+        updated.abstr = abstr;
+        updated.contents = contents;
+        updated.version = version;
+        updated.tags = tags;
+        updated.source = source;
+        updated.date = new Date();
+        if (current != null) {
+            updated.previousVersion = current;
+            updated.links = links == null ? null : new LinkedHashMap<>(links);
+        }
+        return updated;
     }
 
     @Override

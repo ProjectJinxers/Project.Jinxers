@@ -34,6 +34,23 @@ public class Review extends Document implements DocumentAction, Loader<Review> {
     private Boolean approve;
     private IPLDObject<Document> document;
 
+    Review() {
+
+    }
+
+    /**
+     * Constructor for a new review (for a new version call an appropriate method on the current version).
+     * 
+     * @param document
+     * @param approve
+     */
+    public Review(String title, String subtitle, String abstr, String contents, String version, String tags,
+            String source, IPLDObject<Document> document, Boolean approve, IPLDObject<UserState> userState) {
+        super(title, subtitle, abstr, contents, version, tags, source, userState);
+        this.document = document;
+        this.approve = approve;
+    }
+
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {
@@ -59,6 +76,30 @@ public class Review extends Document implements DocumentAction, Loader<Review> {
     @Override
     public IPLDObject<Document> getDocument() {
         return document;
+    }
+
+    /**
+     * Updates the properties of this review. Whether or not that is done in a copy depends on the parameter 'current'.
+     * If that parameter's value is null, this object will be updated. Otherwise a copy of this object, where the
+     * previous version is set as this object, will be updated.
+     * 
+     * @param title    the updated title
+     * @param subtitle the updated subtitle
+     * @param abstr    the updated abstract
+     * @param contents the updated contents
+     * @param version  the updated version
+     * @param tags     the updated tags
+     * @param source   the updated source
+     * @param approve  the updated approve value
+     * @param current  the current wrapper (pass null for updating this object, non-null for creating a new version
+     *                 copy)
+     * @return the updated object
+     */
+    public Review update(String title, String subtitle, String abstr, String contents, String version, String tags,
+            String source, Boolean approve, IPLDObject<Document> current) {
+        Review res = (Review) super.update(title, subtitle, abstr, contents, version, tags, source, current);
+        res.approve = approve;
+        return res;
     }
 
     @Override

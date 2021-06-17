@@ -349,7 +349,6 @@ public class ModelController {
                             transferredDocumentHashes.put(key, transferredDocHashes);
                         }
                         transferredDocHashes.add(transferredDocument.getMultihash());
-                        userHashes.add(key);
                         IPLDObject<UserState> newOwner = controller.getNewOwner();
                         key = newOwner.getMapped().getUser().getMultihash();
                         Queue<IPLDObject<Document>> docs = documents.get(key);
@@ -380,6 +379,7 @@ public class ModelController {
                             ownershipRequests.put(key, ownershipReqs);
                         }
                         ownershipReqs.add(ownershipRequest);
+                        userHashes.add(key);
                     }
                     catch (Exception e) {
                         handleOwnershipTransferControllerException(e, ownershipTransferController);
@@ -475,7 +475,6 @@ public class ModelController {
                     }
                 }
                 boolean userStateTransactionStarted = false;
-                boolean userStateSaved = false;
                 userState = getInstanceToSave(userState);
                 try {
                     if (docs != null && docs.size() > 0 || requests != null && requests.size() > 0
@@ -485,49 +484,22 @@ public class ModelController {
                             userState.getMapped().updateLinks(docs, requests, hashes, userState);
                             userState.save(context, null);
                             updatedUserStates.add(userState);
-                            userStateSaved = true;
                             userState.commit();
                         }
                         else {
-                            requeue(userHash, docs, requests, hashes);
+                            currentModelState.rollback(context);
+                            handleIncompletUserTransaction(userHash, docs, requests, hashes, updatedUserStates,
+                                    document);
+                            return false;
                         }
                     }
                 }
                 catch (Exception e) {
                     currentModelState.rollback(context);
                     if (userStateTransactionStarted) {
-                        if (!userStateSaved) {
-                            userState.rollback(context);
-                            requeue(userHash, docs, requests, hashes);
-                        }
+                        userState.rollback(context);
                     }
-                    else {
-                        requeue(userHash, docs, requests, hashes);
-                    }
-                    if (pendingUserStates == null) {
-                        pendingUserStates = new HashMap<>();
-                    }
-                    synchronized (pendingUserStates) {
-                        pendingUserStates.put(userHash, userState);
-                    }
-                    if (updatedUserStates.size() > 0) {
-                        if (pendingUserStates == null) {
-                            pendingUserStates = new HashMap<>();
-                        }
-                        synchronized (pendingUserStates) {
-                            for (IPLDObject<UserState> updated : updatedUserStates) {
-                                pendingUserStates.put(updated.getMapped().getUser().getMultihash(), updated);
-                            }
-                        }
-                    }
-                    // at this point everything but the document parameter has been handled if its owner has not been
-                    // processed
-                    if (document != null) {
-                        String ownerHash = document.getMapped().expectUserState().getUser().getMultihash();
-                        if (pendingUserStates == null || !pendingUserStates.containsKey(ownerHash)) {
-                            enqueueDocument(document);
-                        }
-                    }
+                    handleIncompletUserTransaction(userHash, docs, requests, hashes, updatedUserStates, document);
                     return false;
                 }
             }
@@ -541,13 +513,6 @@ public class ModelController {
             try {
                 currentModelState.save(context, null);
                 currentModelState.commit();
-                if (queuedVotings != null) {
-                    synchronized (queuedVotings) {
-                        queuedVotings.clear();
-                    }
-                }
-                publishLocalState(currentModelState);
-                return true;
             }
             catch (Exception e) {
                 currentModelState.rollback(context);
@@ -561,6 +526,13 @@ public class ModelController {
                 }
                 return false;
             }
+            if (queuedVotings != null) {
+                synchronized (queuedVotings) {
+                    queuedVotings.clear();
+                }
+            }
+            publishLocalState(currentModelState);
+            return true;
         }
         if (document != null) {
             enqueueDocument(document);
@@ -575,6 +547,31 @@ public class ModelController {
         e.printStackTrace();
         if (controller != null) {
             enqueueOwnershipTransferController(controller);
+        }
+    }
+
+    private void handleIncompletUserTransaction(String userHash, Queue<IPLDObject<Document>> documents,
+            Queue<IPLDObject<OwnershipRequest>> requests, Queue<String> transferredOwnershipHashes,
+            Collection<IPLDObject<UserState>> updatedUserStates, IPLDObject<Document> document) {
+        requeue(userHash, documents, requests, transferredOwnershipHashes);
+
+        if (updatedUserStates.size() > 0) {
+            if (pendingUserStates == null) {
+                pendingUserStates = new HashMap<>();
+            }
+            synchronized (pendingUserStates) {
+                for (IPLDObject<UserState> updated : updatedUserStates) {
+                    pendingUserStates.put(updated.getMapped().getUser().getMultihash(), updated);
+                }
+            }
+        }
+        // at this point everything but the document parameter has been handled if its owner has not been
+        // processed
+        if (document != null) {
+            String ownerHash = document.getMapped().expectUserState().getUser().getMultihash();
+            if (pendingUserStates == null || !pendingUserStates.containsKey(ownerHash)) {
+                enqueueDocument(document);
+            }
         }
     }
 

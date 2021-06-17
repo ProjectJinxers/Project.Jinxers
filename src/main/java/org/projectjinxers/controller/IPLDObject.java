@@ -129,7 +129,7 @@ public class IPLDObject<D extends IPLDSerializable> {
     }
 
     /**
-     * @return the metadata (if this instance has not metadata, yet, {@link #getMapped()} is called)
+     * @return the metadata (if this instance has no metadata, yet, {@link #getMapped()} is called)
      */
     public Metadata getMetadata() {
         if (metadata == null) {
