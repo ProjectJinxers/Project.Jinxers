@@ -202,13 +202,14 @@ public class OwnershipTransferController {
                 this.voting = new IPLDObject<Voting>(new Voting(
                         new IPLDObject<Votable>(new OwnershipSelection(resolvedDocument, activeRequests, anonymous)),
                         0));
+                return true;
             }
-            else if (request.getMapped().isActive()) {
+            if (request.getMapped().isActive()) {
                 this.document = resolvedDocument;
                 this.previousOwner = resolvedDocument.getMapped().getUserState();
                 this.newOwner = resolvedUser;
+                return true;
             }
-            return true;
         }
         return false;
     }
