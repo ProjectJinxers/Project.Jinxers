@@ -57,6 +57,7 @@ public class TestIPFSAccess extends IPFSAccess {
     private Map<String, byte[]> objects = new HashMap<>();
     private Map<String, BlockingQueue<Map<String, Object>>> messageQueues = new HashMap<>();
 
+    private Set<String> availableStreams = new HashSet<>();
     private Map<String, String> publishedMessages = new HashMap<>();
     private String publishedMessageTopic;
 
@@ -100,13 +101,21 @@ public class TestIPFSAccess extends IPFSAccess {
 
     @Override
     public Stream<Map<String, Object>> subscribe(String topic) throws Exception {
-        BlockingQueue<Map<String, Object>> blockingQueue = messageQueues.get(topic);
-        if (blockingQueue == null) {
-            blockingQueue = new LinkedBlockingQueue<>();
-            messageQueues.put(topic, blockingQueue);
+        BlockingQueue<Map<String, Object>> blockingQueue;
+        synchronized (availableStreams) {
+            blockingQueue = messageQueues.get(topic);
+            if (blockingQueue == null) {
+                blockingQueue = new LinkedBlockingQueue<>();
+                messageQueues.put(topic, blockingQueue);
+            }
         }
         final BlockingQueue<Map<String, Object>> queue = blockingQueue;
-        return Stream.generate(() -> {
+        Stream<Map<String, Object>> res = Stream.generate(() -> {
+            synchronized (availableStreams) {
+                if (availableStreams.add(topic)) {
+                    availableStreams.notifyAll();
+                }
+            }
             try {
                 return queue.take();
             }
@@ -114,6 +123,7 @@ public class TestIPFSAccess extends IPFSAccess {
                 throw new RuntimeException(e);
             }
         });
+        return res;
     }
 
     /**
@@ -193,6 +203,53 @@ public class TestIPFSAccess extends IPFSAccess {
     }
 
     /**
+     * Waits until the stream for receiving messages with the given topic is available.
+     * 
+     * @param topic         the topic
+     * @param timeoutMillis the timeout in milliseconds
+     * @return true iff the stream is available
+     */
+    public boolean waitForMessageStream(String topic, int timeoutMillis) {
+        do {
+            synchronized (availableStreams) {
+                if (availableStreams.contains(topic)) {
+                    return true;
+                }
+                try {
+                    availableStreams.wait(timeoutMillis);
+                }
+                catch (InterruptedException e) {
+                    continue;
+                }
+                return availableStreams.contains(topic);
+            }
+        }
+        while (true);
+    }
+
+    /**
+     * Convenience method for waiting until the stream for receiving model state messages is available.
+     * 
+     * @param mainIOTAAddress the main IOTA address
+     * @param timeoutMillis   the timeout in milliseconds
+     * @return true iff the stream is available
+     */
+    public boolean waitForModelStateMessageStream(String mainIOTAAddress, int timeoutMillis) {
+        return waitForMessageStream(mainIOTAAddress, timeoutMillis);
+    }
+
+    /**
+     * Convenience method for waiting until the stream for receiving ownership request messages is available.
+     * 
+     * @param mainIOTAAddress the main IOTA address
+     * @param timeoutMillis   the timeout in milliseconds
+     * @return true iff the stream is available
+     */
+    public boolean waitForOwnershipRequestMessageStream(String mainIOTAAddress, int timeoutMillis) {
+        return waitForMessageStream("or" + mainIOTAAddress, timeoutMillis);
+    }
+
+    /**
      * Simulates a received message. The subscriber for the topic will receive that message.
      * 
      * @param topic   the topic
@@ -206,18 +263,21 @@ public class TestIPFSAccess extends IPFSAccess {
     }
 
     /**
-     * Simulates a received model state message. The subscriber for the topic will receive that message.
+     * Simulates a received model state message. This method blocks until the stream is available. The timeout is pretty
+     * short, though. The subscriber for the topic will receive that message.
      * 
      * @param mainIOTAAddress the main IOTA address (the topic)
      * @param hash            the received hash
      */
     public void simulateModelStateMessage(String mainIOTAAddress, String hash) {
+        waitForModelStateMessageStream(mainIOTAAddress, 200);
         String base64 = Base64.toBase64String(hash.getBytes(StandardCharsets.UTF_8));
         simulateMessage(mainIOTAAddress, Map.of("data", base64));
     }
 
     /**
-     * Simulates a received ownership request message. The subscriber for the topic will receive that message.
+     * Simulates a received ownership request message. This method blocks until the stream is available. The timeout is
+     * pretty short, though. The subscriber for the topic will receive that message.
      * 
      * @param mainIOTAAddress the main IOTA address (part of the topic)
      * @param userHash        the user hash
@@ -227,6 +287,7 @@ public class TestIPFSAccess extends IPFSAccess {
     public Map<String, Object> simulateOwnershipRequestMessage(String mainIOTAAddress, String userHash,
             String documentHash, boolean anonymousVoting, Signer signer) {
 
+        waitForOwnershipRequestMessageStream(mainIOTAAddress, 200);
         String request = (anonymousVoting ? "-" : "+") + "." + userHash + "." + documentHash;
         byte[] requestBytes = request.getBytes(StandardCharsets.UTF_8);
         ECDSASignature signature = signer.sign(requestBytes);
