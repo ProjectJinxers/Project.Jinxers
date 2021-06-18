@@ -185,59 +185,71 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
      *                increasing the version - make sure to call this with the previous version for the first update, if
      *                this is not the first version, as the copies would contain new state objects later)
      */
-    public void updateUserState(IPLDObject<UserState> updated,
+    public ModelState updateUserState(IPLDObject<UserState> userState,
             Collection<IPLDObject<OwnershipRequest>> ownershipRequests, Collection<IPLDObject<Voting>> votings,
             IPLDObject<ModelState> current) {
-        ModelState copy;
+        ModelState updated;
         if (current == null) {
-            copy = null;
-        }
-        else {
-            copy = new ModelState();
-            copy.version = version;
-            copy.timestamp = timestamp;
-            copy.previousVersion = previousVersion;
-            if (this.votings != null) {
-                copy.votings = new LinkedHashMap<>(this.votings);
+            if (this.userStates == null) {
+                this.userStates = new LinkedHashMap<>();
             }
-        }
-        if (userStates == null) {
-            this.userStates = new LinkedHashMap<>();
-        }
-        else if (copy != null) {
-            copy.userStates = new LinkedHashMap<>(userStates);
-        }
-        if (current != null) {
-            this.previousVersion = new IPLDObject<>(current, copy);
-            this.version++;
-        }
-        userStates.put(USER_STATE_KEY_PROVIDER.getKey(updated), updated);
-        if (ownershipRequests != null) {
-            if (this.ownershipRequests == null) {
+            if (ownershipRequests != null && this.ownershipRequests == null) {
                 this.ownershipRequests = new LinkedHashMap<>();
             }
+            if (votings != null && this.votings == null) {
+                this.votings = new LinkedHashMap<>();
+            }
+            updated = this;
+        }
+        else {
+            updated = new ModelState();
+            updated.version = version + 1;
+            updated.previousVersion = current;
+            if (this.userStates != null) {
+                updated.userStates = new LinkedHashMap<>(this.userStates);
+            }
+            if (this.votings != null) {
+                updated.votings = new LinkedHashMap<>(this.votings);
+            }
+            else if (votings != null) {
+                updated.votings = new LinkedHashMap<>();
+            }
+            if (this.sealedDocuments != null) {
+                updated.sealedDocuments = new LinkedHashMap<>(this.sealedDocuments);
+            }
+            if (this.ownershipRequests != null) {
+                updated.ownershipRequests = new LinkedHashMap<>(this.ownershipRequests);
+            }
+            else if (ownershipRequests != null) {
+                updated.ownershipRequests = new LinkedHashMap<>();
+            }
+        }
+        updated.userStates.put(USER_STATE_KEY_PROVIDER.getKey(userState), userState);
+        if (ownershipRequests != null) {
             for (IPLDObject<OwnershipRequest> ownershipRequest : ownershipRequests) {
                 String key = OWNERSHIP_REQUESTS_KEY_PROVIDER.getKey(ownershipRequest);
-                IPLDObject<OwnershipRequest>[] requests = this.ownershipRequests.get(key);
+                IPLDObject<OwnershipRequest>[] requests = updated.ownershipRequests.get(key);
                 if (requests == null) {
                     @SuppressWarnings("unchecked")
                     IPLDObject<OwnershipRequest>[] array = (IPLDObject<OwnershipRequest>[]) Array
                             .newInstance(IPLDObject.class, 1);
                     array[0] = ownershipRequest;
-                    this.ownershipRequests.put(key, array);
+                    updated.ownershipRequests.put(key, array);
                 }
                 else {
                     IPLDObject<OwnershipRequest>[] arrayCopy = Arrays.copyOf(requests, requests.length + 1);
                     arrayCopy[requests.length] = ownershipRequest;
+                    updated.ownershipRequests.put(key, arrayCopy);
                 }
             }
         }
         if (votings != null) {
             for (IPLDObject<Voting> voting : votings) {
-                this.votings.put(VOTING_KEY_PROVIDER.getKey(voting), voting);
+                updated.votings.put(VOTING_KEY_PROVIDER.getKey(voting), voting);
             }
         }
-        this.timestamp = System.currentTimeMillis();
+        updated.timestamp = System.currentTimeMillis();
+        return updated;
     }
 
     @Override

@@ -28,6 +28,7 @@ import org.projectjinxers.account.ECCSigner;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.config.Config;
 import org.projectjinxers.model.Document;
+import org.projectjinxers.model.GrantedOwnership;
 import org.projectjinxers.model.ModelState;
 import org.projectjinxers.model.UserState;
 import org.spongycastle.util.encoders.Base64;
@@ -80,11 +81,12 @@ class ModelControllerTest {
         IPLDObject<Document> documentObject = new IPLDObject<Document>(document);
         IPLDObject<UserState> userState = modelState.getUserState(userHash);
         controller.saveDocument(documentObject, DEFAULT_SIGNER);
-        IPLDObject<ModelState> nextModelState = controller.getCurrentValidatedState();
-        IPLDObject<UserState> nextUserState = modelState.getUserState(userHash);
-        assertSame(nextModelState, modelStateObject); // validated model state is not replaced by local operations
-        assertSame(nextUserState, userState); // no copy
-        Document doc = userState.getMapped().expectDocument(documentObject.getMultihash());
+        String newHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 0);
+        IPLDObject<ModelState> nextModelState = new IPLDObject<>(newHash, new ModelState(), controller.getContext(),
+                null);
+        IPLDObject<UserState> nextUserState = nextModelState.getMapped().getUserState(userHash);
+        assertNotSame(nextUserState, userState); // copy
+        Document doc = nextUserState.getMapped().expectDocument(documentObject.getMultihash());
         assertEquals("Title", doc.getTitle());
     }
 
@@ -112,126 +114,11 @@ class ModelControllerTest {
         modelStateObject.commit();
         access.simulateModelStateMessage(config.getIOTAMainAddress(), newHashes[0]);
         // wait for published hash
-        assertNotNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 100));
-        IPLDObject<ModelState> nextModelState = controller.getCurrentValidatedState();
+        String newHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 100);
+        IPLDObject<ModelState> nextModelState = new IPLDObject<ModelState>(newHash, new ModelState(),
+                controller.getContext(), null);
         IPLDObject<UserState> nextUserState = nextModelState.getMapped().getUserState(userHash);
-        assertSame(nextModelState, modelStateObject); // validated model state is not replaced by local operations
-        assertSame(nextUserState, userState); // pending user state from first attempt
-        Document doc = nextUserState.getMapped().expectDocument(documentObject.getMultihash());
-        assertEquals("Title", doc.getTitle());
-    }
-
-    @Test
-    void testSaveDocumentDeferredTwice() throws Exception {
-        String[] hashes = access.readObjects("model/modelController/saveDocument/simple.json");
-        final String modelStateHash = hashes[1];
-        final String userHash = hashes[0];
-        Config config = Config.getSharedInstance();
-        access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
-        ModelController controller = new ModelController(access, null);
-        IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
-        ModelState modelState = modelStateObject.getMapped();
-        assertNotNull(modelState);
-        Document document = new Document("Title", "Subtitle", "Abstract", "Contents", "Version", "Tags", "Source",
-                modelState.getUserState(userHash));
-        IPLDObject<Document> documentObject = new IPLDObject<Document>(document);
-        IPLDObject<UserState> userState = modelState.getUserState(userHash);
-        modelStateObject.beginTransaction(controller.getContext()); // causes update to be deferred
-        controller.saveDocument(documentObject, DEFAULT_SIGNER);
-        assertNull(userState.getMapped().getDocument(documentObject.getMultihash()));
-        // prepare for simulated message
-        String[] newHashes = access.readObjects("model/modelController/saveDocument/simple_rec.json");
-        access.simulateModelStateMessage(config.getIOTAMainAddress(), newHashes[0]);
-        // wait a bit
-        waitFor(100);
-        IPLDObject<ModelState> nextModelState = controller.getCurrentValidatedState();
-        IPLDObject<UserState> nextUserState = nextModelState.getMapped().getUserState(userHash);
-        // we're still in a transaction
-        assertNull(userState.getMapped().getDocument(documentObject.getMultihash()));
-        // prepare for next simulated message
-        newHashes = access.readObjects("model/modelController/saveDocument/simple_rec2.json");
-        // now we end the transaction
-        modelStateObject.commit();
-        access.simulateModelStateMessage(config.getIOTAMainAddress(), newHashes[0]);
-        assertNotNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 100));
-        nextModelState = controller.getCurrentValidatedState();
-        nextUserState = nextModelState.getMapped().getUserState(userHash);
-        assertSame(nextModelState, modelStateObject); // validated model state is not replaced by local operations
-        assertSame(nextUserState, userState); // pending user state from first attempt
-        Document doc = nextUserState.getMapped().expectDocument(documentObject.getMultihash());
-        assertEquals("Title", doc.getTitle());
-    }
-
-    @Test
-    void testSaveDocumentDeferredByUserStateTransaction() throws Exception {
-        String[] hashes = access.readObjects("model/modelController/saveDocument/simple.json");
-        final String modelStateHash = hashes[1];
-        final String userHash = hashes[0];
-        Config config = Config.getSharedInstance();
-        access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
-        ModelController controller = new ModelController(access, null);
-        IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
-        ModelState modelState = modelStateObject.getMapped();
-        assertNotNull(modelState);
-        Document document = new Document("Title", "Subtitle", "Abstract", "Contents", "Version", "Tags", "Source",
-                modelState.getUserState(userHash));
-        IPLDObject<Document> documentObject = new IPLDObject<Document>(document);
-        IPLDObject<UserState> userState = modelState.getUserState(userHash);
-        userState.beginTransaction(controller.getContext()); // causes update to be deferred
-        controller.saveDocument(documentObject, DEFAULT_SIGNER);
-        assertNull(userState.getMapped().getDocument(documentObject.getMultihash()));
-        // prepare for simulated message
-        String[] newHashes = access.readObjects("model/modelController/saveDocument/simple_rec.json");
-        // now we end the transaction
-        userState.commit();
-        access.simulateModelStateMessage(config.getIOTAMainAddress(), newHashes[0]);
-        // wait a bit
-        assertNotNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 200));
-        IPLDObject<ModelState> nextModelState = controller.getCurrentValidatedState();
-        IPLDObject<UserState> nextUserState = nextModelState.getMapped().getUserState(userHash);
-        assertSame(nextModelState, modelStateObject); // validated model state is not replaced by local operations
-        assertNotSame(nextUserState, userState); // no pending user state from first attempt
-        Document doc = nextUserState.getMapped().expectDocument(documentObject.getMultihash());
-        assertEquals("Title", doc.getTitle());
-    }
-
-    @Test
-    void testSaveDocumentDeferredTwiceByUserStateTransaction() throws Exception {
-        String[] hashes = access.readObjects("model/modelController/saveDocument/simple.json");
-        final String modelStateHash = hashes[1];
-        final String userHash = hashes[0];
-        Config config = Config.getSharedInstance();
-        access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
-        ModelController controller = new ModelController(access, null);
-        IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
-        ModelState modelState = modelStateObject.getMapped();
-        assertNotNull(modelState);
-        Document document = new Document("Title", "Subtitle", "Abstract", "Contents", "Version", "Tags", "Source",
-                modelState.getUserState(userHash));
-        IPLDObject<Document> documentObject = new IPLDObject<Document>(document);
-        IPLDObject<UserState> userState = modelState.getUserState(userHash);
-        userState.beginTransaction(controller.getContext()); // causes update to be deferred
-        controller.saveDocument(documentObject, DEFAULT_SIGNER);
-        assertNull(userState.getMapped().getDocument(documentObject.getMultihash()));
-        // prepare for simulated message
-        String[] newHashes = access.readObjects("model/modelController/saveDocument/simple_rec.json");
-        access.simulateModelStateMessage(config.getIOTAMainAddress(), newHashes[0]);
-        // wait a bit
-        waitFor(100);
-        IPLDObject<ModelState> nextModelState = controller.getCurrentValidatedState();
-        IPLDObject<UserState> nextUserState = nextModelState.getMapped().getUserState(userHash);
-        // we're still in a transaction
-        assertNull(userState.getMapped().getDocument(documentObject.getMultihash()));
-        // prepare for next simulated message
-        newHashes = access.readObjects("model/modelController/saveDocument/simple_rec2.json");
-        // now we end the transaction
-        userState.commit();
-        access.simulateModelStateMessage(config.getIOTAMainAddress(), newHashes[0]);
-        assertNotNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 200));
-        nextModelState = controller.getCurrentValidatedState();
-        nextUserState = nextModelState.getMapped().getUserState(userHash);
-        assertSame(nextModelState, modelStateObject); // validated model state is not replaced by local operations
-        assertNotSame(nextUserState, userState); // no pending user state from first attempt
+        assertNotSame(nextUserState, userState); // copy of pending user state from first attempt
         Document doc = nextUserState.getMapped().expectDocument(documentObject.getMultihash());
         assertEquals("Title", doc.getTitle());
     }
@@ -256,7 +143,7 @@ class ModelControllerTest {
         controller.saveDocument(documentObject, DEFAULT_SIGNER);
         assertNotNull(documentObject.getMultihash());
         IPLDObject<UserState> nextUserState = modelStateObject.getMapped().getUserState(userHash);
-        assertNotSame(nextUserState, userState); // rollback deserializes bytes
+        assertSame(nextUserState, userState);
         assertNull(nextUserState.getMapped().getDocument(documentObject.getMultihash()));
 
         // now we allow for saving successfully (and reading from the file)
@@ -265,11 +152,11 @@ class ModelControllerTest {
         String[] newHashes = access.readObjects("model/modelController/saveDocument/simple_rec.json");
         access.simulateModelStateMessage(config.getIOTAMainAddress(), newHashes[0]);
         // wait for published hash
-        assertNotNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 200));
-        IPLDObject<ModelState> nextModelState = controller.getCurrentValidatedState();
-        nextUserState = modelStateObject.getMapped().getUserState(userHash);
-        assertSame(nextModelState, modelStateObject); // validated model state is not replaced by local operations
-        assertNotSame(nextUserState, userState); // no pending user state from first attempt
+        String newHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 200);
+        IPLDObject<ModelState> nextModelState = new IPLDObject<>(newHash, new ModelState(), controller.getContext(),
+                null);
+        nextUserState = nextModelState.getMapped().getUserState(userHash);
+        assertNotSame(nextUserState, userState);
         Document doc = nextUserState.getMapped().expectDocument(documentObject.getMultihash());
         assertEquals("Title", doc.getTitle());
     }
@@ -294,7 +181,7 @@ class ModelControllerTest {
         controller.saveDocument(documentObject, DEFAULT_SIGNER);
         assertNotNull(documentObject.getMultihash());
         IPLDObject<UserState> nextUserState = modelStateObject.getMapped().getUserState(userHash);
-        assertNotSame(nextUserState, userState); // rollback deserializes bytes
+        assertSame(nextUserState, userState);
         assertNull(nextUserState.getMapped().getDocument(documentObject.getMultihash()));
         // prepare for simulated message
         // temporarily disable save failures
@@ -303,10 +190,12 @@ class ModelControllerTest {
         // re-enable save failures
         access.addNoSaveFailure(noSaveFailureHash);
         access.simulateModelStateMessage(config.getIOTAMainAddress(), newHashes[0]);
+        // random ownership request (not part of this test, code coverage only - should be effective after merge has
+        // been implemented)
+        access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), userHash, "invalid", false, DEFAULT_SIGNER);
         // wait a bit
         waitFor(100);
         IPLDObject<UserState> nextUserState2 = modelStateObject.getMapped().getUserState(userHash);
-        assertNotSame(nextUserState2, nextUserState); // rollback deserializes bytes
         // the save failure simulation is still active
         assertNull(nextUserState2.getMapped().getDocument(documentObject.getMultihash()));
         // prepare for next simulated message
@@ -314,10 +203,10 @@ class ModelControllerTest {
         access.clearNoSaveFailures();
         newHashes = access.readObjects("model/modelController/saveDocument/simple_rec2.json");
         access.simulateModelStateMessage(config.getIOTAMainAddress(), newHashes[0]);
-        assertNotNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 100));
-        IPLDObject<ModelState> nextModelState = controller.getCurrentValidatedState();
-        nextUserState = modelStateObject.getMapped().getUserState(userHash);
-        assertSame(nextModelState, modelStateObject); // validated model state is not replaced by local operations
+        String newHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 100);
+        IPLDObject<ModelState> nextModelState = new IPLDObject<>(newHash, new ModelState(), controller.getContext(),
+                null);
+        nextUserState = nextModelState.getMapped().getUserState(userHash);
         assertNotSame(nextUserState, userState); // no pending user state from first attempt
         Document doc = nextUserState.getMapped().expectDocument(documentObject.getMultihash());
         assertEquals("Title", doc.getTitle());
@@ -338,29 +227,30 @@ class ModelControllerTest {
                 modelState.getUserState(userHash));
         IPLDObject<Document> documentObject = new IPLDObject<Document>(document);
         IPLDObject<UserState> userState = modelState.getUserState(userHash);
-        modelStateObject.beginTransaction(controller.getContext()); // causes update to be deferred
-        controller.saveDocument(documentObject, DEFAULT_SIGNER);
+
+        access.addNoSaveFailure(documentObject, controller.getContext(), DEFAULT_SIGNER); // causes update to be
+                                                                                          // deferred
+        try {
+            controller.saveDocument(documentObject, DEFAULT_SIGNER);
+        }
+        catch (Exception e) {
+
+        }
         assertNull(userState.getMapped().getDocument(documentObject.getMultihash()));
 
-        // now we end the transaction
-        modelStateObject.commit();
+        // now we restore normal save behavior
+        access.clearNoSaveFailures();
         access.simulateModelStateMessage(config.getIOTAMainAddress(), "invalid");
-        // wait a bit
-        waitFor(100);
-        IPLDObject<ModelState> nextModelState = controller.getCurrentValidatedState();
-        IPLDObject<UserState> nextUserState = nextModelState.getMapped().getUserState(userHash);
-        assertSame(nextModelState, modelStateObject);
-        assertSame(nextUserState, userState);
-        assertNull(userState.getMapped().getDocument(documentObject.getMultihash()));
+        assertNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 200));
 
         // prepare for valid simulated message
         String[] newHashes = access.readObjects("model/modelController/saveDocument/simple_rec.json");
         access.simulateModelStateMessage(config.getIOTAMainAddress(), newHashes[0]);
-        assertNotNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 100));
-        nextModelState = controller.getCurrentValidatedState();
-        nextUserState = nextModelState.getMapped().getUserState(userHash);
-        assertSame(nextModelState, modelStateObject); // validated model state is not replaced by local operations
-        assertSame(nextUserState, userState); // pending user state from first attempt
+        String newHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 100);
+        IPLDObject<ModelState> nextModelState = new IPLDObject<>(newHash, new ModelState(), controller.getContext(),
+                null);
+        IPLDObject<UserState> nextUserState = nextModelState.getMapped().getUserState(userHash);
+        assertNotSame(nextUserState, userState); // copy of pending user state from first attempt
         Document doc = nextUserState.getMapped().expectDocument(documentObject.getMultihash());
         assertEquals("Title", doc.getTitle());
     }
@@ -502,66 +392,6 @@ class ModelControllerTest {
     }
 
     @Test
-    void testTransferOwnershipReclaimDeferredByUserStateTransaction() throws Exception {
-        String[] hashes = access.readObjects("model/modelController/transferOwnership/reclaim.json");
-        final String modelStateHash = hashes[1];
-        final String userHash = hashes[0];
-        final String documentHash = hashes[5];
-        Config config = Config.getSharedInstance();
-        access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
-        ModelController controller = new ModelController(access, null);
-        IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
-        ModelState modelState = modelStateObject.getMapped();
-        assertNotNull(modelState);
-
-        IPLDObject<UserState> userState = modelState.expectUserState(hashes[6]);
-        userState.beginTransaction(controller.getContext()); // causes update to be deferred
-
-        Map<String, Object> msg = access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), userHash,
-                documentHash, false, DEFAULT_SIGNER);
-        waitFor(100);
-        assertNull(access.getPublishedMessage(config.getIOTAMainAddress()));
-
-        userState.commit();
-        access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), msg);
-        assertNotNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 400));
-    }
-
-    @Test
-    void testTransferOwnershipReclaimDeferredTwiceByUserStateTransaction() throws Exception {
-        String[] hashes = access.readObjects("model/modelController/transferOwnership/reclaim.json");
-        final String modelStateHash = hashes[1];
-        final String userHash = hashes[0];
-        final String documentHash = hashes[5];
-        Config config = Config.getSharedInstance();
-        access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
-        ModelController controller = new ModelController(access, null);
-        IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
-        ModelState modelState = modelStateObject.getMapped();
-        assertNotNull(modelState);
-
-        IPLDObject<UserState> userState = modelState.expectUserState(hashes[6]);
-        userState.beginTransaction(controller.getContext()); // causes update to be deferred
-
-        Map<String, Object> msg = access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), userHash,
-                documentHash, false, DEFAULT_SIGNER);
-        waitFor(100);
-
-        assertNull(access.getPublishedMessage(config.getIOTAMainAddress()));
-        IPLDObject<UserState> rolledBackUserState = modelState.expectUserState(hashes[6]);
-        assertNotSame(rolledBackUserState, userState);
-        rolledBackUserState.beginTransaction(controller.getContext());
-        access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), msg);
-        waitFor(100);
-
-        assertNull(access.getPublishedMessage(config.getIOTAMainAddress()));
-        IPLDObject<UserState> next = modelState.expectUserState(hashes[6]);
-        assertNotSame(next, rolledBackUserState);
-        access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), msg);
-        assertNotNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 200));
-    }
-
-    @Test
     void testTransferOwnershipReclaimDeferredBySaveFailure() throws Exception {
         String[] hashes = access.readObjects("model/modelController/transferOwnership/reclaim.json");
         final String modelStateHash = hashes[1];
@@ -698,7 +528,7 @@ class ModelControllerTest {
     }
 
     @Test
-    void testSimpleOwnershipRequestDeferred() throws Exception {
+    void testSimpleOwnershipRequestDeferredBySaveFailure() throws Exception {
         String[] hashes = access.readObjects("model/modelController/transferOwnership/simpleRequest.json");
         String modelStateHash = hashes[1];
         String reviewerHash = hashes[7];
@@ -711,18 +541,18 @@ class ModelControllerTest {
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
 
-        modelStateObject.beginTransaction(controller.getContext()); // causes update to be deferred
+        access.addNoSaveFailure(""); // causes update to be deferred
 
         Map<String, Object> msg = access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), reviewerHash,
                 documentHash, false, NEW_OWNER_SIGNER);
         waitFor(100);
         assertNull(access.getPublishedMessage(config.getIOTAMainAddress()));
 
-        modelStateObject.commit();
+        access.clearNoSaveFailures();
 
         access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), msg);
 
-        String published = access.waitForPublishedMessage(config.getIOTAMainAddress(), 200);
+        String published = access.waitForPublishedMessage(config.getIOTAMainAddress(), 400);
         assertNotNull(published);
         IPLDObject<ModelState> updated = new IPLDObject<>(published, new ModelState(), controller.getContext(), null);
         ModelState updatedState = updated.getMapped();
@@ -731,44 +561,7 @@ class ModelControllerTest {
     }
 
     @Test
-    void testSimpleOwnershipRequestDeferredTwice() throws Exception {
-        String[] hashes = access.readObjects("model/modelController/transferOwnership/simpleRequest.json");
-        String modelStateHash = hashes[1];
-        String reviewerHash = hashes[7];
-        String documentHash = hashes[5];
-
-        Config config = Config.getSharedInstance();
-        access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
-        ModelController controller = new ModelController(access, null);
-        IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
-        ModelState modelState = modelStateObject.getMapped();
-        assertNotNull(modelState);
-
-        modelStateObject.beginTransaction(controller.getContext()); // causes update to be deferred
-
-        Map<String, Object> msg = access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), reviewerHash,
-                documentHash, false, NEW_OWNER_SIGNER);
-        waitFor(100);
-        assertNull(access.getPublishedMessage(config.getIOTAMainAddress()));
-
-        access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), msg);
-        waitFor(100);
-        assertNull(access.getPublishedMessage(config.getIOTAMainAddress()));
-
-        modelStateObject.commit();
-
-        access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), msg);
-
-        String published = access.waitForPublishedMessage(config.getIOTAMainAddress(), 200);
-        assertNotNull(published);
-        IPLDObject<ModelState> updated = new IPLDObject<>(published, new ModelState(), controller.getContext(), null);
-        ModelState updatedState = updated.getMapped();
-        assertNotNull(updatedState.expectUserState(reviewerHash).getMapped().getOwnershipRequest(documentHash));
-        assertNotNull(updatedState.expectOwnershipRequests(documentHash));
-    }
-
-    @Test
-    void testSimpleOwnershipRequestDeferredByUserStateTransaction() throws Exception {
+    void testSimpleOwnershipRequestDeferredTwiceBySaveFailure() throws Exception {
         String[] hashes = access.readObjects("model/modelController/transferOwnership/simpleRequest.json");
         String modelStateHash = hashes[1];
         String reviewerHash = hashes[7];
@@ -782,15 +575,23 @@ class ModelControllerTest {
         assertNotNull(modelState);
 
         IPLDObject<UserState> reviewerState = modelState.expectUserState(reviewerHash);
-        reviewerState.beginTransaction(controller.getContext()); // causes update to be deferred
+        access.addNoSaveFailure(""); // causes update to be deferred
 
         Map<String, Object> msg = access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), reviewerHash,
                 documentHash, false, NEW_OWNER_SIGNER);
         waitFor(100);
         assertNull(access.getPublishedMessage(config.getIOTAMainAddress()));
 
-        reviewerState.commit();
+        IPLDObject<UserState> afterFistFailure = modelState.expectUserState(reviewerHash);
+        assertSame(afterFistFailure, reviewerState);
+        access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), msg);
+        waitFor(100);
+        assertNull(access.getPublishedMessage(config.getIOTAMainAddress()));
 
+        IPLDObject<UserState> afterSecondFailure = modelState.expectUserState(reviewerHash);
+        assertSame(afterSecondFailure, afterFistFailure);
+
+        access.clearNoSaveFailures();
         access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), msg);
 
         String published = access.waitForPublishedMessage(config.getIOTAMainAddress(), 400);
@@ -802,11 +603,11 @@ class ModelControllerTest {
     }
 
     @Test
-    void testSimpleOwnershipRequestDeferredTwiceByUserStateTransaction() throws Exception {
-        String[] hashes = access.readObjects("model/modelController/transferOwnership/simpleRequest.json");
-        String modelStateHash = hashes[1];
-        String reviewerHash = hashes[7];
-        String documentHash = hashes[5];
+    void testExistingOwnershipRequestTooEarly() throws Exception {
+        String[] hashes = access.readObjects("model/modelController/transferOwnership/existingReqTooEarly.json");
+        String modelStateHash = hashes[2];
+        String userHash = hashes[4];
+        String documentHash = hashes[10];
 
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
@@ -815,32 +616,37 @@ class ModelControllerTest {
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
 
-        IPLDObject<UserState> reviewerState = modelState.expectUserState(reviewerHash);
-        reviewerState.beginTransaction(controller.getContext()); // causes update to be deferred
+        access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), userHash, documentHash, false,
+                NEW_OWNER_SIGNER);
+        assertNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 200));
+    }
 
-        Map<String, Object> msg = access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), reviewerHash,
-                documentHash, false, NEW_OWNER_SIGNER);
-        waitFor(100);
-        assertNull(access.getPublishedMessage(config.getIOTAMainAddress()));
+    @Test
+    void testExistingOwnershipRequestNoContestants() throws Exception {
+        String[] hashes = access.readObjects("model/modelController/transferOwnership/existingReq.json");
+        String modelStateHash = hashes[2];
+        String userHash = hashes[4];
+        String documentHash = hashes[10];
 
-        IPLDObject<UserState> rolledBackReviewerState = modelState.expectUserState(reviewerHash);
-        assertNotSame(rolledBackReviewerState, reviewerState);
-        rolledBackReviewerState.beginTransaction(controller.getContext());
-        access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), msg);
-        waitFor(100);
-        assertNull(access.getPublishedMessage(config.getIOTAMainAddress()));
+        Config config = Config.getSharedInstance();
+        access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
+        ModelController controller = new ModelController(access, null);
+        IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
+        ModelState modelState = modelStateObject.getMapped();
+        assertNotNull(modelState);
 
-        IPLDObject<UserState> next = modelState.expectUserState(reviewerHash);
-        assertNotSame(next, rolledBackReviewerState);
-
-        access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), msg);
-
-        String published = access.waitForPublishedMessage(config.getIOTAMainAddress(), 400);
-        assertNotNull(published);
-        IPLDObject<ModelState> updated = new IPLDObject<>(published, new ModelState(), controller.getContext(), null);
-        ModelState updatedState = updated.getMapped();
-        assertNotNull(updatedState.expectUserState(reviewerHash).getMapped().getOwnershipRequest(documentHash));
-        assertNotNull(updatedState.expectOwnershipRequests(documentHash));
+        access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), userHash, documentHash, false,
+                NEW_OWNER_SIGNER);
+        String newHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 400);
+        assertNotNull(newHash);
+        IPLDObject<ModelState> newLocalState = new IPLDObject<>(newHash, new ModelState(), controller.getContext(),
+                null);
+        ModelState newLocal = newLocalState.getMapped();
+        IPLDObject<UserState> previousOwnerState = newLocal.expectUserState(hashes[0]);
+        assertNull(previousOwnerState.getMapped().getDocument(documentHash));
+        IPLDObject<UserState> userState = newLocal.expectUserState(userHash);
+        IPLDObject<GrantedOwnership> grantedOwnership = userState.getMapped().getGrantedOwnership(documentHash);
+        assertNotNull(userState.getMapped().expectDocument(grantedOwnership.getMapped().getDocument().getMultihash()));
     }
 
     private void waitFor(long millis) {

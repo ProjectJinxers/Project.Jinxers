@@ -193,7 +193,7 @@ public class Document implements IPLDSerializable {
         Document copy = copy();
         copy.userState = newOwner;
         copy.previousVersion = currentWrapper;
-        IPLDObject<Document> res = new IPLDObject<Document>(this, foreignSignature);
+        IPLDObject<Document> res = new IPLDObject<Document>(copy, foreignSignature);
         return res;
     }
 

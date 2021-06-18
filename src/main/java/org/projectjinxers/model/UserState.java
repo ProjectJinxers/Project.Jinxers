@@ -19,6 +19,7 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
 import org.projectjinxers.account.Signer;
@@ -77,7 +78,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
     private static final KeyProvider<GrantedOwnership> GRANTED_OWNERSHIP_KEY_PROVIDER = new KeyProvider<>() {
         @Override
         public String getKey(IPLDObject<GrantedOwnership> object) {
-            return object.getMapped().getDocument().getMultihash();
+            return object.getMapped().getDocument().getMapped().getPreviousVersionHash();
         }
     };
     private static final KeyProvider<GrantedUnban> GRANTED_UNBAN_KEY_PROVIDER = new KeyProvider<>() {
@@ -99,7 +100,8 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
     private Map<String, IPLDObject<SettlementRequest>> settlementRequests;
     private Map<String, IPLDObject<OwnershipRequest>> ownershipRequests;
     private Map<String, IPLDObject<UnbanRequest>> unbanRequests;
-    private Map<String, IPLDObject<GrantedOwnership>> grantedOwnerships;
+    private Map<String, IPLDObject<GrantedOwnership>> grantedOwnerships; // key at request time, value.document
+                                                                         // transferred
     private Map<String, IPLDObject<GrantedUnban>> grantedUnbans;
 
     UserState() {
@@ -298,46 +300,78 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
     }
 
     /**
+     * @param documentHash the document hash (prior to transfer)
+     * @return the granted ownership for the document with the given hash (null-safe)
+     */
+    public IPLDObject<GrantedOwnership> getGrantedOwnership(String documentHash) {
+        return grantedOwnerships == null ? null : grantedOwnerships.get(documentHash);
+    }
+
+    /**
      * Sets a wrapped copy of this instance as the previousVersion (if current is not null only), adds the documents and
      * ownership requests to this instance and increments the version if there is a previousVersion (i.e. if current is
-     * not null). Should only be called in a transaction, unless this a a completely new instance (no previous version).
+     * not null). Should only be called in a transaction, unless this a completely new instance (no previous version).
      * 
      * @param docs                       the documents to add
      * @param requests                   the ownership request to add
+     * @param granted                    the granted ownerships
      * @param transferredOwnershipHashes the hashes of documents that have been transferred to another user
      * @param current                    the current wrapper (pass null, if you want to update without setting a
      *                                   previous version and increasing the version - make sure to call this with the
      *                                   previous version for the first update, if this is not the first version, as the
      *                                   copies would contain new state objects later)
      */
-    public void updateLinks(Collection<IPLDObject<Document>> docs, Collection<IPLDObject<OwnershipRequest>> requests,
+    public UserState updateLinks(Collection<IPLDObject<Document>> docs,
+            Collection<IPLDObject<OwnershipRequest>> requests, Collection<IPLDObject<GrantedOwnership>> granted,
             Collection<String> transferredOwnershipHashes, IPLDObject<UserState> current) {
-        if (current != null) {
-            UserState copy = copy();
-            this.previousVersion = new IPLDObject<>(current, copy);
-            this.version++;
-            if (transferredOwnershipHashes != null && transferredOwnershipHashes.size() > 0) {
-                for (String hash : transferredOwnershipHashes) {
-                    documents.remove(hash);
+        UserState updated = copy();
+        updated.version = this.version + 1;
+        updated.previousVersion = current;
+        if (transferredOwnershipHashes != null && transferredOwnershipHashes.size() > 0) {
+            for (String hash : transferredOwnershipHashes) {
+                updated.documents.remove(hash);
+                if (updated.grantedOwnerships != null && updated.grantedOwnerships.size() > 0) {
+                    String toRemove = null;
+                    for (Entry<String, IPLDObject<GrantedOwnership>> entry : updated.grantedOwnerships.entrySet()) {
+                        IPLDObject<Document> document = entry.getValue().getMapped().getDocument();
+                        if (document.getMultihash().equals(hash)) {
+                            toRemove = entry.getKey();
+                            break;
+                        }
+                    }
+                    if (toRemove != null) {
+                        updated.grantedOwnerships.remove(toRemove);
+                    }
                 }
             }
-            if (requests != null && requests.size() > 0) {
-                if (ownershipRequests == null) {
-                    this.ownershipRequests = new LinkedHashMap<>();
-                }
-                for (IPLDObject<OwnershipRequest> ownershipRequest : requests) {
-                    ownershipRequests.put(OWNERSHIP_REQUEST_KEY_PROVIDER.getKey(ownershipRequest), ownershipRequest);
-                }
+        }
+        if (requests != null && requests.size() > 0) {
+            if (updated.ownershipRequests == null) {
+                updated.ownershipRequests = new LinkedHashMap<>();
+            }
+            for (IPLDObject<OwnershipRequest> ownershipRequest : requests) {
+                updated.ownershipRequests.put(OWNERSHIP_REQUEST_KEY_PROVIDER.getKey(ownershipRequest),
+                        ownershipRequest);
+            }
+        }
+        if (granted != null && granted.size() > 0) {
+            if (updated.grantedOwnerships == null) {
+                updated.grantedOwnerships = new LinkedHashMap<>();
+            }
+            for (IPLDObject<GrantedOwnership> grantedOwnership : granted) {
+                updated.grantedOwnerships.put(GRANTED_OWNERSHIP_KEY_PROVIDER.getKey(grantedOwnership),
+                        grantedOwnership);
             }
         }
         if (docs != null && docs.size() > 0) {
-            if (documents == null) {
-                this.documents = new LinkedHashMap<>();
+            if (updated.documents == null) {
+                updated.documents = new LinkedHashMap<>();
             }
             for (IPLDObject<Document> document : docs) {
-                documents.put(DOCUMENT_KEY_PROVIDER.getKey(document), document);
+                updated.documents.put(DOCUMENT_KEY_PROVIDER.getKey(document), document);
             }
         }
+        return updated;
     }
 
     private UserState copy() {

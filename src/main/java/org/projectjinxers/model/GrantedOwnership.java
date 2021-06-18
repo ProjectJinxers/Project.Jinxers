@@ -34,6 +34,21 @@ public class GrantedOwnership implements IPLDSerializable, Loader<GrantedOwnersh
     private IPLDObject<Document> document;
     private IPLDObject<ModelState> modelState; // at request resolution time
 
+    GrantedOwnership() {
+
+    }
+
+    /**
+     * Constructor for a new granted ownership.
+     * 
+     * @param document   the transferred document
+     * @param modelState the model state at request resolution time
+     */
+    public GrantedOwnership(IPLDObject<Document> document, IPLDObject<ModelState> modelState) {
+        this.document = document;
+        this.modelState = modelState;
+    }
+
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {

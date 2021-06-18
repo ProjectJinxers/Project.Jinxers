@@ -39,13 +39,13 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
     private static final String KEY_SUBJECT = "s";
     private static final String KEY_VOTES = "v";
 
-    private static final KeyProvider<Vote> ANONYMOUS_VOTE_KEY_PROVIDER = new KeyProvider<Vote>() {
+    private static final KeyProvider<Vote> ANONYMOUS_VOTE_KEY_PROVIDER = new KeyProvider<>() {
         @Override
         public String getKey(IPLDObject<Vote> object) {
             return Base64.encodeBase64String(object.getMapped().getInvitationKey());
         }
     };
-    private static final KeyProvider<Vote> NON_ANONYMOUS_VOTE_KEY_PROVIDER = new KeyProvider<Vote>() {
+    private static final KeyProvider<Vote> NON_ANONYMOUS_VOTE_KEY_PROVIDER = new KeyProvider<>() {
         @Override
         public String getKey(IPLDObject<Vote> object) {
             return new String(object.getMapped().getInvitationKey(), StandardCharsets.UTF_8);

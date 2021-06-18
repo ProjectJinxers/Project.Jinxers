@@ -165,42 +165,50 @@ public class OwnershipTransferController {
 
         IPLDObject<OwnershipRequest> request = resolvedUser.getMapped().getOwnershipRequest(documentHash);
 
-        Date lastActivityDate = ownerUserState.getLastActivityDate(documentHash);
-        if (lastActivityDate == null) {
-            lastActivityDate = resolvedDocument.getMapped().getDate();
-        }
-        long now = System.currentTimeMillis();
-        long inactivity = now - lastActivityDate.getTime();
-        if (inactivity >= REQUIRED_INACTIVITY) {
-            if (request == null) {
+        if (request == null) {
+            Date lastActivityDate = ownerUserState.getLastActivityDate(documentHash);
+            if (lastActivityDate == null) {
+                lastActivityDate = resolvedDocument.getMapped().getDate();
+            }
+            long now = System.currentTimeMillis();
+            long inactivity = now - lastActivityDate.getTime();
+            if (inactivity >= REQUIRED_INACTIVITY) {
                 this.ownershipRequest = new IPLDObject<>(
                         new OwnershipRequest(resolvedUser.getMapped().getUser(), resolvedDocument, anonymousVoting),
                         signature);
                 return true;
             }
-            inactivity = now - request.getMapped().getTimestamp();
-            if (inactivity >= MIN_REQUEST_PHASE_DURATION) {
-                IPLDObject<OwnershipRequest>[] ownershipRequests = modelState.getMapped()
-                        .expectOwnershipRequests(documentHash);
-                Collection<IPLDObject<OwnershipRequest>> activeRequests = new ArrayList<>();
-                boolean anonymous = false;
-                for (IPLDObject<OwnershipRequest> or : ownershipRequests) {
-                    if (or.getMapped().isActive()) {
-                        activeRequests.add(or);
-                        anonymous |= or.getMapped().isAnonymousVoting();
-                    }
+            return false;
+        }
+        IPLDObject<OwnershipRequest>[] ownershipRequests = modelState.getMapped().expectOwnershipRequests(documentHash);
+        Collection<IPLDObject<OwnershipRequest>> activeRequests = new ArrayList<>();
+        boolean anonymous = false;
+        long minTimestamp = request.getMapped().getTimestamp();
+        for (IPLDObject<OwnershipRequest> or : ownershipRequests) {
+            OwnershipRequest req = or.getMapped();
+            if (req.isActive()) {
+                activeRequests.add(or);
+                anonymous |= req.isAnonymousVoting();
+                long timestamp = req.getTimestamp();
+                if (timestamp < minTimestamp) {
+                    minTimestamp = timestamp;
                 }
-                if (activeRequests.size() > 1) {
-                    this.voting = new IPLDObject<Voting>(new Voting(new IPLDObject<Votable>(
-                            new OwnershipSelection(resolvedDocument, activeRequests, anonymous)), 0));
-                }
-                else if (request.getMapped().isActive()) {
-                    this.document = resolvedDocument;
-                    this.previousOwner = resolvedDocument.getMapped().getUserState();
-                    this.newOwner = resolvedUser;
-                }
-                return true;
             }
+        }
+        long now = System.currentTimeMillis();
+        long duration = now - minTimestamp;
+        if (duration >= MIN_REQUEST_PHASE_DURATION) {
+            if (activeRequests.size() > 1) {
+                this.voting = new IPLDObject<Voting>(new Voting(
+                        new IPLDObject<Votable>(new OwnershipSelection(resolvedDocument, activeRequests, anonymous)),
+                        0));
+            }
+            else if (request.getMapped().isActive()) {
+                this.document = resolvedDocument;
+                this.previousOwner = resolvedDocument.getMapped().getUserState();
+                this.newOwner = resolvedUser;
+            }
+            return true;
         }
         return false;
     }

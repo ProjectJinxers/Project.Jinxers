@@ -27,11 +27,10 @@ import org.junit.jupiter.api.Test;
 import org.projectjinxers.account.ECCSigner;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.account.Users;
-import org.projectjinxers.model.Document;
 import org.projectjinxers.model.Loader;
 import org.projectjinxers.model.LoaderFactory;
 import org.projectjinxers.model.ModelState;
-import org.projectjinxers.model.Review;
+import org.projectjinxers.model.OwnershipRequest;
 import org.projectjinxers.model.User;
 import org.projectjinxers.model.UserState;
 
@@ -50,7 +49,12 @@ import com.google.gson.JsonParser;
 class TestIPFSAccessUtil {
 
     private static final String[] PRINT_HASHES_FILEPATHS = {
-            "model/modelController/transferOwnership/simpleRequest.json" };
+            "model/modelController/transferOwnership/existingReq.json" };
+
+    private static final String UPDATE_FILE_CONTENTS_SINGLE_PATH = null;
+    private static final String UPDATE_FILE_CONTENTS_MULTIPLE_PATH = null;
+    private static final String REPLACE_FILE_CONTENTS_SINGLE_PATH = null;
+    private static final String REPLACE_FILE_CONTENTS_MULTIPLE_PATH = "model/modelController/transferOwnership/simpleRequest.json";
 
     /**
      * Interface for updating models in memory. The updated models will be printed out to the console. Please note, that
@@ -82,7 +86,7 @@ class TestIPFSAccessUtil {
 
     private static final Map<String, ModelUpdater> UPDATERS = new HashMap<>();
     static {
-        UPDATERS.put("5f0c79b199ec906bb53db3b856b7c4662a44eb7ce796aea4a41523070f82e707", new ModelUpdater() {
+        UPDATERS.put("b144ebcf4f6ebd47881a15f8c17b3c6712abd84ea5960bbe3566630618273618", new ModelUpdater() {
             @Override
             public IPLDObject<?> update(String hash, IPLDContext context) throws IOException {
                 Loader<ModelState> loader = LoaderFactory.MODEL_STATE.createLoader();
@@ -90,14 +94,18 @@ class TestIPFSAccessUtil {
                 ModelState mapped = modelState.getMapped();
                 IPLDObject<UserState> userState = mapped
                         .expectUserState("4426c8164350e8ec0d2750e2f492aa6016fab43d147810970f25fceb96c69765");
-                IPLDObject<Document> document = userState.getMapped()
-                        .getDocument("7a54a98b83e5b944578d2da4c17d6e5c673faf8333c2e6ef4f3a5d179a528511");
-                Review review = new Review(null, null, null, null, null, null, null, document, Boolean.FALSE, null);
-                IPLDObject<UserState> reviewerState = mapped
-                        .expectUserState("71b363800b13b92f7bd2262618c192bbfcfd8b21c59ce022f9eb33ea6bfeefa5");
-                reviewerState.getMapped().updateLinks(Arrays.asList(new IPLDObject<>(review)), null, null, null);
+                IPLDObject<UserState> secondUserState = mapped.expectUserState("71b363800b13b92f7bd2262618c192bbfcfd8b21c59ce022f9eb33ea6bfeefa5");
+                OwnershipRequest ownershipRequest = new OwnershipRequest(secondUserState.getMapped().getUser(),
+                        userState.getMapped().getDocument(
+                                "109538171df26adb1f1e7ff0e55b777f6e52de8190db13cb39e6c87383c82e96"),
+                        false);
+                IPLDObject<OwnershipRequest> ownershipRequestObject = new IPLDObject<>(ownershipRequest);
+                secondUserState.getMapped().updateLinks(null,
+                        Arrays.asList(ownershipRequestObject), null, null, secondUserState);
 
-                mapped.updateUserState(new IPLDObject<>(reviewerState.getMapped()), null, null, null);
+                IPLDObject<UserState> updated = new IPLDObject<>(secondUserState.getMapped());
+                updated.save(context, new ECCSigner("newOwner", "newpass"));
+                mapped.updateUserState(updated, Arrays.asList(ownershipRequestObject), null, null);
                 return modelState;
             }
         });
@@ -165,33 +173,45 @@ class TestIPFSAccessUtil {
 
     @Test
     void updateFileContentsForSingleObject() throws FileNotFoundException, IOException {
-        String filepath = "model.json";
-        System.out.printf(HEADER, "update " + filepath);
-        updateObject(filepath, false);
+        String filepath = UPDATE_FILE_CONTENTS_SINGLE_PATH;
+        boolean nonEmpty = filepath != null && !"".equals(filepath.trim());
+        System.out.printf(HEADER, "update single " + (nonEmpty ? filepath : "<n/a>"));
+        if (nonEmpty) {
+            updateObject(filepath, false);
+        }
         System.out.println(FOOTER);
     }
 
     @Test
     void updateFileContentsForMultipleObjects() throws FileNotFoundException, IOException {
-        String filepath = "model/modelController/transferOwnership/reclaim.json";
-        System.out.printf(HEADER, "update " + filepath);
-        updateObjects(filepath, false);
+        String filepath = UPDATE_FILE_CONTENTS_MULTIPLE_PATH;
+        boolean nonEmpty = filepath != null && !"".equals(filepath.trim());
+        System.out.printf(HEADER, "update multiple " + (nonEmpty ? filepath : "<n/a>"));
+        if (nonEmpty) {
+            updateObjects(filepath, false);
+        }
         System.out.println(FOOTER);
     }
 
     @Test
     void replaceFileContentsForSingleObject() throws FileNotFoundException, IOException {
-        String filepath = "model.json";
-        System.out.printf(HEADER, "replace " + filepath);
-        updateObject(filepath, true);
+        String filepath = REPLACE_FILE_CONTENTS_SINGLE_PATH;
+        boolean nonEmpty = filepath != null && !"".equals(filepath.trim());
+        System.out.printf(HEADER, "replace single " + (nonEmpty ? filepath : "<n/a>"));
+        if (nonEmpty) {
+            updateObject(filepath, true);
+        }
         System.out.println(FOOTER);
     }
 
     @Test
     void replaceFileContentsForMultipleObjects() throws FileNotFoundException, IOException {
-        String filepath = "model/modelController/transferOwnership/simple.json";
-        System.out.printf(HEADER, "replace " + filepath);
-        updateObjects(filepath, true);
+        String filepath = REPLACE_FILE_CONTENTS_MULTIPLE_PATH;
+        boolean nonEmpty = filepath != null && !"".equals(filepath.trim());
+        System.out.printf(HEADER, "replace multiple " + (nonEmpty ? filepath : "<n/a>"));
+        if (nonEmpty) {
+            updateObjects(filepath, true);
+        }
         System.out.println(FOOTER);
     }
 
