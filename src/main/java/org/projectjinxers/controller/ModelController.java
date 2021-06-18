@@ -203,7 +203,12 @@ public class ModelController {
         return true;
     }
 
+    private long start;
+
     boolean handleIncomingOwnershipRequest(String pubSubData) {
+        start = System.currentTimeMillis();
+        System.out.printf("%8d Handling ownership request - checking validation flag\n",
+                System.currentTimeMillis() - start);
         if (validatingModelState) {
             storePotentialOwnershipRequestHash(pubSubData);
             return false;
@@ -218,11 +223,18 @@ public class ModelController {
         byte v = Byte.parseByte(parts[3]);
         ECDSASignature signature = new ECDSASignature(r, s);
         signature.v = v;
+
+        System.out.printf("%8d Handling ownership request - finished parsing\n", System.currentTimeMillis() - start);
         IPLDObject<ModelState> currentModelState = currentValidatedState;
+        System.out.printf("%8d Handling ownership request - checking transfer in state ",
+                System.currentTimeMillis() - start);
+        System.out.println(currentModelState.getMultihash());
         OwnershipTransferController controller = new OwnershipTransferController(requestParts[2], requestParts[1],
                 OwnershipTransferController.OWNERSHIP_VOTING_ANONYMOUS.equals(requestParts[0]), currentModelState,
                 context, signature);
         if (controller.process()) {
+            System.out.printf("%8d Handling ownership request - saving local changes\n",
+                    System.currentTimeMillis() - start);
             try {
                 saveLocalChanges(null, controller);
             }
@@ -325,12 +337,20 @@ public class ModelController {
         if (ownershipTransferController != null) {
             transferControllers.add(ownershipTransferController);
         }
+        System.out.printf("%8d Saving local changes - pre-initialization finished\n",
+                System.currentTimeMillis() - start);
         if (transferControllers.size() > 0) {
+            System.out.printf("%8d Saving local changes - has transfer controllers\n",
+                    System.currentTimeMillis() - start);
             for (OwnershipTransferController controller : transferControllers) {
                 IPLDObject<OwnershipRequest> ownershipRequest = controller.getOwnershipRequest();
                 if (ownershipRequest == null) {
+                    System.out.printf("%8d Saving local changes - no ownership request\n",
+                            System.currentTimeMillis() - start);
                     IPLDObject<Document> transferredDocument = controller.getDocument();
                     if (transferredDocument == null) {
+                        System.out.printf("%8d Saving local changes - no transferred document\n",
+                                System.currentTimeMillis() - start);
                         IPLDObject<Voting> voting = controller.getVoting();
                         try {
                             voting.save(context, null);
@@ -341,6 +361,8 @@ public class ModelController {
                         }
                     }
                     else {
+                        System.out.printf("%8d Saving local changes - processing transferred document\n",
+                                System.currentTimeMillis() - start);
                         Document transferredDoc = transferredDocument.getMapped();
                         IPLDObject<UserState> previousOwner = controller.getPreviousOwner();
                         String key = previousOwner.getMapped().getUser().getMultihash();
@@ -361,17 +383,23 @@ public class ModelController {
                         IPLDObject<Document> transferred = transferredDoc.transferTo(newOwner, transferredDocument,
                                 controller.getSignature());
                         try {
+                            System.out.printf("%8d Saving local changes - saving transferred document\n",
+                                    System.currentTimeMillis() - start);
                             transferred.save(context, null);
                             docs.add(transferred);
                             userHashes.add(key);
                         }
                         catch (Exception e) {
+                            System.out.printf("%8d Saving local changes - failed to save transferred document\n",
+                                    System.currentTimeMillis() - start);
                             handleOwnershipTransferControllerException(e, ownershipTransferController);
                             return false;
                         }
                     }
                 }
                 else {
+                    System.out.printf("%8d Saving local changes - processing ownership request\n",
+                            System.currentTimeMillis() - start);
                     String key = ownershipRequest.getMapped().expectUserHash();
                     try {
                         ownershipRequest.save(context, null);
@@ -384,13 +412,18 @@ public class ModelController {
                         userHashes.add(key);
                     }
                     catch (Exception e) {
+                        System.out.printf("%8d Saving local changes - failed to save ownership request\n",
+                                System.currentTimeMillis() - start);
                         handleOwnershipTransferControllerException(e, ownershipTransferController);
                         return false;
                     }
                 }
             }
         }
+        System.out.printf("%8d Saving local changes - beginning model state transaction\n",
+                System.currentTimeMillis() - start);
         if (currentModelState.beginTransaction(context)) {
+            System.out.printf("%8d Saving local changes - started transaction\n", System.currentTimeMillis() - start);
             if (queuedOwnershipTransferControllers != null) {
                 synchronized (queuedOwnershipTransferControllers) {
                     queuedOwnershipTransferControllers.clear();
@@ -456,7 +489,11 @@ public class ModelController {
                 queue.add(document);
             }
             Collection<IPLDObject<UserState>> updatedUserStates = new ArrayList<>();
+            System.out.printf("%8d Saving local changes - processing user states\n",
+                    System.currentTimeMillis() - start);
             for (String userHash : userHashes) {
+                System.out.printf("%8d Saving local changes - hash: ", System.currentTimeMillis() - start);
+                System.out.println(userHash);
                 IPLDObject<UserState> userState = modelState.expectUserState(userHash);
                 Queue<IPLDObject<Document>> docs = documents.get(userHash);
                 if (queuedDocuments != null) {
@@ -477,11 +514,19 @@ public class ModelController {
                     }
                 }
                 boolean userStateTransactionStarted = false;
+                System.out.printf("%8d Saving local changes - checking pending instance\n",
+                        System.currentTimeMillis() - start);
                 userState = getInstanceToSave(userState);
+                System.out.printf("%8d Saving local changes - continuing with ", System.currentTimeMillis() - start);
+                System.out.println(userState.getMultihash());
                 try {
                     if (docs != null && docs.size() > 0 || requests != null && requests.size() > 0
                             || hashes != null && hashes.size() > 0) {
+                        System.out.printf("%8d Saving local changes - beginning user state transaction\n",
+                                System.currentTimeMillis() - start);
                         if (userState.beginTransaction(context)) {
+                            System.out.printf("%8d Saving local changes - started transaction\n",
+                                    System.currentTimeMillis() - start);
                             userStateTransactionStarted = true;
                             userState.getMapped().updateLinks(docs, requests, hashes, userState);
                             userState.save(context, null);
@@ -489,34 +534,48 @@ public class ModelController {
                             userState.commit();
                         }
                         else {
+                            System.out.printf("%8d Saving local changes - rolling back model state transaction\n",
+                                    System.currentTimeMillis() - start);
                             currentModelState.rollback(context);
-                            handleIncompletUserTransaction(userHash, docs, requests, hashes, updatedUserStates,
+                            handleIncompleteUserTransaction(userHash, docs, requests, hashes, updatedUserStates,
                                     document);
                             return false;
                         }
                     }
                 }
                 catch (Exception e) {
+                    System.out.printf("%8d Saving local changes - caught exception - rolling back\n",
+                            System.currentTimeMillis() - start);
                     currentModelState.rollback(context);
                     if (userStateTransactionStarted) {
+                        System.out.printf("%8d Saving local changes - user state as well\n",
+                                System.currentTimeMillis() - start);
                         userState.rollback(context);
                     }
-                    handleIncompletUserTransaction(userHash, docs, requests, hashes, updatedUserStates, document);
+                    handleIncompleteUserTransaction(userHash, docs, requests, hashes, updatedUserStates, document);
                     return false;
                 }
             }
             boolean first = true;
+            System.out.printf("%8d Saving local changes - updating model state\n", System.currentTimeMillis() - start);
             for (IPLDObject<UserState> userState : updatedUserStates) {
+                System.out.printf("%8d Saving local changes - updating user state ",
+                        System.currentTimeMillis() - start);
+                System.out.println(userState.getMultihash());
                 modelState.updateUserState(userState,
                         ownershipRequests.get(userState.getMapped().getUser().getMultihash()), first ? votings : null,
                         first ? currentModelState : null);
                 first = false;
             }
             try {
+                System.out.printf("%8d Saving local changes - saving model state\n",
+                        System.currentTimeMillis() - start);
                 currentModelState.save(context, null);
                 currentModelState.commit();
             }
             catch (Exception e) {
+                System.out.printf("%8d Saving local changes - failed to save - rolling back\n",
+                        System.currentTimeMillis() - start);
                 currentModelState.rollback(context);
                 if (pendingUserStates == null) {
                     pendingUserStates = new LinkedHashMap<>();
@@ -533,6 +592,8 @@ public class ModelController {
                     queuedVotings.clear();
                 }
             }
+            System.out.printf("%8d Saving local changes - publishing local state ", System.currentTimeMillis() - start);
+            System.out.println(currentModelState.getMultihash());
             publishLocalState(currentModelState);
             return true;
         }
@@ -552,7 +613,7 @@ public class ModelController {
         }
     }
 
-    private void handleIncompletUserTransaction(String userHash, Queue<IPLDObject<Document>> documents,
+    private void handleIncompleteUserTransaction(String userHash, Queue<IPLDObject<Document>> documents,
             Queue<IPLDObject<OwnershipRequest>> requests, Queue<String> transferredOwnershipHashes,
             Collection<IPLDObject<UserState>> updatedUserStates, IPLDObject<Document> document) {
         requeue(userHash, documents, requests, transferredOwnershipHashes);
