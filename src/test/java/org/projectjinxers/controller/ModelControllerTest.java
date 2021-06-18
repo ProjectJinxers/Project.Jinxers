@@ -674,18 +674,10 @@ class ModelControllerTest {
 
     @Test
     void testSimpleOwnershipRequest() throws Exception {
-        long start = System.currentTimeMillis();
-        System.out.printf("%8d Reading simpleRequest.json\n", System.currentTimeMillis() - start);
         String[] hashes = access.readObjects("model/modelController/transferOwnership/simpleRequest.json");
         String modelStateHash = hashes[1];
         String reviewerHash = hashes[7];
         String documentHash = hashes[5];
-        System.out.printf("%8d ModelState: ", System.currentTimeMillis() - start);
-        System.out.println(modelStateHash);
-        System.out.printf("%8d Reviewer: ", System.currentTimeMillis() - start);
-        System.out.println(reviewerHash);
-        System.out.printf("%8d Document: ", System.currentTimeMillis() - start);
-        System.out.println(documentHash);
 
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
@@ -694,15 +686,10 @@ class ModelControllerTest {
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
 
-        System.out.printf("%8d Finished setup - simulating message\n", System.currentTimeMillis() - start);
-
         access.simulateOwnershipRequestMessage(config.getIOTAMainAddress(), reviewerHash, documentHash, false,
                 NEW_OWNER_SIGNER);
 
-        System.out.printf("%8d Waiting for published message\n", System.currentTimeMillis() - start);
         String published = access.waitForPublishedMessage(config.getIOTAMainAddress(), 32000);
-        System.out.printf("%8d Received published message ", System.currentTimeMillis() - start);
-        System.out.println(published);
         assertNotNull(published);
         IPLDObject<ModelState> updated = new IPLDObject<>(published, new ModelState(), controller.getContext(), null);
         ModelState updatedState = updated.getMapped();
