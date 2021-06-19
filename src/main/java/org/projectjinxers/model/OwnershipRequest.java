@@ -95,6 +95,16 @@ public class OwnershipRequest extends ToggleRequest implements DocumentAction, L
     }
 
     @Override
+    protected ToggleRequest createCopyInstance() {
+        OwnershipRequest res = new OwnershipRequest();
+        res.anonymousVoting = anonymousVoting;
+        res.votingHashSeed = votingHashSeed;
+        res.timestamp = timestamp;
+        res.document = document;
+        return res;
+    }
+
+    @Override
     public OwnershipRequest getOrCreateDataInstance(IPLDReader reader, Metadata metadata) {
         return this;
     }

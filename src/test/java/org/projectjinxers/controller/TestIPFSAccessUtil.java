@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.projectjinxers.account.ECCSigner;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.account.Users;
+import org.projectjinxers.model.Document;
 import org.projectjinxers.model.Loader;
 import org.projectjinxers.model.LoaderFactory;
 import org.projectjinxers.model.ModelState;
@@ -49,12 +50,12 @@ import com.google.gson.JsonParser;
 class TestIPFSAccessUtil {
 
     private static final String[] PRINT_HASHES_FILEPATHS = {
-            "model/modelController/transferOwnership/existingReq.json" };
+            "model/modelController/transferOwnership/existingReqs.json" };
 
     private static final String UPDATE_FILE_CONTENTS_SINGLE_PATH = null;
     private static final String UPDATE_FILE_CONTENTS_MULTIPLE_PATH = null;
     private static final String REPLACE_FILE_CONTENTS_SINGLE_PATH = null;
-    private static final String REPLACE_FILE_CONTENTS_MULTIPLE_PATH = "model/modelController/transferOwnership/simpleRequest.json";
+    private static final String REPLACE_FILE_CONTENTS_MULTIPLE_PATH = "model/modelController/transferOwnership/existingReq.json";
 
     /**
      * Interface for updating models in memory. The updated models will be printed out to the console. Please note, that
@@ -86,26 +87,21 @@ class TestIPFSAccessUtil {
 
     private static final Map<String, ModelUpdater> UPDATERS = new HashMap<>();
     static {
-        UPDATERS.put("b144ebcf4f6ebd47881a15f8c17b3c6712abd84ea5960bbe3566630618273618", new ModelUpdater() {
+        UPDATERS.put("c26324283499d6db7799f6625d4ece1dd995a4d91a5f956bdf7429211a2cd176", new ModelUpdater() {
             @Override
             public IPLDObject<?> update(String hash, IPLDContext context) throws IOException {
                 Loader<ModelState> loader = LoaderFactory.MODEL_STATE.createLoader();
                 IPLDObject<ModelState> modelState = new IPLDObject<>(hash, loader, context, null);
                 ModelState mapped = modelState.getMapped();
-                IPLDObject<UserState> userState = mapped
+                IPLDObject<Document> document = new IPLDObject<>(
+                        "109538171df26adb1f1e7ff0e55b777f6e52de8190db13cb39e6c87383c82e96",
+                        LoaderFactory.DOCUMENT.createLoader(), context, null);
+                OwnershipRequest firstRequest = (OwnershipRequest) new OwnershipRequest(null, document, true).toggle();
+                OwnershipRequest secondRequest = new OwnershipRequest(null, document, true);
+                IPLDObject<UserState> dummyState = mapped
                         .expectUserState("4426c8164350e8ec0d2750e2f492aa6016fab43d147810970f25fceb96c69765");
-                IPLDObject<UserState> secondUserState = mapped.expectUserState("71b363800b13b92f7bd2262618c192bbfcfd8b21c59ce022f9eb33ea6bfeefa5");
-                OwnershipRequest ownershipRequest = new OwnershipRequest(secondUserState.getMapped().getUser(),
-                        userState.getMapped().getDocument(
-                                "109538171df26adb1f1e7ff0e55b777f6e52de8190db13cb39e6c87383c82e96"),
-                        false);
-                IPLDObject<OwnershipRequest> ownershipRequestObject = new IPLDObject<>(ownershipRequest);
-                secondUserState.getMapped().updateLinks(null,
-                        Arrays.asList(ownershipRequestObject), null, null, secondUserState);
-
-                IPLDObject<UserState> updated = new IPLDObject<>(secondUserState.getMapped());
-                updated.save(context, new ECCSigner("newOwner", "newpass"));
-                mapped.updateUserState(updated, Arrays.asList(ownershipRequestObject), null, null);
+                mapped.updateUserState(dummyState,
+                        Arrays.asList(new IPLDObject<>(firstRequest), new IPLDObject<>(secondRequest)), null, null);
                 return modelState;
             }
         });

@@ -92,4 +92,22 @@ public abstract class ToggleRequest implements IPLDSerializable {
         return user.getMultihash();
     }
 
+    /**
+     * Creates a new valid instance where the active property's value is toggled.
+     * 
+     * @return the toggled copy
+     */
+    public ToggleRequest toggle() {
+        ToggleRequest copy = createCopyInstance();
+        copy.active = !active;
+        copy.payload = payload + 1;
+        copy.user = user;
+        return copy;
+    }
+
+    /**
+     * @return a new instance of this class, where all necessary properties defined in the subclasses have been set.
+     */
+    protected abstract ToggleRequest createCopyInstance();
+
 }

@@ -63,6 +63,8 @@ public class TestIPFSAccess extends IPFSAccess {
 
     private Set<String> saveFailures = new HashSet<>();
     private Set<String> noSaveFailures = new HashSet<>();
+    private int saveFailureCountdown;
+
     private Map<String, String> modelStateHashes = new HashMap<>();
 
     private boolean calculatingHashOnly;
@@ -74,6 +76,9 @@ public class TestIPFSAccess extends IPFSAccess {
 
     @Override
     public String saveObject(String inputFormat, byte[] bytes, String outputFormat) {
+        if (!calculatingHashOnly && --saveFailureCountdown == 0) {
+            throw new RuntimeException("Simulated save failure");
+        }
         String hash = getHash(bytes);
         if (calculatingHashOnly) {
             return hash;
@@ -352,6 +357,16 @@ public class TestIPFSAccess extends IPFSAccess {
             }
         }
         while (true);
+    }
+
+    /**
+     * Causes a save failure in the future. 0 or negative (not too close to min value) countdown effectively clears the
+     * save failure. If the save failure already hit, a reset to restore normal save behavior is not necessary.
+     * 
+     * @param countdown 1-based count down (skips countdown - 1 save operations)
+     */
+    public void failSaveIn(int countdown) {
+        this.saveFailureCountdown = countdown;
     }
 
     /**

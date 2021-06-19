@@ -308,18 +308,13 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
     }
 
     /**
-     * Sets a wrapped copy of this instance as the previousVersion (if current is not null only), adds the documents and
-     * ownership requests to this instance and increments the version if there is a previousVersion (i.e. if current is
-     * not null). Should only be called in a transaction, unless this a completely new instance (no previous version).
+     * Creates a copy of this instance, updates and returns it. The given current version is set as its previousVersion.
      * 
      * @param docs                       the documents to add
      * @param requests                   the ownership request to add
-     * @param granted                    the granted ownerships
-     * @param transferredOwnershipHashes the hashes of documents that have been transferred to another user
-     * @param current                    the current wrapper (pass null, if you want to update without setting a
-     *                                   previous version and increasing the version - make sure to call this with the
-     *                                   previous version for the first update, if this is not the first version, as the
-     *                                   copies would contain new state objects later)
+     * @param granted                    the granted ownerships to add
+     * @param transferredOwnershipHashes the hashes of documents that have been transferred to other users
+     * @param current                    the current wrapper (should not be null)
      */
     public UserState updateLinks(Collection<IPLDObject<Document>> docs,
             Collection<IPLDObject<OwnershipRequest>> requests, Collection<IPLDObject<GrantedOwnership>> granted,

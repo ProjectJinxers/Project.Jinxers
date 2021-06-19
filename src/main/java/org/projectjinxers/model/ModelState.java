@@ -149,21 +149,21 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
 
     /**
      * @param documentHash the hash of the document to check
-     * @return true iff there is a voting for transfer of ownership of the document with the given hash
+     * @return the voting for transfer of ownership of the document with the given hash, if any
      */
-    public boolean hasVotingForOwnershipTransfer(String documentHash) {
+    public IPLDObject<Voting> getVotingForOwnershipTransfer(String documentHash) {
         if (votings != null) {
             for (IPLDObject<Voting> voting : votings.values()) {
                 Votable votable = voting.getMapped().getSubject().getMapped();
                 if (votable instanceof OwnershipSelection) {
                     OwnershipSelection ownershipSelection = (OwnershipSelection) votable;
                     if (documentHash.equals(ownershipSelection.getDocument().getMultihash())) {
-                        return true;
+                        return voting;
                     }
                 }
             }
         }
-        return false;
+        return null;
     }
 
     /**
@@ -175,22 +175,25 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
     }
 
     /**
-     * Sets a wrapped copy of this instance as the previous version (if current is not null only), updates the user
-     * states map by replacing the entry for the key of the updated user state with the updated user state and
-     * increments the version if there is a previousVersion (i.e. if current is not null). Should only be called in a
-     * transaction, unless this a a completely new instance (no previous version).
+     * Updates this instance or a copy, which depends on the value of the 'current' parameter. It will be a copy if that
+     * value is not null. That value will also be the previousVersion of the updated instance. The first invocation of
+     * this method in a logical transaction should always be done with a non-null current instance.
      * 
-     * @param updated the updated (or new) user state
-     * @param current the current wrapper (pass null, if you want to update without setting a previous version and
-     *                increasing the version - make sure to call this with the previous version for the first update, if
-     *                this is not the first version, as the copies would contain new state objects later)
+     * @param userState         the updated (or new) user state (can also be null)
+     * @param ownershipRequests the new ownership requests (can be null)
+     * @param the               new votings (can be null)
+     * @param current           the current wrapper (pass null, if you want to update without setting a previous version
+     *                          and increasing the version - make sure to call this with the previous version for the
+     *                          first update, if this is not the first version, as the copies would contain new state
+     *                          objects later)
+     * @return the updated instance (can be this instance)
      */
     public ModelState updateUserState(IPLDObject<UserState> userState,
             Collection<IPLDObject<OwnershipRequest>> ownershipRequests, Collection<IPLDObject<Voting>> votings,
             IPLDObject<ModelState> current) {
         ModelState updated;
         if (current == null) {
-            if (this.userStates == null) {
+            if (userState != null && this.userStates == null) {
                 this.userStates = new LinkedHashMap<>();
             }
             if (ownershipRequests != null && this.ownershipRequests == null) {
@@ -224,7 +227,9 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
                 updated.ownershipRequests = new LinkedHashMap<>();
             }
         }
-        updated.userStates.put(USER_STATE_KEY_PROVIDER.getKey(userState), userState);
+        if (userState != null) {
+            updated.userStates.put(USER_STATE_KEY_PROVIDER.getKey(userState), userState);
+        }
         if (ownershipRequests != null) {
             for (IPLDObject<OwnershipRequest> ownershipRequest : ownershipRequests) {
                 String key = OWNERSHIP_REQUESTS_KEY_PROVIDER.getKey(ownershipRequest);

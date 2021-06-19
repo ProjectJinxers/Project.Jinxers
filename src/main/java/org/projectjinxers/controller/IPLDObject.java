@@ -39,9 +39,6 @@ public class IPLDObject<D extends IPLDSerializable> {
     private Metadata metadata;
     private ECDSASignature foreignSignature;
 
-    private String rollbackMultihash;
-    private byte[] rollbackBytes;
-
     /**
      * Constructor for locally created objects. Usually the instance will be written to IPFS.
      * 
@@ -184,45 +181,6 @@ public class IPLDObject<D extends IPLDSerializable> {
         }
         this.metadata = new Metadata(mapped.getMetaVersion(), signature);
         return metadata;
-    }
-
-    /**
-     * Saves the current state, so it can be restored in case the transaction has to be rolled back. If there is a
-     * transaction, however, the current rollback data will not be replaced.
-     * 
-     * @param context the context for saving the current state
-     * @return true iff a new transaction has been started (false is returned if there already is a transaction)
-     * @throws IOException if saving the current state fails
-     */
-    boolean beginTransaction(IPLDContext context) throws IOException {
-        if (rollbackBytes == null) {
-            this.rollbackBytes = context.serializeObject(this, null);
-            this.rollbackMultihash = multihash;
-            return true;
-        }
-        return false;
-    }
-
-    /**
-     * Rolls back to the previous save point marked by the most recent successful invocation of
-     * {@link #beginTransaction(IPLDContext)}.
-     * 
-     * @param context the context
-     */
-    void rollback(IPLDContext context) {
-        this.metadata = context.loadObject(rollbackBytes, loader, null);
-        this.mapped = loader.getLoaded();
-        this.multihash = rollbackMultihash;
-        this.rollbackMultihash = null;
-        this.rollbackBytes = null;
-    }
-
-    /**
-     * Clears the save point, so new transactions can be started.
-     */
-    void commit() {
-        this.rollbackBytes = null;
-        this.rollbackMultihash = null;
     }
 
 }

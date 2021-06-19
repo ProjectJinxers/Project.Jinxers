@@ -151,8 +151,7 @@ class UserStateTest {
         assertNotEquals(updatedDate, secondUpdatedDate);
         UserState userState = new UserState();
         UserState updated = userState.updateLinks(
-                Arrays.asList(prev, first, new TestIPLDObject<>("updated", secondUpdate)), null, null,
-                null, null);
+                Arrays.asList(prev, first, new TestIPLDObject<>("updated", secondUpdate)), null, null, null, null);
         assertEquals(secondUpdatedDate, updated.getLastActivityDate("hash"));
     }
 
@@ -180,7 +179,7 @@ class UserStateTest {
         Document unrelatedUpdate = unrelatedPrev.update(null, null, null, null, null, null, null, unrelated);
         UserState updated = userState
                 .updateLinks(Arrays.asList(unrelated, prev, first, new TestIPLDObject<>("updated", secondUpdate),
-                new TestIPLDObject<>("unrelatedUpdate", unrelatedUpdate)), null, null, null, null);
+                        new TestIPLDObject<>("unrelatedUpdate", unrelatedUpdate)), null, null, null, null);
         assertEquals(secondUpdatedDate, updated.getLastActivityDate("hash"));
     }
 

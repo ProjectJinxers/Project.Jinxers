@@ -338,11 +338,12 @@ public class ModelController {
                         IPLDObject<Voting> voting = controller.getVoting();
                         try {
                             voting.save(context, null);
-                            votings.add(voting);
                         }
                         catch (Exception e) {
-                            handleOwnershipTransferControllerException(e, ownershipTransferController);
+                            handleOwnershipTransferControllerException(e, ownershipTransferController, document);
+                            return false;
                         }
+                        votings.add(voting);
                     }
                     else {
                         Document transferredDoc = transferredDocument.getMapped();
@@ -370,7 +371,7 @@ public class ModelController {
                             userHashes.add(key);
                         }
                         catch (Exception e) {
-                            handleOwnershipTransferControllerException(e, ownershipTransferController);
+                            handleOwnershipTransferControllerException(e, ownershipTransferController, document);
                             return false;
                         }
                         Queue<IPLDObject<GrantedOwnership>> granted = grantedOwnerships.get(key);
@@ -394,7 +395,7 @@ public class ModelController {
                         userHashes.add(key);
                     }
                     catch (Exception e) {
-                        handleOwnershipTransferControllerException(e, ownershipTransferController);
+                        handleOwnershipTransferControllerException(e, ownershipTransferController, document);
                         return false;
                     }
                 }
@@ -403,11 +404,6 @@ public class ModelController {
         if (queuedOwnershipTransferControllers != null) {
             synchronized (queuedOwnershipTransferControllers) {
                 queuedOwnershipTransferControllers.clear();
-            }
-        }
-        if (pendingUserStates != null) {
-            synchronized (pendingUserStates) {
-                userHashes.addAll(pendingUserStates.keySet());
             }
         }
         if (queuedDocuments != null) {
@@ -477,7 +473,17 @@ public class ModelController {
             }
             queue.add(document);
         }
-        Collection<IPLDObject<UserState>> updatedUserStates = new ArrayList<>();
+        if (queuedVotings != null) {
+            synchronized (queuedVotings) {
+                queuedVotings.clear();
+            }
+        }
+        Map<String, IPLDObject<UserState>> updatedUserStates = new LinkedHashMap<>();
+        if (pendingUserStates != null) {
+            synchronized (pendingUserStates) {
+                updatedUserStates.putAll(pendingUserStates);
+            }
+        }
         for (String userHash : userHashes) {
             IPLDObject<UserState> userState = modelState.expectUserState(userHash);
             Queue<IPLDObject<Document>> docs = documents.get(userHash);
@@ -511,19 +517,18 @@ public class ModelController {
                     UserState updated = userState.getMapped().updateLinks(docs, requests, granted, hashes, userState);
                     IPLDObject<UserState> updatedObject = new IPLDObject<>(updated);
                     updatedObject.save(context, null);
-                    updatedUserStates.add(updatedObject);
+                    updatedUserStates.put(userHash, updatedObject);
                 }
                 catch (Exception e) {
-                    requeue(userHash, docs, requests, granted, hashes);
+                    e.printStackTrace();
+                    requeue(userHash, docs, requests, granted, hashes, votings);
 
                     if (updatedUserStates.size() > 0) {
                         if (pendingUserStates == null) {
                             pendingUserStates = new LinkedHashMap<>();
                         }
                         synchronized (pendingUserStates) {
-                            for (IPLDObject<UserState> updated : updatedUserStates) {
-                                pendingUserStates.put(updated.getMapped().getUser().getMultihash(), updated);
-                            }
+                            pendingUserStates.putAll(updatedUserStates);
                         }
                     }
                     // at this point everything but the document parameter has been handled if its owner has not been
@@ -538,41 +543,51 @@ public class ModelController {
                 }
             }
         }
-        boolean first = true;
-        for (IPLDObject<UserState> userState : updatedUserStates) {
-            modelState = modelState.updateUserState(userState,
-                    ownershipRequests.get(userState.getMapped().getUser().getMultihash()), first ? votings : null,
-                    first ? currentModelState : null);
-            first = false;
+        if (updatedUserStates.isEmpty()) { // must be voting(s)
+            modelState = modelState.updateUserState(null, null, votings, currentModelState);
+        }
+        else {
+            boolean first = true;
+            for (Entry<String, IPLDObject<UserState>> entry : updatedUserStates.entrySet()) {
+                modelState = modelState.updateUserState(entry.getValue(), ownershipRequests.get(entry.getKey()),
+                        first ? votings : null, first ? currentModelState : null);
+                first = false;
+            }
         }
         IPLDObject<ModelState> newLocalState = new IPLDObject<ModelState>(modelState);
         try {
             newLocalState.save(context, null);
         }
         catch (Exception e) {
-            if (pendingUserStates == null) {
-                pendingUserStates = new LinkedHashMap<>();
-            }
-            synchronized (pendingUserStates) {
-                for (IPLDObject<UserState> userState : updatedUserStates) {
-                    pendingUserStates.put(userState.getMapped().getUser().getMultihash(), userState);
+            e.printStackTrace();
+            if (updatedUserStates.size() > 0) {
+                if (pendingUserStates == null) {
+                    pendingUserStates = new LinkedHashMap<>();
+                }
+                synchronized (pendingUserStates) {
+                    pendingUserStates.putAll(updatedUserStates);
                 }
             }
-            return false;
-        }
-        if (queuedVotings != null) {
-            synchronized (queuedVotings) {
-                queuedVotings.clear();
+            if (votings.size() > 0) {
+                if (queuedVotings == null) {
+                    queuedVotings = new ArrayDeque<>();
+                }
+                queuedVotings.addAll(votings);
             }
+            return false;
         }
         publishLocalState(newLocalState);
         return true;
     }
 
-    private void handleOwnershipTransferControllerException(Exception e, OwnershipTransferController controller) {
+    private void handleOwnershipTransferControllerException(Exception e, OwnershipTransferController controller,
+            IPLDObject<Document> document) {
         e.printStackTrace();
         if (controller != null) {
             enqueueOwnershipTransferController(controller);
+        }
+        if (document != null) {
+            enqueueDocument(document);
         }
     }
 
@@ -620,7 +635,7 @@ public class ModelController {
 
     private void requeue(String userHash, Queue<IPLDObject<Document>> documents,
             Queue<IPLDObject<OwnershipRequest>> requests, Queue<IPLDObject<GrantedOwnership>> granted,
-            Queue<String> transferredOwnershipHashes) {
+            Queue<String> transferredOwnershipHashes, Collection<IPLDObject<Voting>> votings) {
         if (documents != null && documents.size() > 0) {
             if (queuedDocuments == null) {
                 queuedDocuments = new HashMap<>();
@@ -675,6 +690,14 @@ public class ModelController {
                 else {
                     queue.addAll(transferredOwnershipHashes);
                 }
+            }
+        }
+        if (votings != null && votings.size() > 0) {
+            if (queuedVotings == null) {
+                queuedVotings = new ArrayDeque<>();
+            }
+            synchronized (queuedVotings) {
+                queuedVotings.addAll(votings);
             }
         }
     }

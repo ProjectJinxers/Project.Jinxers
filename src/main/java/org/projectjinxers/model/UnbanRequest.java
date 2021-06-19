@@ -100,6 +100,16 @@ public class UnbanRequest extends ToggleRequest implements DocumentAction, Votab
     }
 
     @Override
+    protected ToggleRequest createCopyInstance() {
+        UnbanRequest res = new UnbanRequest();
+        res.anonymous = anonymous;
+        res.hashSeed = hashSeed;
+        res.deadline = deadline;
+        res.document = document;
+        return res;
+    }
+
+    @Override
     public UnbanRequest getOrCreateDataInstance(IPLDReader reader, Metadata metadata) {
         return this;
     }

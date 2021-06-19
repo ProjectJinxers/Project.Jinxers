@@ -101,7 +101,7 @@ public class OwnershipTransferController {
      */
     boolean process() {
         ModelState model = modelState.getMapped();
-        if (model.isSealedDocument(documentHash) || model.hasVotingForOwnershipTransfer(documentHash)) {
+        if (model.isSealedDocument(documentHash) || model.getVotingForOwnershipTransfer(documentHash) != null) {
             return false;
         }
 
