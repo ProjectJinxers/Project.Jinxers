@@ -165,8 +165,8 @@ class ModelControllerTest {
         // prepare for next simulated message
         newHashes = access.readObjects("model/modelController/saveDocument/simple_rec2.json");
         access.simulateModelStateMessage(config.getIOTAMainAddress(), newHashes[0]);
-        String mergedHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 100);
-        String newHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 100);
+        String mergedHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 200);
+        String newHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 200);
         assertNotEquals(mergedHash, newHash);
         IPLDObject<ModelState> nextModelState = new IPLDObject<>(newHash, new ModelState(), controller.getContext(),
                 null);
