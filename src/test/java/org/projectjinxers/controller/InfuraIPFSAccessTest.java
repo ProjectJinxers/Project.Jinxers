@@ -40,7 +40,6 @@ import org.projectjinxers.config.TestSecretConfig;
 import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.Loader;
 import org.projectjinxers.model.Metadata;
-import org.projectjinxers.model.ValidationContext;
 
 import io.ipfs.api.IPFS;
 import io.ipfs.api.JSONParser;

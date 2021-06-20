@@ -20,7 +20,6 @@ import org.projectjinxers.account.Signer;
 import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.Loader;
 import org.projectjinxers.model.Metadata;
-import org.projectjinxers.model.ValidationContext;
 
 /**
  * @author ProjectJinxers

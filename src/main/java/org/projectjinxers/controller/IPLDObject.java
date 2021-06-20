@@ -20,7 +20,6 @@ import org.projectjinxers.account.Signer;
 import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.Loader;
 import org.projectjinxers.model.Metadata;
-import org.projectjinxers.model.ValidationContext;
 
 /**
  * Wrapper class for data model objects, that can be saved as IPLD in IPFS. By default, loading/reading an instance from
@@ -115,6 +114,9 @@ public class IPLDObject<D extends IPLDSerializable> {
                         @SuppressWarnings("unchecked") // obviously correct
                         D mapped = (D) fromCache.getMapped();
                         this.mapped = mapped;
+                    }
+                    if (validationContext != null) {
+                        validationContext.addVisited(this);
                     }
                 }
             }

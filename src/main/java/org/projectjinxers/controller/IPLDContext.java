@@ -21,7 +21,6 @@ import org.ethereum.crypto.ECKey.ECDSASignature;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.model.Loader;
 import org.projectjinxers.model.Metadata;
-import org.projectjinxers.model.ValidationContext;
 
 /**
  * Context for IPFS operations on IPLD instances. Successfully saved or loaded and fully validated objects will be
@@ -113,8 +112,9 @@ public class IPLDContext {
     /**
      * Deserializes the given bytes.
      * 
-     * @param bytes  the bytes to deserialize
-     * @param loader the loader
+     * @param bytes             the bytes to deserialize
+     * @param loader            the loader
+     * @param validationContext the optional validation context
      * @return the metadata of the read object containing the optional signature (read, no signing happens here)
      * @throws IOException if a single read operation fails
      */

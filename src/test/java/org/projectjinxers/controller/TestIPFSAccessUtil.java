@@ -142,7 +142,7 @@ class TestIPFSAccessUtil {
         ModelState modelState = new ModelState();
         User user = new User("user", Users.createAccount("user", "pass").getPubKey());
         IPLDObject<User> userObject = new IPLDObject<>(user);
-        UserState userState = new UserState(userObject, null);
+        UserState userState = new UserState(userObject);
         IPLDObject<UserState> userStateObject = new IPLDObject<>(userState);
         IPLDObject<ModelState> modelStateObject = new IPLDObject<>(modelState);
         modelState.updateUserState(userStateObject, null, null, null);

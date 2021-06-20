@@ -28,6 +28,7 @@ import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDReader.KeyProvider;
 import org.projectjinxers.controller.IPLDWriter;
+import org.projectjinxers.controller.ValidationContext;
 
 /**
  * Instances of this class represent the state of a user (rating, documents, requests etc.) at a specific time.
@@ -56,6 +57,11 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
     private static final KeyProvider<Document> DOCUMENT_KEY_PROVIDER = new KeyProvider<>() {
     };
     private static final KeyProvider<Review> REVIEW_KEY_PROVIDER = new KeyProvider<>() {
+    };
+    private static final KeyProvider<DocumentRemoval> DOCUMENT_REMOVAL_KEY_PROVIDER = new KeyProvider<>() {
+        public String getKey(IPLDObject<DocumentRemoval> object) {
+            return object.getMapped().getDocument().getMultihash();
+        }
     };
     private static final KeyProvider<SettlementRequest> SETTLEMENT_KEY_PROVIDER = new KeyProvider<>() {
         @Override
@@ -93,7 +99,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
     private IPLDObject<User> user;
     private IPLDObject<UserState> previousVersion;
     private Map<String, IPLDObject<Document>> documents;
-    private Map<String, IPLDObject<Document>> removedDocuments;
+    private Map<String, IPLDObject<DocumentRemoval>> removedDocuments;
     private Map<String, IPLDObject<Document>> falseClaims;
     private Map<String, IPLDObject<Review>> falseApprovals;
     private Map<String, IPLDObject<Review>> falseDeclinations;
@@ -108,10 +114,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
 
     }
 
-    public UserState(IPLDObject<User> user, IPLDObject<UserState> previousVersion) {
-        if (previousVersion != null) {
-            this.version = previousVersion.getMapped().version + 1;
-        }
+    public UserState(IPLDObject<User> user) {
         this.rating = INITIAL_RATING;
         this.user = user;
     }
@@ -122,12 +125,12 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         this.version = reader.readNumber(KEY_VERSION).intValue();
         this.rating = reader.readNumber(KEY_RATING).intValue();
         this.user = reader.readLinkObject(KEY_USER, context, validationContext, LoaderFactory.USER, eager);
-        this.previousVersion = reader.readLinkObject(KEY_PREVIOUS_VERSION, context, validationContext,
-                LoaderFactory.USER_STATE, false);
+        this.previousVersion = reader.readLinkObject(KEY_PREVIOUS_VERSION, context, null, LoaderFactory.USER_STATE,
+                false);
         this.documents = reader.readLinkObjects(KEY_DOCUMENTS, context, validationContext, LoaderFactory.DOCUMENT,
                 eager, DOCUMENT_KEY_PROVIDER);
         this.removedDocuments = reader.readLinkObjects(KEY_REMOVED_DOCUMENTS, context, validationContext,
-                LoaderFactory.DOCUMENT, eager, DOCUMENT_KEY_PROVIDER);
+                LoaderFactory.DOCUMENT_REMOVAL, eager, DOCUMENT_REMOVAL_KEY_PROVIDER);
         this.falseClaims = reader.readLinkObjects(KEY_FALSE_CLAIMS, context, validationContext, LoaderFactory.DOCUMENT,
                 eager, DOCUMENT_KEY_PROVIDER);
         this.falseApprovals = reader.readLinkObjects(KEY_FALSE_APPROVALS, context, validationContext,
@@ -162,6 +165,14 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         writer.writeLinkObjects(KEY_UNBAN_REQUESTS, unbanRequests, signer, context);
         writer.writeLinkObjects(KEY_GRANTED_OWNERSHIPS, grantedOwnerships, signer, context);
         writer.writeLinkObjects(KEY_GRANTED_UNBANS, grantedUnbans, signer, context);
+    }
+
+    public int getVersion() {
+        return version;
+    }
+
+    public IPLDObject<UserState> getPreviousVersion() {
+        return previousVersion;
     }
 
     /**
@@ -367,6 +378,94 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             }
         }
         return updated;
+    }
+
+    UserState mergeWith(IPLDObject<UserState> otherObject, ValidationContext validationContext) {
+        UserState other = otherObject.getMapped();
+        UserState res = new UserState(user);
+        if (this.documents == null) {
+            res.documents = other.documents;
+        }
+        else {
+            res.documents = new LinkedHashMap<>(documents);
+            if (other.documents != null) {
+                res.documents.putAll(other.documents);
+            }
+        }
+        if (this.removedDocuments == null) {
+            res.removedDocuments = other.removedDocuments;
+        }
+        else {
+            res.removedDocuments = new LinkedHashMap<>(removedDocuments);
+            if (other.removedDocuments != null) {
+                res.removedDocuments.putAll(other.removedDocuments);
+            }
+        }
+        if (res.removedDocuments != null) {
+            for (String key : res.removedDocuments.keySet()) {
+                res.documents.remove(key);
+            }
+        }
+        if (this.settlementRequests == null) {
+            res.settlementRequests = other.settlementRequests;
+        }
+        else {
+            res.settlementRequests = new LinkedHashMap<>(settlementRequests);
+            if (other.settlementRequests != null) {
+                res.settlementRequests.putAll(other.settlementRequests);
+            }
+        }
+        if (this.ownershipRequests == null) {
+            res.ownershipRequests = other.ownershipRequests;
+        }
+        else {
+            res.ownershipRequests = new LinkedHashMap<>(ownershipRequests);
+            if (other.ownershipRequests != null) {
+                res.ownershipRequests.putAll(other.ownershipRequests);
+            }
+        }
+        if (this.unbanRequests == null) {
+            res.unbanRequests = other.unbanRequests;
+        }
+        else {
+            res.unbanRequests = new LinkedHashMap<>(unbanRequests);
+            if (other.unbanRequests != null) {
+                res.unbanRequests.putAll(other.unbanRequests);
+            }
+        }
+        if (this.grantedOwnerships == null) {
+            res.grantedOwnerships = other.grantedOwnerships;
+        }
+        else {
+            res.grantedOwnerships = new LinkedHashMap<>(grantedOwnerships);
+            if (other.grantedOwnerships != null) {
+                res.grantedOwnerships.putAll(other.grantedOwnerships);
+            }
+        }
+        if (this.grantedUnbans == null) {
+            res.grantedUnbans = other.grantedUnbans;
+        }
+        else {
+            res.grantedUnbans = new LinkedHashMap<>(grantedUnbans);
+            if (other.grantedUnbans != null) {
+                res.grantedUnbans.putAll(other.grantedUnbans);
+            }
+        }
+        IPLDObject<UserState> commonStateObject = validationContext.getCommonUserState(otherObject.getMultihash());
+        if (commonStateObject != null) {
+            UserState commonState = commonStateObject == null ? null : commonStateObject.getMapped();
+            res.rating = commonState.rating;
+            if (commonState.falseClaims != null) {
+                res.falseClaims = new LinkedHashMap<>(commonState.falseClaims);
+            }
+            if (commonState.falseApprovals != null) {
+                res.falseApprovals = new LinkedHashMap<>(commonState.falseApprovals);
+            }
+            if (commonState.falseDeclinations != null) {
+                res.falseDeclinations = new LinkedHashMap<>(commonState.falseDeclinations);
+            }
+        }
+        return res;
     }
 
     private UserState copy() {

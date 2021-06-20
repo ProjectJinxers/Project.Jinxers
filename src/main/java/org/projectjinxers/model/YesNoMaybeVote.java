@@ -19,6 +19,7 @@ import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDWriter;
+import org.projectjinxers.controller.ValidationContext;
 
 /**
  * A simple Vote for a non-anonymous Voting where users can select 'yes', 'no' and nothing (e.g. maybe).

@@ -25,6 +25,7 @@ import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDReader.KeyProvider;
 import org.projectjinxers.controller.IPLDWriter;
+import org.projectjinxers.controller.ValidationContext;
 
 /**
  * OwnershipSelection instances can be voted for if more than one user requests ownership of an abandoned document.

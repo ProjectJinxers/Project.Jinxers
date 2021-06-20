@@ -64,6 +64,16 @@ public interface LoaderFactory<D extends IPLDSerializable> {
     };
 
     /**
+     * The factory for DocumentRemoval instances.
+     */
+    public static final LoaderFactory<DocumentRemoval> DOCUMENT_REMOVAL = new LoaderFactory<>() {
+        @Override
+        public Loader<DocumentRemoval> createLoader() {
+            return new DocumentRemoval();
+        }
+    };
+
+    /**
      * The factory for Voting instances.
      */
     public static final LoaderFactory<Voting> VOTING = new LoaderFactory<>() {

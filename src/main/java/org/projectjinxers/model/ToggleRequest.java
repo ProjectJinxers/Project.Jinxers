@@ -20,6 +20,7 @@ import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDWriter;
+import org.projectjinxers.controller.ValidationContext;
 
 /**
  * Base class for user requests, where the active state can be toggled. In order to prevent other users from re-posting

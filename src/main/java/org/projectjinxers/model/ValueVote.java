@@ -20,6 +20,7 @@ import org.projectjinxers.controller.ByteCodec;
 import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDWriter;
+import org.projectjinxers.controller.ValidationContext;
 
 /**
  * A ValueVote is a vote, which carries an arbitrary value. Every vote of an anonymous voting is automatically a an

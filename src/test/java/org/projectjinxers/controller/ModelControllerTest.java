@@ -18,6 +18,7 @@ import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -164,7 +165,9 @@ class ModelControllerTest {
         // prepare for next simulated message
         newHashes = access.readObjects("model/modelController/saveDocument/simple_rec2.json");
         access.simulateModelStateMessage(config.getIOTAMainAddress(), newHashes[0]);
-        String newHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 1000000);
+        String mergedHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 100);
+        String newHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 100);
+        assertNotEquals(mergedHash, newHash);
         IPLDObject<ModelState> nextModelState = new IPLDObject<>(newHash, new ModelState(), controller.getContext(),
                 null);
         nextUserState = nextModelState.getMapped().getUserState(userHash);

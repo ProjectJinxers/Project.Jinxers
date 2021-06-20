@@ -24,7 +24,6 @@ import org.projectjinxers.config.Config;
 import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.Loader;
 import org.projectjinxers.model.Metadata;
-import org.projectjinxers.model.ValidationContext;
 
 /**
  * Test class for saving and retrieving a simple JSON string on a local IPFS node. The out encoding has to be cbor.

@@ -17,8 +17,11 @@ import java.io.IOException;
 import java.lang.reflect.Array;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
@@ -26,6 +29,8 @@ import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDReader.KeyProvider;
 import org.projectjinxers.controller.IPLDWriter;
+import org.projectjinxers.controller.ValidationContext;
+import org.projectjinxers.util.ModelUtility;
 
 /**
  * ModelStates are the root instances of a tree, that represents the system at a specific time.
@@ -80,8 +85,8 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
             Metadata metadata) {
         this.version = reader.readNumber(KEY_VERSION).intValue();
         this.timestamp = reader.readNumber(KEY_TIMESTAMP).longValue();
-        this.previousVersion = reader.readLinkObject(KEY_PREVIOUS_VERSION, context, validationContext,
-                LoaderFactory.MODEL_STATE, false); // we don't want to load the entire tree, do we?
+        this.previousVersion = reader.readLinkObject(KEY_PREVIOUS_VERSION, context, null, LoaderFactory.MODEL_STATE,
+                false); // we don't want to load the entire tree, do we?
         this.userStates = reader.readLinkObjects(KEY_USER_STATES, context, validationContext, LoaderFactory.USER_STATE,
                 eager, USER_STATE_KEY_PROVIDER);
         this.votings = reader.readLinkObjects(KEY_VOTINGS, context, validationContext, LoaderFactory.VOTING, eager,
@@ -90,6 +95,9 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
                 LoaderFactory.DOCUMENT, eager, SEALED_DOCUMENT_KEY_PROVIDER);
         this.ownershipRequests = reader.readLinkObjectCollections(KEY_OWNERSHIP_REQUESTS, context, validationContext,
                 LoaderFactory.OWNERSHIP_REQUEST, eager, OWNERSHIP_REQUESTS_KEY_PROVIDER);
+        if (validationContext != null) {
+            validationContext.validateModelState(this);
+        }
     }
 
     @Override
@@ -101,6 +109,18 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         writer.writeLinkObjects(KEY_VOTINGS, votings, signer, context);
         writer.writeLinkObjects(KEY_SEALED_DOCUMENTS, sealedDocuments, signer, null);
         writer.writeLinkObjectArrays(KEY_OWNERSHIP_REQUESTS, ownershipRequests, signer, context);
+    }
+
+    public int getVersion() {
+        return version;
+    }
+
+    public IPLDObject<ModelState> getPreviousVersion() {
+        return previousVersion;
+    }
+
+    public Set<Entry<String, IPLDObject<UserState>>> getAllUserStateEntries() {
+        return userStates == null ? null : Collections.unmodifiableSet(userStates.entrySet());
     }
 
     /**
@@ -255,6 +275,109 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         }
         updated.timestamp = System.currentTimeMillis();
         return updated;
+    }
+
+    public Collection<IPLDObject<UserState>> getNewUserStates(ModelState since) {
+        return ModelUtility.getNewForeignKeyLinks(userStates, since == null ? null : since.userStates);
+    }
+
+    public Collection<IPLDObject<Voting>> getNewVotings(ModelState since) {
+        return ModelUtility.getNewForeignKeyLinks(votings, since == null ? null : since.votings);
+    }
+
+    public Collection<IPLDObject<Document>> getNewSealedDocuments(ModelState since) {
+        return ModelUtility.getNewLinks(sealedDocuments, since == null ? null : since.sealedDocuments);
+    }
+
+    public Collection<IPLDObject<OwnershipRequest>> getNewOwnershipRequests(ModelState since) {
+        return ModelUtility.getNewLinkArrays(ownershipRequests, since == null ? null : since.ownershipRequests);
+    }
+
+    public ModelState mergeWith(IPLDObject<ModelState> otherObject, ValidationContext validationContext) {
+        ModelState other = otherObject.getMapped();
+        ModelState res = new ModelState();
+        res.userStates = new LinkedHashMap<String, IPLDObject<UserState>>();
+        // can't be null, otherwise it would be a trivial merge
+        for (Entry<String, IPLDObject<UserState>> entry : userStates.entrySet()) {
+            String key = entry.getKey();
+            if (validationContext.isTrivialMerge(key)) {
+                res.userStates.put(key, other.expectUserState(key));
+            }
+            else {
+                IPLDObject<UserState> value = entry.getValue();
+                // other.userStates can't be null, validation would have dropped otherObject
+                IPLDObject<UserState> remoteUserStateObject = other.userStates.remove(key);
+                if (remoteUserStateObject == null
+                        || remoteUserStateObject.getMultihash().equals(value.getMultihash())) {
+                    res.userStates.put(key, value);
+                }
+                else {
+                    res.userStates.put(key, new IPLDObject<UserState>(
+                            value.getMapped().mergeWith(remoteUserStateObject, validationContext)));
+                }
+            }
+        }
+        res.userStates.putAll(other.userStates); // new entries
+
+        if (this.votings == null) {
+            res.votings = other.votings;
+        }
+        else {
+            res.votings = new LinkedHashMap<>(votings);
+            if (other.votings != null) {
+                res.votings.putAll(other.votings);
+            }
+        }
+
+        if (this.sealedDocuments == null) {
+            res.sealedDocuments = other.sealedDocuments;
+        }
+        else {
+            res.sealedDocuments = new LinkedHashMap<>(sealedDocuments);
+            if (other.sealedDocuments != null) {
+                res.sealedDocuments.putAll(other.sealedDocuments);
+            }
+        }
+
+        if (this.ownershipRequests == null) {
+            res.ownershipRequests = other.ownershipRequests;
+        }
+        else if (other.ownershipRequests == null) {
+            res.ownershipRequests = new LinkedHashMap<>(ownershipRequests);
+        }
+        else {
+            res.ownershipRequests = new LinkedHashMap<>();
+            for (Entry<String, IPLDObject<OwnershipRequest>[]> entry : ownershipRequests.entrySet()) {
+                String key = entry.getKey();
+                IPLDObject<OwnershipRequest>[] otherRequests = other.ownershipRequests.get(key);
+                if (otherRequests == null) {
+                    res.ownershipRequests.put(key, entry.getValue());
+                }
+                else {
+                    Map<String, IPLDObject<OwnershipRequest>> merged = new LinkedHashMap<>();
+                    for (IPLDObject<OwnershipRequest> request : entry.getValue()) {
+                        merged.put(request.getMultihash(), request);
+                    }
+                    for (IPLDObject<OwnershipRequest> request : otherRequests) {
+                        String hash = request.getMultihash();
+                        if (!merged.containsKey(hash)) {
+                            merged.put(hash, request);
+                        }
+                    }
+                    IPLDObject<OwnershipRequest>[] copy = Arrays.copyOf(otherRequests, merged.size());
+                    merged.values().toArray(copy);
+                    res.ownershipRequests.put(key, copy);
+                }
+            }
+        }
+
+        res.previousVersion = validationContext.getCommonStateObject();
+        if (res.previousVersion != null) {
+            res.version = res.previousVersion.getMapped().version + 1;
+        }
+        // TODO: redo settlements (unknown in common state) on merged state (restricted on merged user states)
+        res.timestamp = System.currentTimeMillis();
+        return res;
     }
 
     @Override

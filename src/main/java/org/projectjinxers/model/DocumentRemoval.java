@@ -20,6 +20,7 @@ import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDWriter;
+import org.projectjinxers.controller.ValidationContext;
 
 /**
  * In order to be able to validate the state, there has to be some kind of info, that a document has been deleted
@@ -27,7 +28,7 @@ import org.projectjinxers.controller.IPLDWriter;
  * 
  * @author ProjectJinxers
  */
-public class DocumentRemoval implements DocumentAction {
+public class DocumentRemoval implements DocumentAction, Loader<DocumentRemoval> {
 
     private static final String KEY_DOCUMENT = "d";
 
@@ -47,6 +48,16 @@ public class DocumentRemoval implements DocumentAction {
     @Override
     public IPLDObject<Document> getDocument() {
         return document;
+    }
+
+    @Override
+    public DocumentRemoval getOrCreateDataInstance(IPLDReader reader, Metadata metadata) {
+        return this;
+    }
+
+    @Override
+    public DocumentRemoval getLoaded() {
+        return this;
     }
 
 }

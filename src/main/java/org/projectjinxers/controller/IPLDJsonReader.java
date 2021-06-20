@@ -27,7 +27,6 @@ import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.Loader;
 import org.projectjinxers.model.LoaderFactory;
 import org.projectjinxers.model.Metadata;
-import org.projectjinxers.model.ValidationContext;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;

@@ -21,6 +21,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -37,7 +38,6 @@ import org.projectjinxers.model.GrantedOwnership;
 import org.projectjinxers.model.ModelState;
 import org.projectjinxers.model.OwnershipRequest;
 import org.projectjinxers.model.UserState;
-import org.projectjinxers.model.ValidationContext;
 import org.projectjinxers.model.Voting;
 import org.spongycastle.util.encoders.Base64;
 
@@ -57,6 +57,7 @@ public class ModelController {
 
     private final String mainIOTAAddress;
     private IPLDObject<ModelState> currentValidatedState;
+    private Set<String> currentLocalHashes = new HashSet<>();
 
     private ValidationContext currentValidationContext;
 
@@ -71,6 +72,7 @@ public class ModelController {
     private Map<String, Queue<String>> queuedTransferredDocumentHashes;
     private Queue<OwnershipTransferController> queuedOwnershipTransferControllers;
     private Queue<IPLDObject<Voting>> queuedVotings;
+    private boolean abortLocalChanges;
 
     /**
      * Constructor. If it returns without throwing an exception, the instance is completely initialized and continuously
@@ -99,7 +101,7 @@ public class ModelController {
                 currentModelStateHash = readNextModelStateHashFromTangle(mainIOTAAddress);
                 if (currentModelStateHash != null) {
                     try {
-                        this.currentValidationContext = new ValidationContext();
+                        this.currentValidationContext = new ValidationContext(context, null, null);
                         this.currentValidatedState = loadModelState(currentModelStateHash, true);
                         access.saveModelStateHash(mainIOTAAddress, currentModelStateHash);
                         break;
@@ -193,10 +195,17 @@ public class ModelController {
         }
         validatingModelState = true;
         try {
-            currentValidationContext = new ValidationContext();
             String multihash = convertPubSubDataToOriginal(pubSubData);
-            IPLDObject<ModelState> loaded = loadModelState(multihash, true);
-            mergeWithValidated(loaded);
+            if (currentLocalHashes.contains(multihash)) {
+                if (currentValidatedState == null || !multihash.equals(currentValidatedState.getMultihash())) {
+                    this.currentValidatedState = loadModelState(multihash, false);
+                }
+            }
+            else {
+                currentValidationContext = new ValidationContext(context, currentValidatedState, currentLocalHashes);
+                IPLDObject<ModelState> loaded = loadModelState(multihash, true);
+                mergeWithValidated(loaded);
+            }
         }
         finally {
             validatingModelState = false;
@@ -331,6 +340,9 @@ public class ModelController {
         }
         if (transferControllers.size() > 0) {
             for (OwnershipTransferController controller : transferControllers) {
+                if (abortLocalChanges) {
+                    return false;
+                }
                 IPLDObject<OwnershipRequest> ownershipRequest = controller.getOwnershipRequest();
                 if (ownershipRequest == null) {
                     IPLDObject<Document> transferredDocument = controller.getDocument();
@@ -513,6 +525,9 @@ public class ModelController {
             userState = getInstanceToSave(userState);
             if (docs != null && docs.size() > 0 || requests != null && requests.size() > 0
                     || granted != null && granted.size() > 0 || hashes != null && hashes.size() > 0) {
+                if (abortLocalChanges) {
+                    return false;
+                }
                 try {
                     UserState updated = userState.getMapped().updateLinks(docs, requests, granted, hashes, userState);
                     IPLDObject<UserState> updatedObject = new IPLDObject<>(updated);
@@ -543,6 +558,9 @@ public class ModelController {
                 }
             }
         }
+        if (abortLocalChanges) {
+            return false;
+        }
         if (updatedUserStates.isEmpty()) { // must be voting(s)
             modelState = modelState.updateUserState(null, null, votings, currentModelState);
         }
@@ -555,8 +573,11 @@ public class ModelController {
             }
         }
         IPLDObject<ModelState> newLocalState = new IPLDObject<ModelState>(modelState);
+        if (abortLocalChanges) {
+            return false;
+        }
         try {
-            newLocalState.save(context, null);
+            currentLocalHashes.add(newLocalState.save(context, null));
         }
         catch (Exception e) {
             e.printStackTrace();
@@ -712,15 +733,31 @@ public class ModelController {
         return false;
     }
 
-    private void mergeWithValidated(IPLDObject<ModelState> modelState) {
-        modelState.getMapped();
-        // TODO: merge with currentValidatedState
+    private boolean mergeWithValidated(IPLDObject<ModelState> validated) {
+        IPLDObject<ModelState> nextValidatedState;
+        if (currentValidationContext.isTrivialMerge()) {
+            checkPendingUserStatesAndQueues(validated.getMapped());
+            nextValidatedState = validated;
+            this.currentValidatedState = nextValidatedState;
+            return true;
+        }
+        ModelState localRoot = currentValidatedState.getMapped();
+        ModelState localMergeBase = localRoot.mergeWith(validated, currentValidationContext);
+        nextValidatedState = new IPLDObject<ModelState>(localMergeBase);
         try {
-            Thread.sleep(10);
+            currentLocalHashes.add(nextValidatedState.save(context, null));
         }
-        catch (InterruptedException e) {
+        catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+        publishLocalState(nextValidatedState);
+        checkPendingUserStatesAndQueues(localMergeBase);
+        return true;
+    }
 
-        }
+    private void checkPendingUserStatesAndQueues(ModelState localMergeBase) {
+
     }
 
     private void processPendingModelStates() {
