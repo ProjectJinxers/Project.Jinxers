@@ -55,7 +55,7 @@ class ModelControllerTest {
         final String modelStateHash = hashes[1];
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
-        ModelController controller = new ModelController(access, null);
+        ModelController controller = new ModelController(access, null, false);
         // prepare for simulated message
         String[] newHashes = access.readObjects("model/modelController/saveDocument/simple_rec.json");
         String[] newHashes2 = access.readObjects("model/modelController/saveDocument/simple_rec2.json");
@@ -72,7 +72,7 @@ class ModelControllerTest {
         final String userHash = hashes[0];
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
-        ModelController controller = new ModelController(access, null);
+        ModelController controller = new ModelController(access, null, false);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -97,7 +97,7 @@ class ModelControllerTest {
         final String userHash = hashes[0];
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
-        ModelController controller = new ModelController(access, null);
+        ModelController controller = new ModelController(access, null, false);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -135,7 +135,7 @@ class ModelControllerTest {
         final String userHash = hashes[0];
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
-        ModelController controller = new ModelController(access, null);
+        ModelController controller = new ModelController(access, null, false);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -184,7 +184,7 @@ class ModelControllerTest {
         final String userHash = hashes[0];
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
-        ModelController controller = new ModelController(access, null);
+        ModelController controller = new ModelController(access, null, false);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -228,7 +228,7 @@ class ModelControllerTest {
         final String documentHash = hashes[5];
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
-        ModelController controller = new ModelController(access, null);
+        ModelController controller = new ModelController(access, null, false);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -246,7 +246,7 @@ class ModelControllerTest {
         final String documentHash = hashes[5];
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
-        ModelController controller = new ModelController(access, null);
+        ModelController controller = new ModelController(access, null, false);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -270,7 +270,7 @@ class ModelControllerTest {
         final String documentHash = hashes[5];
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
-        ModelController controller = new ModelController(access, null);
+        ModelController controller = new ModelController(access, null, false);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -299,7 +299,7 @@ class ModelControllerTest {
 
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
-        ModelController controller = new ModelController(access, null);
+        ModelController controller = new ModelController(access, null, false);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -319,7 +319,7 @@ class ModelControllerTest {
 
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
-        ModelController controller = new ModelController(access, null);
+        ModelController controller = new ModelController(access, null, false);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -339,7 +339,7 @@ class ModelControllerTest {
 
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
-        ModelController controller = new ModelController(access, null);
+        ModelController controller = new ModelController(access, null, false);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -359,7 +359,7 @@ class ModelControllerTest {
 
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
-        ModelController controller = new ModelController(access, null);
+        ModelController controller = new ModelController(access, null, false);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -384,7 +384,7 @@ class ModelControllerTest {
 
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
-        ModelController controller = new ModelController(access, null);
+        ModelController controller = new ModelController(access, null, false);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -417,7 +417,7 @@ class ModelControllerTest {
 
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
-        ModelController controller = new ModelController(access, null);
+        ModelController controller = new ModelController(access, null, false);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -461,7 +461,7 @@ class ModelControllerTest {
 
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
-        ModelController controller = new ModelController(access, null);
+        ModelController controller = new ModelController(access, null, false);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -480,7 +480,7 @@ class ModelControllerTest {
 
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
-        ModelController controller = new ModelController(access, null);
+        ModelController controller = new ModelController(access, null, false);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -508,7 +508,7 @@ class ModelControllerTest {
 
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
-        ModelController controller = new ModelController(access, null);
+        ModelController controller = new ModelController(access, null, false);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -543,7 +543,7 @@ class ModelControllerTest {
 
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
-        ModelController controller = new ModelController(access, null);
+        ModelController controller = new ModelController(access, null, false);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -604,7 +604,7 @@ class ModelControllerTest {
 
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
-        ModelController controller = new ModelController(access, null);
+        ModelController controller = new ModelController(access, null, false);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -628,7 +628,7 @@ class ModelControllerTest {
 
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
-        ModelController controller = new ModelController(access, null);
+        ModelController controller = new ModelController(access, null, false);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -659,7 +659,7 @@ class ModelControllerTest {
 
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
-        ModelController controller = new ModelController(access, null);
+        ModelController controller = new ModelController(access, null, false);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);

@@ -19,9 +19,13 @@ import java.util.Map;
 import java.util.Set;
 
 import org.projectjinxers.model.Document;
+import org.projectjinxers.model.GrantedOwnership;
+import org.projectjinxers.model.GrantedUnban;
 import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.ModelState;
 import org.projectjinxers.model.OwnershipRequest;
+import org.projectjinxers.model.SettlementRequest;
+import org.projectjinxers.model.UnbanRequest;
 import org.projectjinxers.model.UserState;
 import org.projectjinxers.model.Voting;
 
@@ -40,9 +44,12 @@ import org.projectjinxers.model.Voting;
  */
 public class ValidationContext {
 
+    private static final long TIMESTAMP_TOLERANCE = 1000L * 60 * 60 * 4;
+
     private IPLDContext context;
     private IPLDObject<ModelState> currentValidLocalState;
     private Set<String> currentLocalHashes;
+    private boolean validateTimestamps;
 
     private IPLDObject<ModelState> commonStateObject;
     private ModelState commonState;
@@ -51,10 +58,11 @@ public class ValidationContext {
     private Map<String, IPLDObject<?>> visited = new HashMap<>();
 
     public ValidationContext(IPLDContext context, IPLDObject<ModelState> currentValidLocalState,
-            Set<String> currentLocalHashes) {
+            Set<String> currentLocalHashes, boolean validateTimestamps) {
         this.context = context;
         this.currentValidLocalState = currentValidLocalState;
         this.currentLocalHashes = currentLocalHashes;
+        this.validateTimestamps = validateTimestamps;
     }
 
     public IPLDObject<ModelState> getCommonStateObject() {
@@ -89,6 +97,12 @@ public class ValidationContext {
         return res;
     }
 
+    public void validateTimestamp(long timestamp) {
+        if (validateTimestamps && Math.abs(System.currentTimeMillis() - timestamp) > TIMESTAMP_TOLERANCE) {
+            throw new ValidationException("Timestamp out of range");
+        }
+    }
+
     public void validateModelState(ModelState modelState) {
         findCommonState(modelState);
         Collection<IPLDObject<Voting>> newVotings = modelState.getNewVotings(commonState);
@@ -103,10 +117,16 @@ public class ValidationContext {
                 validateSealedDocument(sealedDocument.getMapped());
             }
         }
+        Map<String, IPLDObject<OwnershipRequest>> newOwnershipRequestsMap;
         Collection<IPLDObject<OwnershipRequest>> newOwnershipRequests = modelState.getNewOwnershipRequests(commonState);
-        if (newOwnershipRequests != null) {
+        if (newOwnershipRequests == null) {
+            newOwnershipRequestsMap = null;
+        }
+        else {
+            newOwnershipRequestsMap = new HashMap<>();
             for (IPLDObject<OwnershipRequest> ownershipRequest : newOwnershipRequests) {
-                validateOwnershipRequest(ownershipRequest.getMapped());
+                validateOwnershipRequest(ownershipRequest.getMapped(), modelState);
+                newOwnershipRequestsMap.put(ownershipRequest.getMultihash(), ownershipRequest);
             }
         }
         Collection<IPLDObject<UserState>> newUserStates = modelState.getNewUserStates(commonState);
@@ -115,14 +135,19 @@ public class ValidationContext {
                 UserState userState = userStateObject.getMapped();
                 String userHash = userState.getUser().getMultihash();
                 IPLDObject<UserState> commonUserState = commonState == null ? null : commonState.getUserState(userHash);
-                if (commonUserState == null) {
-                    findCommonUserState(userHash, userStateObject);
+                if (currentValidLocalState != null) {
+                    if (commonUserState == null) {
+                        findCommonUserState(userHash, userStateObject);
+                    }
+                    else {
+                        findBestCommonUserState(userHash, userStateObject, commonUserState);
+                    }
                 }
-                else {
-                    findBestCommonUserState(userHash, userStateObject, commonUserState);
-                }
-                validateUserState(userState);
+                validateUserState(userState, modelState, newOwnershipRequestsMap);
             }
+        }
+        if (newOwnershipRequestsMap != null && newOwnershipRequestsMap.size() > 0) {
+            throw new ValidationException("New ownership requests out of sync (model state v user states)");
         }
     }
 
@@ -248,19 +273,95 @@ public class ValidationContext {
         commonUserStates.put(userHash, minCommonState);
     }
 
+    /*
+     * ???
+     */
     private void validateVoting(Voting voting) {
 
     }
 
+    /*
+     * ???
+     */
     private void validateSealedDocument(Document document) {
 
     }
 
-    private void validateOwnershipRequest(OwnershipRequest request) {
+    /*
+     * verify signature, ownership transfer controller for model state must produce same ownership request
+     */
+    private void validateOwnershipRequest(OwnershipRequest request, ModelState modelState) {
 
     }
 
-    private void validateUserState(UserState userState) {
+    private void validateUserState(UserState userState, ModelState modelState,
+            Map<String, IPLDObject<OwnershipRequest>> newOwnershipRequestsMap) {
+        IPLDObject<UserState> common = commonUserStates.get(userState.getUser().getMultihash());
+        UserState since = common == null ? null : common.getMapped();
+        IPLDObject<UserState> prev = userState.getPreviousVersion();
+        UserState previousState = prev == null ? null : prev.getMapped();
+        Collection<IPLDObject<SettlementRequest>> newSettlementRequests = userState.getNewSettlementRequests(since);
+        if (newSettlementRequests != null) {
+            for (IPLDObject<SettlementRequest> settlementRequest : newSettlementRequests) {
+                validateSettlementRequest(settlementRequest.getMapped(), previousState);
+            }
+        }
+        Collection<IPLDObject<OwnershipRequest>> newOwnershipRequests = userState.getNewOwnershipRequests(since);
+        if (newOwnershipRequests != null) {
+            for (IPLDObject<OwnershipRequest> ownershipRequest : newOwnershipRequests) {
+                if (newOwnershipRequestsMap.remove(ownershipRequest.getMultihash()) == null) {
+                    throw new ValidationException("Expected ownership request in model state");
+                }
+            }
+        }
+        Collection<IPLDObject<UnbanRequest>> newUnbanRequests = userState.getNewUnbanRequests(since);
+        if (newUnbanRequests != null) {
+            for (IPLDObject<UnbanRequest> unbanRequest : newUnbanRequests) {
+                validateUnbanRequest(unbanRequest.getMapped(), previousState);
+            }
+        }
+        Collection<IPLDObject<GrantedOwnership>> newGrantedOwnerships = userState.getNewGrantedOwnerships(since);
+        if (newGrantedOwnerships != null) {
+            for (IPLDObject<GrantedOwnership> grantedOwnership : newGrantedOwnerships) {
+                validateGrantedOwnership(grantedOwnership.getMapped(), modelState);
+            }
+        }
+        Collection<IPLDObject<GrantedUnban>> newGrantedUnbans = userState.getNewGrantedUnbans(since);
+        if (newGrantedUnbans != null) {
+            for (IPLDObject<GrantedUnban> grantedUnban : newGrantedUnbans) {
+                validateGrantedUnban(grantedUnban.getMapped(), userState, modelState);
+            }
+        }
+    }
+
+    /*
+     * verify signature, if previousStates (all the way to common) contain toggled settlement request, check if payload
+     * has been increased; check if document is eligible for settlement
+     */
+    private void validateSettlementRequest(SettlementRequest request, UserState previousState) {
+
+    }
+
+    /*
+     * verify signature, if previousStates (all the way to common) contain toggled unban request, check if payload has
+     * been increased; check if user was banned
+     */
+    private void validateUnbanRequest(UnbanRequest request, UserState previousState) {
+
+    }
+
+    /*
+     * Ownership transfer controller for modelState must produce same GrantedOwnership
+     */
+    private void validateGrantedOwnership(GrantedOwnership granted, ModelState modelState) {
+
+    }
+
+    /*
+     * granted.unbanRequest must be contained in user state and there must be a won voting with granted.unbanRequest as
+     * subject in model state
+     */
+    private void validateGrantedUnban(GrantedUnban granted, UserState userState, ModelState modelState) {
 
     }
 

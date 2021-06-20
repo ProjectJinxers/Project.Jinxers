@@ -53,6 +53,7 @@ public class ModelController {
     private static final String PUBSUB_TOPIC_PREFIX_OWNERSHIP_REQUEST = "or";
 
     private final IPFSAccess access;
+    private boolean validateTimestamps;
     private final IPLDContext context;
 
     private final String mainIOTAAddress;
@@ -82,11 +83,12 @@ public class ModelController {
      * @param config the config (provides initialization and configuration parameters, pass null for defaults)
      * @throws Exception if initialization failed and the application should not continue running.
      */
-    public ModelController(IPFSAccess access, Config config) throws Exception {
+    public ModelController(IPFSAccess access, Config config, boolean validateTimestamps) throws Exception {
         this.access = access;
         if (config == null) {
             config = Config.getSharedInstance();
         }
+        this.validateTimestamps = validateTimestamps;
         this.context = new IPLDContext(access, IPLDEncoding.JSON, IPLDEncoding.CBOR, false);
         mainIOTAAddress = config.getIOTAMainAddress();
         String currentModelStateHash;
@@ -101,7 +103,7 @@ public class ModelController {
                 currentModelStateHash = readNextModelStateHashFromTangle(mainIOTAAddress);
                 if (currentModelStateHash != null) {
                     try {
-                        this.currentValidationContext = new ValidationContext(context, null, null);
+                        this.currentValidationContext = new ValidationContext(context, null, null, false);
                         this.currentValidatedState = loadModelState(currentModelStateHash, true);
                         access.saveModelStateHash(mainIOTAAddress, currentModelStateHash);
                         break;
@@ -202,7 +204,8 @@ public class ModelController {
                 }
             }
             else {
-                currentValidationContext = new ValidationContext(context, currentValidatedState, currentLocalHashes);
+                currentValidationContext = new ValidationContext(context, currentValidatedState, currentLocalHashes,
+                        validateTimestamps);
                 IPLDObject<ModelState> loaded = loadModelState(multihash, true);
                 mergeWithValidated(loaded);
             }

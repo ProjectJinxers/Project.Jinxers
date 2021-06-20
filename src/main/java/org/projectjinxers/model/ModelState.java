@@ -30,6 +30,7 @@ import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDReader.KeyProvider;
 import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.ValidationContext;
+import org.projectjinxers.controller.ValidationException;
 import org.projectjinxers.util.ModelUtility;
 
 /**
@@ -85,8 +86,14 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
             Metadata metadata) {
         this.version = reader.readNumber(KEY_VERSION).intValue();
         this.timestamp = reader.readNumber(KEY_TIMESTAMP).longValue();
+        if (validationContext != null) {
+            validationContext.validateTimestamp(timestamp);
+        }
         this.previousVersion = reader.readLinkObject(KEY_PREVIOUS_VERSION, context, null, LoaderFactory.MODEL_STATE,
                 false); // we don't want to load the entire tree, do we?
+        if (validationContext != null && previousVersion != null && previousVersion.getMapped().version >= version) {
+            throw new ValidationException("Version must be increased");
+        }
         this.userStates = reader.readLinkObjects(KEY_USER_STATES, context, validationContext, LoaderFactory.USER_STATE,
                 eager, USER_STATE_KEY_PROVIDER);
         this.votings = reader.readLinkObjects(KEY_VOTINGS, context, validationContext, LoaderFactory.VOTING, eager,

@@ -29,6 +29,8 @@ import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDReader.KeyProvider;
 import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.ValidationContext;
+import org.projectjinxers.controller.ValidationException;
+import org.projectjinxers.util.ModelUtility;
 
 /**
  * Instances of this class represent the state of a user (rating, documents, requests etc.) at a specific time.
@@ -127,6 +129,9 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         this.user = reader.readLinkObject(KEY_USER, context, validationContext, LoaderFactory.USER, eager);
         this.previousVersion = reader.readLinkObject(KEY_PREVIOUS_VERSION, context, null, LoaderFactory.USER_STATE,
                 false);
+        if (validationContext != null && previousVersion != null && previousVersion.getMapped().version >= version) {
+            throw new ValidationException("Version must be increased");
+        }
         this.documents = reader.readLinkObjects(KEY_DOCUMENTS, context, validationContext, LoaderFactory.DOCUMENT,
                 eager, DOCUMENT_KEY_PROVIDER);
         this.removedDocuments = reader.readLinkObjects(KEY_REMOVED_DOCUMENTS, context, validationContext,
@@ -378,6 +383,26 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             }
         }
         return updated;
+    }
+
+    public Collection<IPLDObject<SettlementRequest>> getNewSettlementRequests(UserState since) {
+        return ModelUtility.getNewForeignKeyLinks(settlementRequests, since == null ? null : since.settlementRequests);
+    }
+
+    public Collection<IPLDObject<OwnershipRequest>> getNewOwnershipRequests(UserState since) {
+        return ModelUtility.getNewForeignKeyLinks(ownershipRequests, since == null ? null : since.ownershipRequests);
+    }
+
+    public Collection<IPLDObject<UnbanRequest>> getNewUnbanRequests(UserState since) {
+        return ModelUtility.getNewForeignKeyLinks(unbanRequests, since == null ? null : since.unbanRequests);
+    }
+
+    public Collection<IPLDObject<GrantedOwnership>> getNewGrantedOwnerships(UserState since) {
+        return ModelUtility.getNewForeignKeyLinks(grantedOwnerships, since == null ? null : since.grantedOwnerships);
+    }
+
+    public Collection<IPLDObject<GrantedUnban>> getNewGrantedUnbans(UserState since) {
+        return ModelUtility.getNewForeignKeyLinks(grantedUnbans, since == null ? null : since.grantedUnbans);
     }
 
     UserState mergeWith(IPLDObject<UserState> otherObject, ValidationContext validationContext) {
