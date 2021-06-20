@@ -18,7 +18,6 @@ import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -165,12 +164,14 @@ class ModelControllerTest {
         // prepare for next simulated message
         newHashes = access.readObjects("model/modelController/saveDocument/simple_rec2.json");
         access.simulateModelStateMessage(config.getIOTAMainAddress(), newHashes[0]);
-        String mergedHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 200);
-        String newHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 200);
-        assertNotEquals(mergedHash, newHash);
-        IPLDObject<ModelState> nextModelState = new IPLDObject<>(newHash, new ModelState(), controller.getContext(),
-                null);
-        nextUserState = nextModelState.getMapped().getUserState(userHash);
+        do { // the model controller publishes the merged model state first; if we're too slow, the hash will be the
+             // merged model state's hash
+            String hash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 100);
+            IPLDObject<ModelState> nextModelState = new IPLDObject<>(hash, new ModelState(), controller.getContext(),
+                    null);
+            nextUserState = nextModelState.getMapped().getUserState(userHash);
+        }
+        while (nextUserState.getMapped().getDocument(documentObject.getMultihash()) == null);
         assertNotSame(nextUserState, userState); // copy of pending user state from first attempt
         Document doc = nextUserState.getMapped().expectDocument(documentObject.getMultihash());
         assertEquals("Title", doc.getTitle());
