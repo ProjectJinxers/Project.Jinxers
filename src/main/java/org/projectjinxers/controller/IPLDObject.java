@@ -115,9 +115,6 @@ public class IPLDObject<D extends IPLDSerializable> {
                         D mapped = (D) fromCache.getMapped();
                         this.mapped = mapped;
                     }
-                    if (validationContext != null) {
-                        validationContext.addVisited(this);
-                    }
                 }
             }
             catch (Exception e) {

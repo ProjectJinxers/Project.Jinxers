@@ -62,8 +62,10 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         }
     };
 
-    private static final KeyProvider<Document> SEALED_DOCUMENT_KEY_PROVIDER = new KeyProvider<>() {
-
+    private static final KeyProvider<SettlementRequest> SEALED_DOCUMENT_KEY_PROVIDER = new KeyProvider<>() {
+        public String getKey(org.projectjinxers.controller.IPLDObject<SettlementRequest> object) {
+            return object.getMapped().getDocument().getMultihash();
+        }
     };
 
     private static final KeyProvider<OwnershipRequest> OWNERSHIP_REQUESTS_KEY_PROVIDER = new KeyProvider<>() {
@@ -78,7 +80,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
     private IPLDObject<ModelState> previousVersion;
     private Map<String, IPLDObject<UserState>> userStates;
     private Map<String, IPLDObject<Voting>> votings;
-    private Map<String, IPLDObject<Document>> sealedDocuments;
+    private Map<String, IPLDObject<SettlementRequest>> sealedDocuments;
     private Map<String, IPLDObject<OwnershipRequest>[]> ownershipRequests;
 
     @Override
@@ -99,7 +101,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         this.votings = reader.readLinkObjects(KEY_VOTINGS, context, validationContext, LoaderFactory.VOTING, eager,
                 VOTING_KEY_PROVIDER);
         this.sealedDocuments = reader.readLinkObjects(KEY_SEALED_DOCUMENTS, context, validationContext,
-                LoaderFactory.DOCUMENT, eager, SEALED_DOCUMENT_KEY_PROVIDER);
+                LoaderFactory.SETTLEMENT_REQUEST, eager, SEALED_DOCUMENT_KEY_PROVIDER);
         this.ownershipRequests = reader.readLinkObjectCollections(KEY_OWNERSHIP_REQUESTS, context, validationContext,
                 LoaderFactory.OWNERSHIP_REQUEST, eager, OWNERSHIP_REQUESTS_KEY_PROVIDER);
         if (validationContext != null) {
@@ -171,7 +173,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
      * @return the sealed document with the given hash (no null checks!)
      */
     public Document expectSealedDocument(String documentHash) {
-        return sealedDocuments.get(documentHash).getMapped();
+        return sealedDocuments.get(documentHash).getMapped().getDocument().getMapped();
     }
 
     /**
@@ -292,7 +294,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         return ModelUtility.getNewForeignKeyLinks(votings, since == null ? null : since.votings);
     }
 
-    public Collection<IPLDObject<Document>> getNewSealedDocuments(ModelState since) {
+    public Collection<IPLDObject<SettlementRequest>> getNewSealedDocuments(ModelState since) {
         return ModelUtility.getNewLinks(sealedDocuments, since == null ? null : since.sealedDocuments);
     }
 

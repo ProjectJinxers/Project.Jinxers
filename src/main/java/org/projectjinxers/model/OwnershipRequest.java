@@ -49,8 +49,8 @@ public class OwnershipRequest extends ToggleRequest implements DocumentAction, L
      * @param document        the document
      * @param anonymousVoting indicates whether or not a voting, if necessary, has to be anonymous
      */
-    public OwnershipRequest(IPLDObject<User> user, IPLDObject<Document> document, boolean anonymousVoting) {
-        super(user);
+    public OwnershipRequest(IPLDObject<UserState> userState, IPLDObject<Document> document, boolean anonymousVoting) {
+        super(userState);
         this.document = document;
         this.anonymousVoting = anonymousVoting;
         this.votingHashSeed = (int) (Math.random() * Integer.MAX_VALUE);

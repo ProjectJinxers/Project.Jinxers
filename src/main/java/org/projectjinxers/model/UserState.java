@@ -65,7 +65,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             return object.getMapped().getDocument().getMultihash();
         }
     };
-    private static final KeyProvider<SettlementRequest> SETTLEMENT_KEY_PROVIDER = new KeyProvider<>() {
+    private static final KeyProvider<SettlementRequest> SETTLEMENT_REQUEST_KEY_PROVIDER = new KeyProvider<>() {
         @Override
         public String getKey(IPLDObject<SettlementRequest> object) {
             return object.getMapped().getDocument().getMultihash();
@@ -143,7 +143,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         this.falseDeclinations = reader.readLinkObjects(KEY_FALSE_DECLINATIONS, context, validationContext,
                 LoaderFactory.REVIEW, eager, REVIEW_KEY_PROVIDER);
         this.settlementRequests = reader.readLinkObjects(KEY_SETTLEMENT_REQUESTS, context, validationContext,
-                LoaderFactory.SETTLEMENT_REQUEST, eager, SETTLEMENT_KEY_PROVIDER);
+                LoaderFactory.SETTLEMENT_REQUEST, eager, SETTLEMENT_REQUEST_KEY_PROVIDER);
         this.ownershipRequests = reader.readLinkObjects(KEY_OWNERSHIP_REQUESTS, context, validationContext,
                 LoaderFactory.OWNERSHIP_REQUEST, eager, OWNERSHIP_REQUEST_KEY_PROVIDER);
         this.unbanRequests = reader.readLinkObjects(KEY_UNBAN_REQUESTS, context, validationContext,

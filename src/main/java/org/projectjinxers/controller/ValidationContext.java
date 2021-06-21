@@ -18,10 +18,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
-import org.projectjinxers.model.Document;
 import org.projectjinxers.model.GrantedOwnership;
 import org.projectjinxers.model.GrantedUnban;
-import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.ModelState;
 import org.projectjinxers.model.OwnershipRequest;
 import org.projectjinxers.model.SettlementRequest;
@@ -46,23 +44,21 @@ public class ValidationContext {
 
     private static final long TIMESTAMP_TOLERANCE = 1000L * 60 * 60 * 4;
 
-    private IPLDContext context;
+    private IPLDContext context; // we might actually not need it (it's used indirectly in getMapped() calls)
     private IPLDObject<ModelState> currentValidLocalState;
     private Set<String> currentLocalHashes;
-    private boolean validateTimestamps;
+    private boolean strict;
 
     private IPLDObject<ModelState> commonStateObject;
     private ModelState commonState;
     private Map<String, IPLDObject<UserState>> commonUserStates = new HashMap<>();
 
-    private Map<String, IPLDObject<?>> visited = new HashMap<>();
-
     public ValidationContext(IPLDContext context, IPLDObject<ModelState> currentValidLocalState,
-            Set<String> currentLocalHashes, boolean validateTimestamps) {
+            Set<String> currentLocalHashes, boolean strict) {
         this.context = context;
         this.currentValidLocalState = currentValidLocalState;
         this.currentLocalHashes = currentLocalHashes;
-        this.validateTimestamps = validateTimestamps;
+        this.strict = strict;
     }
 
     public IPLDObject<ModelState> getCommonStateObject() {
@@ -83,22 +79,8 @@ public class ValidationContext {
         return commonUserState == currentValidUserState;
     }
 
-    void addVisited(IPLDObject<?> object) {
-        visited.put(object.getMultihash(), object);
-    }
-
-    public <D extends IPLDSerializable> IPLDObject<D> getVisited(String multihash) {
-        IPLDObject<?> object = visited.get(multihash);
-        if (object == null) {
-            return null;
-        }
-        @SuppressWarnings("unchecked")
-        IPLDObject<D> res = (IPLDObject<D>) object;
-        return res;
-    }
-
     public void validateTimestamp(long timestamp) {
-        if (validateTimestamps && Math.abs(System.currentTimeMillis() - timestamp) > TIMESTAMP_TOLERANCE) {
+        if (strict && Math.abs(System.currentTimeMillis() - timestamp) > TIMESTAMP_TOLERANCE) {
             throw new ValidationException("Timestamp out of range");
         }
     }
@@ -108,13 +90,14 @@ public class ValidationContext {
         Collection<IPLDObject<Voting>> newVotings = modelState.getNewVotings(commonState);
         if (newVotings != null) {
             for (IPLDObject<Voting> voting : newVotings) {
-                validateVoting(voting.getMapped());
+                validateNewVoting(voting.getMapped(), modelState);
             }
         }
-        Collection<IPLDObject<Document>> newSealedDocuments = modelState.getNewSealedDocuments(commonState);
+        Collection<IPLDObject<SettlementRequest>> newSealedDocuments = modelState.getNewSealedDocuments(commonState);
         if (newSealedDocuments != null) {
-            for (IPLDObject<Document> sealedDocument : newSealedDocuments) {
-                validateSealedDocument(sealedDocument.getMapped());
+            ModelState requestState = strict ? commonState : modelState.getPreviousVersion().getMapped();
+            for (IPLDObject<SettlementRequest> sealedDocument : newSealedDocuments) {
+                validateSealedDocument(sealedDocument.getMapped(), requestState);
             }
         }
         Map<String, IPLDObject<OwnershipRequest>> newOwnershipRequestsMap;
@@ -167,6 +150,9 @@ public class ValidationContext {
                     }
                     remoteState = remoteStateObject.getMapped();
                     remoteVersion = remoteState.getVersion();
+                    if (currentLocalHashes.contains(remoteStateObject.getMultihash())) {
+
+                    }
                 }
                 while (localVersion > remoteVersion) {
                     localStateObject = localState.getPreviousVersion();
@@ -274,16 +260,18 @@ public class ValidationContext {
     }
 
     /*
-     * ???
+     * if voting.subject is OwnershipSelection, ownership transfer controller for modelState must produce same voting,
+     * else if voting.subject is UnbanRequest, modelState.userStates[voting.subject.userState.user.multihash] must be
+     * voting.subject.userState or contain unban request; unban request must be active
      */
-    private void validateVoting(Voting voting) {
+    private void validateNewVoting(Voting voting, ModelState modelState) {
 
     }
 
     /*
-     * ???
+     * requestState.userState[document.userState.user.multihash] must be document.userState or contain document
      */
-    private void validateSealedDocument(Document document) {
+    private void validateSealedDocument(SettlementRequest document, ModelState requestState) {
 
     }
 
@@ -335,16 +323,17 @@ public class ValidationContext {
     }
 
     /*
-     * verify signature, if previousStates (all the way to common) contain toggled settlement request, check if payload
-     * has been increased; check if document is eligible for settlement
+     * verify signature, if previousStates (all the way to common - or request.userState if not strict) contain toggled
+     * settlement request, check if payload has been increased; check if document was eligible for settlement at
+     * request.userState and there is no conflicting settlement request (w.r.t. timestamp)
      */
     private void validateSettlementRequest(SettlementRequest request, UserState previousState) {
 
     }
 
     /*
-     * verify signature, if previousStates (all the way to common) contain toggled unban request, check if payload has
-     * been increased; check if user was banned
+     * verify signature, if previousStates (all the way to common - or request.userState if not strict) contain toggled
+     * unban request, check if payload has been increased; check if request.userState was banned
      */
     private void validateUnbanRequest(UnbanRequest request, UserState previousState) {
 

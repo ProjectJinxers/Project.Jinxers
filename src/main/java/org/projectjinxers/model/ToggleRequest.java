@@ -32,11 +32,11 @@ public abstract class ToggleRequest implements IPLDSerializable {
 
     private static final String KEY_ACTIVE = "a";
     private static final String KEY_PAYLOAD = "p";
-    private static final String KEY_USER = "u";
+    private static final String KEY_USER_STATE = "u";
 
     private boolean active;
     private int payload;
-    private IPLDObject<User> user;
+    private IPLDObject<UserState> userState;
 
     protected ToggleRequest() {
 
@@ -45,11 +45,11 @@ public abstract class ToggleRequest implements IPLDSerializable {
     /**
      * Constructor for a new toggle request.
      * 
-     * @param user the user
+     * @param userState the userState (at creation time)
      */
-    protected ToggleRequest(IPLDObject<User> user) {
+    protected ToggleRequest(IPLDObject<UserState> userState) {
         this.active = true;
-        this.user = user;
+        this.userState = userState;
     }
 
     @Override
@@ -62,14 +62,15 @@ public abstract class ToggleRequest implements IPLDSerializable {
             Metadata metadata) {
         this.active = Boolean.TRUE.equals(reader.readBoolean(KEY_ACTIVE));
         this.payload = reader.readNumber(KEY_PAYLOAD).intValue();
-        this.user = reader.readLinkObject(KEY_USER, context, validationContext, LoaderFactory.USER, eager);
+        this.userState = reader.readLinkObject(KEY_USER_STATE, context, validationContext, LoaderFactory.USER_STATE,
+                eager);
     }
 
     @Override
     public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
         writer.writeIfTrue(KEY_ACTIVE, active);
         writer.writeNumber(KEY_PAYLOAD, payload);
-        writer.writeLink(KEY_USER, user, signer, null);
+        writer.writeLink(KEY_USER_STATE, userState, signer, null);
     }
 
     /**
@@ -82,15 +83,15 @@ public abstract class ToggleRequest implements IPLDSerializable {
     /**
      * @return the unwrapped user
      */
-    public User getUser() {
-        return user == null ? null : user.getMapped();
+    public User expectUser() {
+        return userState.getMapped().getUser().getMapped();
     }
 
     /**
      * @return the multihash for the user (if user is null a NullPointerException will be thrown)
      */
     public String expectUserHash() {
-        return user.getMultihash();
+        return userState.getMapped().getUser().getMultihash();
     }
 
     /**
@@ -102,7 +103,7 @@ public abstract class ToggleRequest implements IPLDSerializable {
         ToggleRequest copy = createCopyInstance();
         copy.active = !active;
         copy.payload = payload + 1;
-        copy.user = user;
+        copy.userState = userState;
         return copy;
     }
 

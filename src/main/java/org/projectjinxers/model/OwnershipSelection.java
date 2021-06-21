@@ -123,7 +123,7 @@ public class OwnershipSelection implements Votable {
             allValues = new Object[selection.size()];
             int i = 0;
             for (IPLDObject<OwnershipRequest> request : selection.values()) {
-                allValues[i++] = request.getMapped().getUser();
+                allValues[i++] = request.getMapped().expectUser();
             }
         }
         return allValues;

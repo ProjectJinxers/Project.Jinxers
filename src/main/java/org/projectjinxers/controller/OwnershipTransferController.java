@@ -174,8 +174,7 @@ public class OwnershipTransferController {
             long inactivity = now - lastActivityDate.getTime();
             if (inactivity >= REQUIRED_INACTIVITY) {
                 this.ownershipRequest = new IPLDObject<>(
-                        new OwnershipRequest(resolvedUser.getMapped().getUser(), resolvedDocument, anonymousVoting),
-                        signature);
+                        new OwnershipRequest(resolvedUser, resolvedDocument, anonymousVoting), signature);
                 return true;
             }
             return false;
