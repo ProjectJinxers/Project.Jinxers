@@ -17,8 +17,10 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
@@ -36,7 +38,9 @@ import org.projectjinxers.controller.ValidationException;
  */
 public class OwnershipSelection implements Votable {
 
-    private static final int DURATION = 1000 * 60 * 60 * 24 * 10;
+    // if changed in a running system, all affected model meta versions must be changed as well and validation must be
+    // adjusted
+    public static final int DURATION = 1000 * 60 * 60 * 24 * 10;
 
     private static final String KEY_ANONYMOUS = "a";
     private static final String KEY_HASH_SEED = "h";
@@ -65,7 +69,7 @@ public class OwnershipSelection implements Votable {
             boolean anonymous) {
         this.anonymous = anonymous;
         this.hashSeed = (int) (Math.random() * Integer.MAX_VALUE);
-        this.deadline = new Date(System.currentTimeMillis() + DURATION);
+        this.deadline = new Date(System.currentTimeMillis() + ValidationContext.TIMESTAMP_TOLERANCE + DURATION);
         this.document = document;
         this.selection = new LinkedHashMap<>();
         for (IPLDObject<OwnershipRequest> request : selection) {
@@ -176,6 +180,21 @@ public class OwnershipSelection implements Votable {
         }
         if (((Integer) value).intValue() != maxIndex) {
             throw new ValidationException("Expected count for " + value + " to be the max");
+        }
+    }
+
+    void validateReconstructed(OwnershipSelection reconstructed) {
+        if (selection.size() != reconstructed.selection.size()) {
+            throw new ValidationException("Expected same selection size");
+        }
+        Set<String> reconstructedHashes = new HashSet<>();
+        for (IPLDObject<OwnershipRequest> request : reconstructed.selection.values()) {
+            reconstructedHashes.add(request.getMultihash());
+        }
+        for (IPLDObject<OwnershipRequest> request : selection.values()) {
+            if (!reconstructedHashes.contains(request.getMultihash())) {
+                throw new ValidationException("Expected same ownership requests");
+            }
         }
     }
 

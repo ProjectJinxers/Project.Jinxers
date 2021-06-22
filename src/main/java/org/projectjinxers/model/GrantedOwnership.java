@@ -56,6 +56,9 @@ public class GrantedOwnership implements IPLDSerializable, Loader<GrantedOwnersh
         this.document = reader.readLinkObject(KEY_DOCUMENT, context, validationContext, LoaderFactory.DOCUMENT, eager);
         this.modelState = reader.readLinkObject(KEY_MODEL_STATE, context, validationContext, LoaderFactory.MODEL_STATE,
                 eager);
+        if (validationContext != null) {
+            validationContext.addMustKeepModelState(modelState);
+        }
     }
 
     @Override

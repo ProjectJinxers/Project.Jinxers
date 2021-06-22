@@ -96,7 +96,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         }
     };
 
-    private int version;
+    private long version;
     private int rating;
     private IPLDObject<User> user;
     private IPLDObject<UserState> previousVersion;
@@ -148,9 +148,9 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
                 LoaderFactory.OWNERSHIP_REQUEST, eager, OWNERSHIP_REQUEST_KEY_PROVIDER);
         this.unbanRequests = reader.readLinkObjects(KEY_UNBAN_REQUESTS, context, validationContext,
                 LoaderFactory.UNBAN_REQUEST, eager, UNBAN_REQUEST_KEY_PROVIDER);
-        this.grantedOwnerships = reader.readLinkObjects(KEY_OWNERSHIP_REQUESTS, context, validationContext,
+        this.grantedOwnerships = reader.readLinkObjects(KEY_GRANTED_OWNERSHIPS, context, validationContext,
                 LoaderFactory.GRANTED_OWNERSHIP, eager, GRANTED_OWNERSHIP_KEY_PROVIDER);
-        this.grantedUnbans = reader.readLinkObjects(KEY_UNBAN_REQUESTS, context, validationContext,
+        this.grantedUnbans = reader.readLinkObjects(KEY_GRANTED_UNBANS, context, validationContext,
                 LoaderFactory.GRANTED_UNBAN, eager, GRANTED_UNBAN_KEY_PROVIDER);
     }
 
@@ -172,7 +172,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         writer.writeLinkObjects(KEY_GRANTED_UNBANS, grantedUnbans, signer, context);
     }
 
-    public int getVersion() {
+    public long getVersion() {
         return version;
     }
 
@@ -393,6 +393,35 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         return updated;
     }
 
+    public void addFalseClaim(IPLDObject<Document> falseClaim) {
+        if (falseClaims == null) {
+            falseClaims = new LinkedHashMap<>();
+        }
+        falseClaims.put(falseClaim.getMultihash(), falseClaim);
+    }
+
+    public void addFalseApproval(IPLDObject<Review> falseApproval) {
+        if (falseApprovals == null) {
+            falseApprovals = new LinkedHashMap<>();
+        }
+        falseApprovals.put(falseApproval.getMultihash(), falseApproval);
+    }
+
+    public void addFalseDeclination(IPLDObject<Review> falseDeclination) {
+        if (falseDeclinations == null) {
+            falseDeclinations = new LinkedHashMap<>();
+        }
+        falseDeclinations.put(falseDeclination.getMultihash(), falseDeclination);
+    }
+
+    public Collection<IPLDObject<Document>> getNewDocuments(UserState since) {
+        return ModelUtility.getNewForeignKeyLinks(documents, since == null ? null : since.documents);
+    }
+
+    public Collection<IPLDObject<DocumentRemoval>> getNewRemovedDocuments(UserState since) {
+        return ModelUtility.getNewForeignKeyLinks(removedDocuments, since == null ? null : since.removedDocuments);
+    }
+
     public Collection<IPLDObject<SettlementRequest>> getNewSettlementRequests(UserState since) {
         return ModelUtility.getNewForeignKeyLinks(settlementRequests, since == null ? null : since.settlementRequests);
     }
@@ -484,18 +513,19 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
                 res.grantedUnbans.putAll(other.grantedUnbans);
             }
         }
-        IPLDObject<UserState> commonStateObject = validationContext.getCommonUserState(otherObject.getMultihash());
-        if (commonStateObject != null) {
-            UserState commonState = commonStateObject == null ? null : commonStateObject.getMapped();
-            res.rating = commonState.rating;
-            if (commonState.falseClaims != null) {
-                res.falseClaims = new LinkedHashMap<>(commonState.falseClaims);
+        IPLDObject<UserState> previousUserState = validationContext.getPreviousUserState(otherObject.getMultihash());
+        if (previousUserState != null) {
+            UserState previous = previousUserState.getMapped();
+            res.rating = previous.rating;
+            res.previousVersion = previousUserState;
+            if (previous.falseClaims != null) {
+                res.falseClaims = new LinkedHashMap<>(previous.falseClaims);
             }
-            if (commonState.falseApprovals != null) {
-                res.falseApprovals = new LinkedHashMap<>(commonState.falseApprovals);
+            if (previous.falseApprovals != null) {
+                res.falseApprovals = new LinkedHashMap<>(previous.falseApprovals);
             }
-            if (commonState.falseDeclinations != null) {
-                res.falseDeclinations = new LinkedHashMap<>(commonState.falseDeclinations);
+            if (previous.falseDeclinations != null) {
+                res.falseDeclinations = new LinkedHashMap<>(previous.falseDeclinations);
             }
         }
         return res;

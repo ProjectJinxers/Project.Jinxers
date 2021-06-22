@@ -13,18 +13,27 @@
  */
 package org.projectjinxers.controller;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.TreeSet;
 
+import org.projectjinxers.model.Document;
+import org.projectjinxers.model.DocumentRemoval;
 import org.projectjinxers.model.GrantedOwnership;
 import org.projectjinxers.model.GrantedUnban;
+import org.projectjinxers.model.LoaderFactory;
 import org.projectjinxers.model.ModelState;
 import org.projectjinxers.model.OwnershipRequest;
 import org.projectjinxers.model.SealedDocument;
 import org.projectjinxers.model.SettlementRequest;
+import org.projectjinxers.model.Tally;
 import org.projectjinxers.model.UnbanRequest;
 import org.projectjinxers.model.UserState;
 import org.projectjinxers.model.Voting;
@@ -44,16 +53,34 @@ import org.projectjinxers.model.Voting;
  */
 public class ValidationContext {
 
-    private static final long TIMESTAMP_TOLERANCE = 1000L * 60 * 60 * 4;
+    // if changed in a running system, all affected model meta versions must be changed as well and validation must be
+    // adjusted
+    public static final long TIMESTAMP_TOLERANCE = 1000L * 60 * 60 * 4;
+
+    private static final Comparator<Long> DESCENDING = new Comparator<>() {
+        @Override
+        public int compare(Long o1, Long o2) {
+            return o2.compareTo(o1);
+        }
+    };
 
     private IPLDContext context; // we might actually not need it (it's used indirectly in getMapped() calls)
     private IPLDObject<ModelState> currentValidLocalState;
     private Set<String> currentLocalHashes;
     private boolean strict;
+    private SettlementController mainSettlementController;
 
+    private SettlementController currentSettlementController;
     private IPLDObject<ModelState> commonStateObject;
     private ModelState commonState;
     private Map<String, IPLDObject<UserState>> commonUserStates = new HashMap<>();
+
+    private Map<Long, IPLDObject<ModelState>> mustKeepModelStates;
+    private IPLDObject<ModelState> keptModelState;
+    private Map<String, Set<Long>> mustKeepUserStateVersions;
+    private Map<String, IPLDObject<UserState>> keptUserStates;
+
+    private Set<String> validated = new TreeSet<>();
 
     public ValidationContext(IPLDContext context, IPLDObject<ModelState> currentValidLocalState,
             Set<String> currentLocalHashes, boolean strict) {
@@ -61,14 +88,17 @@ public class ValidationContext {
         this.currentValidLocalState = currentValidLocalState;
         this.currentLocalHashes = currentLocalHashes;
         this.strict = strict;
+        this.mainSettlementController = new SettlementController();
+        this.currentSettlementController = mainSettlementController;
     }
 
-    public IPLDObject<ModelState> getCommonStateObject() {
-        return commonStateObject;
+    public IPLDObject<ModelState> getPreviousVersion() {
+        return keptModelState == null ? commonStateObject : keptModelState;
     }
 
-    public IPLDObject<UserState> getCommonUserState(String userHash) {
-        return commonUserStates.get(userHash);
+    public IPLDObject<UserState> getPreviousUserState(String userHash) {
+        IPLDObject<UserState> kept = keptUserStates == null ? null : keptUserStates.get(userHash);
+        return kept == null ? commonUserStates.get(userHash) : kept;
     }
 
     public boolean isTrivialMerge() {
@@ -92,14 +122,20 @@ public class ValidationContext {
         Map<String, IPLDObject<Voting>> newVotings = modelState.getNewVotings(commonState);
         if (newVotings != null) {
             for (Entry<String, IPLDObject<Voting>> entry : newVotings.entrySet()) {
-                validateNewVoting(entry.getKey(), entry.getValue().getMapped(), modelState);
+                IPLDObject<Voting> voting = entry.getValue();
+                if (validated.add(voting.getMultihash())) {
+                    validateNewVoting(entry.getKey(), voting.getMapped(), modelState);
+                }
             }
         }
         Map<String, IPLDObject<SealedDocument>> newSealedDocuments = modelState.getNewSealedDocuments(commonState);
         if (newSealedDocuments != null) {
             ModelState requestState = strict ? commonState : modelState.getPreviousVersion().getMapped();
             for (Entry<String, IPLDObject<SealedDocument>> entry : newSealedDocuments.entrySet()) {
-                validateSealedDocument(entry.getKey(), entry.getValue().getMapped(), requestState);
+                IPLDObject<SealedDocument> sealed = entry.getValue();
+                if (validated.add(sealed.getMultihash())) {
+                    validateSealedDocument(entry.getKey(), sealed.getMapped(), requestState);
+                }
             }
         }
         Map<String, IPLDObject<OwnershipRequest>> newOwnershipRequestsMap;
@@ -110,29 +146,38 @@ public class ValidationContext {
         else {
             newOwnershipRequestsMap = new HashMap<>();
             for (IPLDObject<OwnershipRequest> ownershipRequest : newOwnershipRequests) {
-                validateOwnershipRequest(ownershipRequest.getMapped(), modelState);
-                newOwnershipRequestsMap.put(ownershipRequest.getMultihash(), ownershipRequest);
+                String multihash = ownershipRequest.getMultihash();
+                if (validated.add(multihash)) {
+                    validateOwnershipRequest(ownershipRequest.getMapped(), modelState);
+                }
+                newOwnershipRequestsMap.put(multihash, ownershipRequest);
             }
         }
         Collection<IPLDObject<UserState>> newUserStates = modelState.getNewUserStates(commonState);
         if (newUserStates != null) {
             for (IPLDObject<UserState> userStateObject : newUserStates) {
-                UserState userState = userStateObject.getMapped();
-                String userHash = userState.getUser().getMultihash();
-                IPLDObject<UserState> commonUserState = commonState == null ? null : commonState.getUserState(userHash);
-                if (currentValidLocalState != null) {
-                    if (commonUserState == null) {
-                        findCommonUserState(userHash, userStateObject);
+                if (validated.add(userStateObject.getMultihash())) {
+                    UserState userState = userStateObject.getMapped();
+                    String userHash = userState.getUser().getMultihash();
+                    IPLDObject<UserState> commonUserState = commonState == null ? null
+                            : commonState.getUserState(userHash);
+                    if (currentValidLocalState != null) {
+                        if (commonUserState == null) {
+                            findCommonUserState(userHash, userStateObject);
+                        }
+                        else {
+                            findBestCommonUserState(userHash, userStateObject, commonUserState);
+                        }
                     }
-                    else {
-                        findBestCommonUserState(userHash, userStateObject, commonUserState);
-                    }
+                    validateUserState(userState, modelState, newOwnershipRequestsMap);
                 }
-                validateUserState(userState, modelState, newOwnershipRequestsMap);
             }
         }
         if (newOwnershipRequestsMap != null && newOwnershipRequestsMap.size() > 0) {
             throw new ValidationException("New ownership requests out of sync (model state v user states)");
+        }
+        if (validateMustKeepModelStates(modelState.getPreviousVersion())) {
+            mainSettlementController.evaluate();
         }
     }
 
@@ -142,8 +187,8 @@ public class ValidationContext {
             ModelState localState = localStateObject.getMapped();
             IPLDObject<ModelState> remoteStateObject = null;
             ModelState remoteState = modelState;
-            int localVersion = localState.getVersion();
-            int remoteVersion = remoteState.getVersion();
+            long localVersion = localState.getVersion();
+            long remoteVersion = remoteState.getVersion();
             do {
                 while (remoteVersion > localVersion) {
                     remoteStateObject = remoteState.getPreviousVersion();
@@ -153,7 +198,9 @@ public class ValidationContext {
                     remoteState = remoteStateObject.getMapped();
                     remoteVersion = remoteState.getVersion();
                     if (currentLocalHashes.contains(remoteStateObject.getMultihash())) {
-
+                        commonStateObject = remoteStateObject;
+                        commonState = remoteState;
+                        return;
                     }
                 }
                 while (localVersion > remoteVersion) {
@@ -170,7 +217,7 @@ public class ValidationContext {
                         return;
                     }
                     if (localStateObject.getMultihash().equals(remoteStateObject.getMultihash())) {
-                        commonStateObject = localStateObject; // important for reference equality check
+                        commonStateObject = localStateObject;
                         commonState = localState;
                         return;
                     }
@@ -191,8 +238,8 @@ public class ValidationContext {
         UserState localUserState = localUserStateObject.getMapped();
         IPLDObject<UserState> remoteUserStateObject = userState;
         UserState remoteUserState = remoteUserStateObject.getMapped();
-        int localVersion = localUserState.getVersion();
-        int remoteVersion = remoteUserState.getVersion();
+        long localVersion = localUserState.getVersion();
+        long remoteVersion = remoteUserState.getVersion();
         do {
             while (remoteVersion > localVersion) {
                 remoteUserStateObject = remoteUserState.getPreviousVersion();
@@ -212,7 +259,7 @@ public class ValidationContext {
             }
             if (localVersion == remoteVersion) {
                 if (localUserStateObject.getMultihash().equals(remoteUserStateObject.getMultihash())) {
-                    commonUserStates.put(userHash, localUserStateObject); // important for reference equality check
+                    commonUserStates.put(userHash, localUserStateObject);
                     return;
                 }
                 localUserStateObject = localUserState.getPreviousVersion();
@@ -232,9 +279,9 @@ public class ValidationContext {
         UserState localUserState = localUserStateObject.getMapped();
         IPLDObject<UserState> remoteUserStateObject = userState;
         UserState remoteUserState = remoteUserStateObject.getMapped();
-        int minCommonVersion = minCommonState.getMapped().getVersion();
-        int localVersion = localUserState.getVersion();
-        int remoteVersion = remoteUserState.getVersion();
+        long minCommonVersion = minCommonState.getMapped().getVersion();
+        long localVersion = localUserState.getVersion();
+        long remoteVersion = remoteUserState.getVersion();
 
         while (remoteVersion > minCommonVersion) {
             while (localVersion > remoteVersion) {
@@ -267,9 +314,13 @@ public class ValidationContext {
      * voting.subject.userState or contain unban request; unban request must be active
      */
     private void validateNewVoting(String key, Voting voting, ModelState modelState) {
-        voting.validateNewVotes(commonState, modelState, context);
-        if (voting.getTally() != null) {
+        boolean hasNewVotes = voting.validateNewVotes(commonState, modelState, context, this);
+        IPLDObject<Tally> tally = voting.getTally();
+        if (tally != null && validated.add(tally.getMultihash())) {
             voting.validateTally();
+        }
+        if (!hasNewVotes && (commonState == null || commonState.getVoting(key) == null)) {
+            modelState.validateVotingCause(key, commonState == null ? -1 : commonState.getVersion());
         }
     }
 
@@ -298,10 +349,29 @@ public class ValidationContext {
         UserState since = common == null ? null : common.getMapped();
         IPLDObject<UserState> prev = userState.getPreviousVersion();
         UserState previousState = prev == null ? null : prev.getMapped();
+        Collection<IPLDObject<Document>> newDocuments = userState.getNewDocuments(since);
+        if (newDocuments != null) {
+            for (IPLDObject<Document> document : newDocuments) {
+                if (validated.add(document.getMultihash())) {
+                    validateDocument(document.getMapped());
+                }
+            }
+        }
+        Collection<IPLDObject<DocumentRemoval>> newRemovedDocuments = userState.getNewRemovedDocuments(since);
+        if (newRemovedDocuments != null) {
+            for (IPLDObject<DocumentRemoval> removal : newRemovedDocuments) {
+                if (validated.add(removal.getMultihash())) {
+                    validateDocumentRemoval(removal.getMapped());
+                }
+            }
+        }
         Collection<IPLDObject<SettlementRequest>> newSettlementRequests = userState.getNewSettlementRequests(since);
         if (newSettlementRequests != null) {
             for (IPLDObject<SettlementRequest> settlementRequest : newSettlementRequests) {
-                validateSettlementRequest(settlementRequest.getMapped(), previousState);
+                if (validated.add(settlementRequest.getMultihash())) {
+                    validateSettlementRequest(settlementRequest.getMapped(), previousState);
+                }
+                currentSettlementController.checkRequest(settlementRequest.getMapped(), userState);
             }
         }
         Collection<IPLDObject<OwnershipRequest>> newOwnershipRequests = userState.getNewOwnershipRequests(since);
@@ -315,21 +385,35 @@ public class ValidationContext {
         Collection<IPLDObject<UnbanRequest>> newUnbanRequests = userState.getNewUnbanRequests(since);
         if (newUnbanRequests != null) {
             for (IPLDObject<UnbanRequest> unbanRequest : newUnbanRequests) {
-                validateUnbanRequest(unbanRequest.getMapped(), previousState);
+                if (validated.add(unbanRequest.getMultihash())) {
+                    validateUnbanRequest(unbanRequest.getMapped(), previousState);
+                }
             }
         }
         Collection<IPLDObject<GrantedOwnership>> newGrantedOwnerships = userState.getNewGrantedOwnerships(since);
         if (newGrantedOwnerships != null) {
             for (IPLDObject<GrantedOwnership> grantedOwnership : newGrantedOwnerships) {
-                validateGrantedOwnership(grantedOwnership.getMapped(), modelState);
+                if (validated.add(grantedOwnership.getMultihash())) {
+                    validateGrantedOwnership(grantedOwnership.getMapped(), modelState);
+                }
             }
         }
         Collection<IPLDObject<GrantedUnban>> newGrantedUnbans = userState.getNewGrantedUnbans(since);
         if (newGrantedUnbans != null) {
             for (IPLDObject<GrantedUnban> grantedUnban : newGrantedUnbans) {
-                validateGrantedUnban(grantedUnban.getMapped(), userState, modelState);
+                if (validated.add(grantedUnban.getMultihash())) {
+                    validateGrantedUnban(grantedUnban.getMapped(), userState, modelState);
+                }
             }
         }
+    }
+
+    private void validateDocument(Document document) {
+
+    }
+
+    private void validateDocumentRemoval(DocumentRemoval removal) {
+
     }
 
     /*
@@ -367,6 +451,119 @@ public class ValidationContext {
         }
         IPLDObject<Voting> voting = modelState.expectVotingForUnbanRequest(unbanRequest.getMultihash());
         voting.getMapped().expectWinner(Boolean.TRUE);
+    }
+
+    public long addMustKeepModelState(IPLDObject<ModelState> modelState) {
+        long version = modelState.getMapped().getVersion();
+        if (commonState == null || commonState.getVersion() < version) {
+            if (mustKeepModelStates == null) {
+                mustKeepModelStates = new HashMap<>();
+            }
+            mustKeepModelStates.put(version, modelState);
+            return version;
+        }
+        return -1;
+    }
+
+    private boolean validateMustKeepModelStates(IPLDObject<ModelState> mustKeepStart) {
+        if (mustKeepModelStates != null && currentSettlementController == mainSettlementController) {
+            outer: do {
+                integrateMustKeepUserStates(mustKeepStart);
+                List<Long> keys = new ArrayList<>(mustKeepModelStates.keySet());
+                Collections.sort(keys, DESCENDING);
+                for (Long key : keys) {
+                    IPLDObject<ModelState> mustKeep = mustKeepModelStates.remove(key);
+                    this.currentSettlementController = new SettlementController();
+                    IPLDObject<ModelState> toValidate = new IPLDObject<>(mustKeep.getMultihash(),
+                            LoaderFactory.MODEL_STATE.createLoader(), context, this);
+                    int count = mustKeepModelStates.size();
+                    toValidate.getMapped();
+                    if (keptModelState == null) { // by design highest version first, must not be replaced with lower
+                                                  // version
+                        keptModelState = mustKeep;
+                    }
+                    if (mustKeepModelStates.size() > count) {
+                        continue outer;
+                    }
+                }
+                this.currentSettlementController = mainSettlementController;
+                return true;
+            }
+            while (true);
+        }
+        return false;
+    }
+
+    public long addMustKeepUserState(IPLDObject<UserState> userState) {
+        if (mustKeepUserStateVersions == null) {
+            mustKeepUserStateVersions = new HashMap<>();
+            if (mustKeepModelStates == null) {
+                mustKeepModelStates = new HashMap<>();
+            }
+        }
+        UserState u = userState.getMapped();
+        long version = u.getVersion();
+        String userHash = u.getUser().getMultihash();
+        IPLDObject<UserState> commonUserState = commonUserStates.get(userHash);
+        if (commonUserState == null || commonUserState.getMapped().getVersion() < version) {
+            Set<Long> set = mustKeepUserStateVersions.get(userHash);
+            if (set == null) {
+                set = new TreeSet<>(DESCENDING);
+                mustKeepUserStateVersions.put(userHash, set);
+            }
+            set.add(version);
+            return version;
+        }
+        return -1;
+    }
+
+    private void integrateMustKeepUserStates(IPLDObject<ModelState> mustKeepStart) {
+        if (mustKeepUserStateVersions != null) {
+            long stop = commonState == null ? -1 : commonState.getVersion();
+            for (Entry<String, Set<Long>> entry : mustKeepUserStateVersions.entrySet()) {
+                String userHash = entry.getKey();
+                Set<Long> set = entry.getValue();
+                outer: for (Long version : set) {
+                    for (IPLDObject<ModelState> mustKeep : mustKeepModelStates.values()) {
+                        IPLDObject<UserState> userState = mustKeep.getMapped().getUserState(userHash);
+                        if (userState != null && userState.getMapped().getVersion() == version) {
+                            addKeptUserState(userHash, userState);
+                            continue outer;
+                        }
+                    }
+                    IPLDObject<ModelState> mustKeep = mustKeepStart;
+                    do {
+                        ModelState modelState = mustKeep.getMapped();
+                        if (!mustKeepModelStates.containsKey(modelState.getVersion())) {
+                            IPLDObject<UserState> userState = modelState.getUserState(userHash);
+                            if (userState != null && userState.getMapped().getVersion() == version) {
+                                mustKeepModelStates.put(modelState.getVersion(), mustKeep);
+                                addKeptUserState(userHash, userState);
+                                continue outer;
+                            }
+                        }
+                        mustKeep = modelState.getPreviousVersion();
+                    }
+                    while (mustKeep.getMapped().getVersion() > stop);
+                    throw new ValidationException("Did not find model state for must keep user state");
+                }
+            }
+        }
+        mustKeepUserStateVersions.clear();
+    }
+
+    private void addKeptUserState(String userHash, IPLDObject<UserState> userState) {
+        if (keptUserStates == null) {
+            keptUserStates = new HashMap<>();
+        }
+        if (!keptUserStates.containsKey(userHash)) { // by design highest version first, must not be replaced with lower
+                                                     // version
+            keptUserStates.put(userHash, userState);
+        }
+    }
+
+    public boolean addValidated(String multihash) {
+        return validated.add(multihash);
     }
 
 }

@@ -136,6 +136,9 @@ public class Document implements IPLDSerializable {
         this.previousVersion = reader.readLinkObject(KEY_PREVIOUS_VERSION, context, validationContext,
                 LoaderFactory.DOCUMENT, eager);
         this.links = reader.readLinkObjects(KEY_LINKS, context, validationContext, LoaderFactory.DOCUMENT, false, null);
+        if (validationContext != null) {
+            validationContext.addMustKeepUserState(userState);
+        }
     }
 
     @Override

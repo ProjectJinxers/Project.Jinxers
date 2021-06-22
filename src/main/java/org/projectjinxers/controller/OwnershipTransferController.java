@@ -64,9 +64,11 @@ public class OwnershipTransferController {
     private final String documentHash;
     private final String userHash;
     private final boolean anonymousVoting;
-    private final IPLDObject<ModelState> modelState;
+    private final IPLDObject<ModelState> modelStateObject;
+    private final ModelState modelState;
     private final IPLDContext context;
     private final ECDSASignature signature;
+    private final long timestamp;
 
     private IPLDObject<OwnershipRequest> ownershipRequest;
     private IPLDObject<Voting> voting;
@@ -81,7 +83,7 @@ public class OwnershipTransferController {
      * @param userHash        the user hash
      * @param anonymousVoting indicates whether or not a voting, if necessary, has to be anonymous
      * @param modelState      the current model state
-     * @param context         the cntext
+     * @param context         the context
      * @param signature       the signature
      */
     OwnershipTransferController(String documentHash, String userHash, boolean anonymousVoting,
@@ -89,9 +91,25 @@ public class OwnershipTransferController {
         this.documentHash = documentHash;
         this.userHash = userHash;
         this.anonymousVoting = anonymousVoting;
-        this.modelState = modelState;
+        this.modelStateObject = modelState;
+        this.modelState = modelState.getMapped();
         this.context = context;
         this.signature = signature;
+        this.timestamp = System.currentTimeMillis() + ValidationContext.TIMESTAMP_TOLERANCE;
+    }
+
+    public OwnershipTransferController(OwnershipSelection selection, IPLDObject<ModelState> modelState) {
+        this.modelStateObject = modelState;
+        this.modelState = modelStateObject.getMapped();
+        this.documentHash = selection.getDocument().getMultihash();
+        this.anonymousVoting = selection.isAnonymous();
+        this.timestamp = selection.getDeadline().getTime() - OwnershipSelection.DURATION;
+        if (!prepareVoting(Long.MAX_VALUE, false, null, document)) {
+            throw new ValidationException("Expected voting");
+        }
+        this.userHash = null;
+        this.context = null;
+        this.signature = null;
     }
 
     /**
@@ -101,12 +119,11 @@ public class OwnershipTransferController {
      * @return true iff the request is valid
      */
     boolean process() {
-        ModelState model = modelState.getMapped();
-        if (model.isSealedDocument(documentHash) || model.getVotingForOwnershipTransfer(documentHash) != null) {
+        if (modelState.isSealedDocument(documentHash)
+                || modelState.getVotingForOwnershipTransfer(documentHash) != null) {
             return false;
         }
-
-        IPLDObject<UserState> userState = model.getUserState(userHash);
+        IPLDObject<UserState> userState = modelState.getUserState(userHash);
         if (userState != null) {
             byte[] hashBase = composePubMessageRequest(anonymousVoting, userHash, documentHash)
                     .getBytes(StandardCharsets.UTF_8);
@@ -118,35 +135,38 @@ public class OwnershipTransferController {
                     if (userHash.equals(loaded.getFirstVersion().expectUserState().getUser().getMultihash())) { // OP
                         return prepareTransfer(userState, document, true);
                     }
-                    else {
-                        UserState unwrapped = userState.getMapped();
-                        if (unwrapped.getRating() >= REQUIRED_RATING) {
-                            if (loaded instanceof Review) {
-                                Review review = (Review) loaded;
-                                Boolean approve = review.getApprove();
-                                if (approve != null) {
-                                    if (approve) {
-                                        // check if requesting user is the OP or find a non-negative review by them
-                                        Document firstVersion = review.getDocument().getMapped().getFirstVersion();
-                                        if (userHash.equals(firstVersion.expectUserState().getUser().getMultihash())) {
-                                            return true;
-                                        }
-                                        return unwrapped.checkNonNegativeReview(documentHash)
-                                                && prepareTransfer(userState, document, false);
-                                    }
-                                    // find a non-positive review by the requesting user
-                                    return unwrapped.checkNonPositiveReview(documentHash)
-                                            && prepareTransfer(userState, document, false);
-                                }
-                                // why would someone ever want to request ownership of an abandoned neutral review?!?
-                            }
-                            else {
-                                return unwrapped.checkNonNegativeReview(documentHash)
-                                        && prepareTransfer(userState, document, false);
-                            }
-                        }
-                    }
+                    return processUserDocument(userState, document);
                 }
+            }
+        }
+        return false;
+    }
+
+    private boolean processUserDocument(IPLDObject<UserState> userState, IPLDObject<Document> document) {
+        UserState unwrapped = userState.getMapped();
+        if (unwrapped.getRating() >= REQUIRED_RATING) {
+            Document doc = document.getMapped();
+            if (doc instanceof Review) {
+                Review review = (Review) doc;
+                Boolean approve = review.getApprove();
+                if (approve != null) {
+                    if (approve) {
+                        // check if requesting user is the OP or find a non-negative review by them
+                        Document firstVersion = review.getDocument().getMapped().getFirstVersion();
+                        if (userHash.equals(firstVersion.expectUserState().getUser().getMultihash())) {
+                            return true;
+                        }
+                        return unwrapped.checkNonNegativeReview(documentHash)
+                                && prepareTransfer(userState, document, false);
+                    }
+                    // find a non-positive review by the requesting user
+                    return unwrapped.checkNonPositiveReview(documentHash)
+                            && prepareTransfer(userState, document, false);
+                }
+                // why would someone ever want to request ownership of an abandoned neutral review?!?
+            }
+            else {
+                return unwrapped.checkNonNegativeReview(documentHash) && prepareTransfer(userState, document, false);
             }
         }
         return false;
@@ -162,7 +182,7 @@ public class OwnershipTransferController {
         }
         UserState currentOwner = resolvedDocument.getMapped().expectUserState();
         String ownerUserHash = currentOwner.getUser().getMultihash();
-        UserState ownerUserState = modelState.getMapped().expectUserState(ownerUserHash).getMapped();
+        UserState ownerUserState = modelState.expectUserState(ownerUserHash).getMapped();
 
         IPLDObject<OwnershipRequest> request = resolvedUser.getMapped().getOwnershipRequest(documentHash);
 
@@ -171,8 +191,7 @@ public class OwnershipTransferController {
             if (lastActivityDate == null) {
                 lastActivityDate = resolvedDocument.getMapped().getDate();
             }
-            long now = System.currentTimeMillis();
-            long inactivity = now - lastActivityDate.getTime();
+            long inactivity = timestamp - lastActivityDate.getTime();
             if (inactivity >= REQUIRED_INACTIVITY) {
                 this.ownershipRequest = new IPLDObject<>(
                         new OwnershipRequest(resolvedUser, resolvedDocument, anonymousVoting), signature);
@@ -180,10 +199,15 @@ public class OwnershipTransferController {
             }
             return false;
         }
-        IPLDObject<OwnershipRequest>[] ownershipRequests = modelState.getMapped().expectOwnershipRequests(documentHash);
+        OwnershipRequest or = request.getMapped();
+        return prepareVoting(or.getTimestamp(), or.isActive(), resolvedUser, resolvedDocument);
+    }
+
+    private boolean prepareVoting(long minTimestamp, boolean active, IPLDObject<UserState> resolvedUser,
+            IPLDObject<Document> resolvedDocument) {
+        IPLDObject<OwnershipRequest>[] ownershipRequests = modelState.expectOwnershipRequests(documentHash);
         Collection<IPLDObject<OwnershipRequest>> activeRequests = new ArrayList<>();
         boolean anonymous = false;
-        long minTimestamp = request.getMapped().getTimestamp();
         for (IPLDObject<OwnershipRequest> or : ownershipRequests) {
             OwnershipRequest req = or.getMapped();
             if (req.isActive()) {
@@ -195,16 +219,15 @@ public class OwnershipTransferController {
                 }
             }
         }
-        long now = System.currentTimeMillis();
-        long duration = now - minTimestamp;
+        long duration = timestamp - minTimestamp;
         if (duration >= MIN_REQUEST_PHASE_DURATION) {
             if (activeRequests.size() > 1) {
                 this.voting = new IPLDObject<Voting>(new Voting(
                         new IPLDObject<Votable>(new OwnershipSelection(resolvedDocument, activeRequests, anonymous)),
-                        ModelUtility.CURRENT_HASH_OBFUSCATION_VERSION));
+                        modelStateObject, ModelUtility.CURRENT_HASH_OBFUSCATION_VERSION));
                 return true;
             }
-            if (request.getMapped().isActive()) {
+            if (active) {
                 this.document = resolvedDocument;
                 this.previousOwner = resolvedDocument.getMapped().getUserState();
                 this.newOwner = resolvedUser;

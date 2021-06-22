@@ -29,6 +29,7 @@ import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDReader.KeyProvider;
 import org.projectjinxers.controller.IPLDWriter;
+import org.projectjinxers.controller.OwnershipTransferController;
 import org.projectjinxers.controller.ValidationContext;
 import org.projectjinxers.controller.ValidationException;
 import org.projectjinxers.util.ModelUtility;
@@ -75,7 +76,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         }
     };
 
-    private int version;
+    private long version;
     private long timestamp;
     private IPLDObject<ModelState> previousVersion;
     private Map<String, IPLDObject<UserState>> userStates;
@@ -120,7 +121,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         writer.writeLinkObjectArrays(KEY_OWNERSHIP_REQUESTS, ownershipRequests, signer, context);
     }
 
-    public int getVersion() {
+    public long getVersion() {
         return version;
     }
 
@@ -319,14 +320,43 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         return ModelUtility.getNewLinkArrays(ownershipRequests, since == null ? null : since.ownershipRequests);
     }
 
-    public int validateUnchangedVote(String voteKey, String multihash, String votingKey, int validVersion) {
+    public void validateVotingCause(String votingKey, long validVersion) {
         ModelState modelState = this;
-        int res = validVersion;
+        IPLDObject<Voting> voting = null;
+        while (modelState.previousVersion != null) {
+            ModelState prev = modelState.previousVersion.getMapped();
+            if (prev.version == validVersion || prev.votings == null) {
+                break;
+            }
+            IPLDObject<Voting> prevVoting = prev.votings.get(votingKey);
+            if (prevVoting == null) {
+                break;
+            }
+            modelState = prev;
+            voting = prevVoting;
+        }
+        Voting v = voting.getMapped();
+        Votable subject = v.getSubject().getMapped();
+        if (subject instanceof OwnershipSelection) {
+            OwnershipSelection selection = (OwnershipSelection) subject;
+            OwnershipTransferController checkController = new OwnershipTransferController(selection,
+                    v.getInitialModelState());
+            Voting reconstructedVoting = checkController.getVoting().getMapped();
+            selection.validateReconstructed((OwnershipSelection) reconstructedVoting.getSubject().getMapped());
+        }
+    }
+
+    public long validateUnchangedVote(String voteKey, String multihash, String votingKey, long validVersion) {
+        ModelState modelState = this;
+        long res = validVersion;
         do {
-            if (modelState.version == validVersion || modelState.votings != null) {
+            if (modelState.version == validVersion) {
+                return validVersion;
+            }
+            if (modelState.votings == null) {
                 return res;
             }
-            IPLDObject<Voting> votingObject = votings.get(votingKey);
+            IPLDObject<Voting> votingObject = modelState.votings.get(votingKey);
             if (votingObject == null) {
                 return res;
             }
@@ -425,7 +455,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
             }
         }
 
-        res.previousVersion = validationContext.getCommonStateObject();
+        res.previousVersion = validationContext.getPreviousVersion();
         if (res.previousVersion != null) {
             res.version = res.previousVersion.getMapped().version + 1;
         }

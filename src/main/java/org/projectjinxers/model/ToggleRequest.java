@@ -64,6 +64,9 @@ public abstract class ToggleRequest implements IPLDSerializable {
         this.payload = reader.readNumber(KEY_PAYLOAD).intValue();
         this.userState = reader.readLinkObject(KEY_USER_STATE, context, validationContext, LoaderFactory.USER_STATE,
                 eager);
+        if (validationContext != null) {
+            validationContext.addMustKeepUserState(userState);
+        }
     }
 
     @Override

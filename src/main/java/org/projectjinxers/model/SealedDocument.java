@@ -50,6 +50,9 @@ public class SealedDocument implements IPLDSerializable, Loader<SealedDocument> 
                 LoaderFactory.SETTLEMENT_REQUEST, eager);
         this.userState = reader.readLinkObject(KEY_USER_STATE, context, validationContext, LoaderFactory.USER_STATE,
                 eager);
+        if (validationContext != null) {
+            validationContext.addMustKeepUserState(userState);
+        }
     }
 
     @Override

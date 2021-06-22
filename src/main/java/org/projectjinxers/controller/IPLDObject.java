@@ -102,7 +102,7 @@ public class IPLDObject<D extends IPLDSerializable> {
     public D getMapped() {
         if (mapped == null && multihash != null) {
             try {
-                LoadResult result = context.loadObject(multihash, loader, validationContext);
+                LoadResult result = context.loadObject(this);
                 if (result != null) {
                     IPLDObject<?> fromCache = result.getFromCache();
                     if (fromCache == null) {
@@ -122,6 +122,14 @@ public class IPLDObject<D extends IPLDSerializable> {
             }
         }
         return mapped;
+    }
+
+    public ValidationContext getValidationContext() {
+        return validationContext;
+    }
+
+    public Loader<D> getLoader() {
+        return loader;
     }
 
     /**

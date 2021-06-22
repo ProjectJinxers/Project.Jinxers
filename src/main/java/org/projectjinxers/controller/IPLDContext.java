@@ -110,6 +110,17 @@ public class IPLDContext {
         return new LoadResult(loadObject(bytes, loader, validationContext));
     }
 
+    LoadResult loadObject(IPLDObject<?> object) throws IOException {
+        String multihash = object.getMultihash();
+        LoadResult result = loadObject(multihash, object.getLoader(), object.getValidationContext());
+        if (result != null && result.getFromCache() == null) {
+            synchronized (cache) {
+                cache.put(multihash, object);
+            }
+        }
+        return result;
+    }
+
     /**
      * Deserializes the given bytes.
      * 

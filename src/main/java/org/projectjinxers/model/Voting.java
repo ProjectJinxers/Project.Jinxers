@@ -77,15 +77,17 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
      * Constructor.
      * 
      * @param subject            the subject
+     * @param initialModelState  the initial model state
      * @param obfuscationVersion the version of the hash obfuscation algorithm
      */
-    public Voting(IPLDObject<Votable> subject, int obfuscationVersion) {
+    public Voting(IPLDObject<Votable> subject, IPLDObject<ModelState> initialModelState, int obfuscationVersion) {
         do {
             this.seed = (int) (Math.random() * Integer.MAX_VALUE);
         }
         while (seed == 0);
         this.obfuscationVersion = obfuscationVersion;
         this.subject = subject;
+        this.initialModelState = initialModelState;
     }
 
     @Override
@@ -100,6 +102,9 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
         this.votes = reader.readLinkObjects(KEY_VOTES, context, validationContext, LoaderFactory.VOTE, eager,
                 subject.getMapped().isAnonymous() ? ANONYMOUS_VOTE_KEY_PROVIDER : NON_ANONYMOUS_VOTE_KEY_PROVIDER);
         this.tally = reader.readLinkObject(KEY_TALLY, context, validationContext, null, eager);
+        if (validationContext != null) {
+            validationContext.addMustKeepModelState(initialModelState);
+        }
     }
 
     @Override
@@ -116,6 +121,10 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
      */
     public IPLDObject<Votable> getSubject() {
         return subject;
+    }
+
+    public IPLDObject<ModelState> getInitialModelState() {
+        return initialModelState;
     }
 
     /**
@@ -169,13 +178,14 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
         subject.getMapped().expectWinner(value, counts);
     }
 
-    public void validateNewVotes(ModelState since, ModelState currentState, IPLDContext context) {
+    public boolean validateNewVotes(ModelState since, ModelState currentState, IPLDContext context,
+            ValidationContext validationContext) {
         String votingKey = subject.getMultihash();
         IPLDObject<Voting> sinceVoting = since == null ? null : since.getVoting(votingKey);
         Map<String, IPLDObject<Vote>> newVotes = ModelUtility.getNewForeignKeyLinksMap(votes,
                 sinceVoting == null ? null : sinceVoting.getMapped().votes);
-        if (newVotes != null) {
-            int validVersion = since == null ? -1 : since.getVersion();
+        if (newVotes != null && newVotes.size() > 0) {
+            long validVersion = since == null ? -1 : since.getVersion();
             Votable subject = this.subject.getMapped();
             Collection<IPLDObject<UserState>> allUserStates = initialModelState.getMapped().expectAllUserStates();
             Map<String, User> allUsers = new HashMap<>();
@@ -188,13 +198,17 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
                 for (Entry<String, IPLDObject<Vote>> entry : newVotes.entrySet()) {
                     String key = entry.getKey();
                     IPLDObject<Vote> value = entry.getValue();
-                    currentState.validateUnchangedVote(key, value.getMultihash(), votingKey, validVersion);
-                    for (Entry<String, User> userEntry : entrySet) {
-                        String userHash = userEntry.getKey();
-                        String invitationKey = getInvitationKey(userHash);
-                        if (key.equals(invitationKey)) {
-                            context.verifySignature(value, Signer.VERIFIER, userEntry.getValue());
-                            break;
+                    String multihash = value.getMultihash();
+                    if (validationContext.addValidated(multihash + "@" + key)) {
+                        validVersion = currentState.validateUnchangedVote(key, value.getMultihash(), votingKey,
+                                validVersion);
+                        for (Entry<String, User> userEntry : entrySet) {
+                            String userHash = userEntry.getKey();
+                            String invitationKey = getInvitationKey(userHash);
+                            if (key.equals(invitationKey)) {
+                                context.verifySignature(value, Signer.VERIFIER, userEntry.getValue());
+                                break;
+                            }
                         }
                     }
                 }
@@ -203,12 +217,17 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
                 for (Entry<String, IPLDObject<Vote>> entry : newVotes.entrySet()) {
                     String key = entry.getKey();
                     IPLDObject<Vote> value = entry.getValue();
-                    currentState.validateUnchangedVote(key, value.getMultihash(), votingKey, validVersion);
-                    User user = allUsers.get(key);
-                    context.verifySignature(value, Signer.VERIFIER, user);
+                    String multihash = value.getMultihash();
+                    if (validationContext.addValidated(multihash + "@" + key)) {
+                        currentState.validateUnchangedVote(key, value.getMultihash(), votingKey, validVersion);
+                        User user = allUsers.get(key);
+                        context.verifySignature(value, Signer.VERIFIER, user);
+                    }
                 }
             }
+            return true;
         }
+        return false;
     }
 
     public void validateTally() {
