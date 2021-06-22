@@ -37,6 +37,16 @@ public abstract class AbstractVote implements Vote {
     private boolean readValue;
     private int valueHashObfuscation;
 
+    AbstractVote() {
+
+    }
+
+    protected AbstractVote(byte[] invitationKey, boolean readValue, int valueHashObfuscation) {
+        this.invitationKey = invitationKey;
+        this.readValue = readValue;
+        this.valueHashObfuscation = valueHashObfuscation;
+    }
+
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {

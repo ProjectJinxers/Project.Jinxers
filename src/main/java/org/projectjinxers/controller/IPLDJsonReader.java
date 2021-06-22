@@ -183,6 +183,23 @@ public class IPLDJsonReader implements IPLDReader {
     }
 
     @Override
+    public Object readPrimitive(String key) {
+        JsonPrimitive primitive = primitives.get(key);
+        if (primitive != null) {
+            if (primitive.isBoolean()) {
+                return primitive.getAsBoolean();
+            }
+            if (primitive.isNumber()) {
+                return primitive.getAsNumber();
+            }
+            if (primitive.isString()) {
+                return primitive.getAsString();
+            }
+        }
+        return null;
+    }
+
+    @Override
     public Boolean readBoolean(String key) {
         JsonPrimitive primitive = primitives.get(key);
         return primitive == null ? null : primitive.getAsBoolean();

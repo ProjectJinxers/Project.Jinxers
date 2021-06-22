@@ -210,6 +210,10 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         return documents.get(documentHash).getMapped();
     }
 
+    public boolean expectContainsSettlementRequest(String key) {
+        return settlementRequests.containsKey(key);
+    }
+
     /**
      * Checks if the user has posted a non-negative review, that has not been followed by a negative review, for the
      * document with the given hash. Neutral reviews are currently included.
@@ -313,6 +317,10 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
      */
     public IPLDObject<OwnershipRequest> getOwnershipRequest(String documentHash) {
         return ownershipRequests == null ? null : ownershipRequests.get(documentHash);
+    }
+
+    public IPLDObject<UnbanRequest> expectUnbanRequest(String documentHash) {
+        return unbanRequests.get(documentHash);
     }
 
     /**

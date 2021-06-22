@@ -30,25 +30,36 @@ import org.projectjinxers.controller.ValidationContext;
  */
 public class ValueVote extends AbstractVote {
 
-    private static final String KEY_STRING_VALUE = "s";
+    private static final String KEY_PRIMITIVE_VALUE = "p";
     private static final String KEY_BYTES_VALUE = "b";
 
     private Object value;
+
+    ValueVote() {
+
+    }
+
+    public ValueVote(byte[] invitationKey, Object value, boolean readValue, int valueHashObfuscation) {
+        super(invitationKey, readValue, valueHashObfuscation);
+        this.value = value;
+    }
 
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {
         super.read(reader, context, validationContext, eager, metadata);
-        String stringValue = reader.readString(KEY_STRING_VALUE);
-        if (stringValue != null) {
-            this.value = stringValue;
-        }
-        byte[] bytesValue = reader.readByteArray(KEY_BYTES_VALUE, ByteCodec.DEFAULT);
-        if (bytesValue != null) {
-            this.value = bytesValue;
+        Object primitiveValue = reader.readPrimitive(KEY_PRIMITIVE_VALUE);
+        if (primitiveValue != null) {
+            this.value = primitiveValue;
         }
         else {
-            this.value = null;
+            byte[] bytesValue = reader.readByteArray(KEY_BYTES_VALUE, ByteCodec.DEFAULT);
+            if (bytesValue != null) {
+                this.value = bytesValue;
+            }
+            else {
+                this.value = null;
+            }
         }
     }
 
@@ -57,9 +68,20 @@ public class ValueVote extends AbstractVote {
         if (value instanceof byte[]) {
             writer.writeByteArray(KEY_BYTES_VALUE, (byte[]) value, ByteCodec.DEFAULT);
         }
-        else if (value instanceof String) {
-            writer.writeString(KEY_STRING_VALUE, (String) value);
+        else if (value instanceof Number) {
+            writer.writeNumber(KEY_PRIMITIVE_VALUE, (Number) value);
         }
+        else if (value instanceof Boolean) {
+            writer.writeBoolean(KEY_PRIMITIVE_VALUE, (Boolean) value);
+        }
+        else if (value instanceof String) {
+            writer.writeString(KEY_PRIMITIVE_VALUE, (String) value);
+        }
+    }
+
+    @Override
+    public Object getValue() {
+        return value;
     }
 
 }

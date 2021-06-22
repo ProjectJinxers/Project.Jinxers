@@ -14,6 +14,7 @@
 package org.projectjinxers.model;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
 import org.projectjinxers.account.Signer;
@@ -22,6 +23,8 @@ import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.ValidationContext;
+import org.projectjinxers.controller.ValidationException;
+import org.projectjinxers.util.ModelUtility;
 
 /**
  * Unban requests can be issued by banned users on a false-post basis.
@@ -36,6 +39,9 @@ public class UnbanRequest extends ToggleRequest implements DocumentAction, Votab
     private static final String KEY_DOCUMENT = "c";
 
     private static final Boolean[] ALL_VALUES = { Boolean.TRUE, Boolean.FALSE, null };
+    private static final Integer[] ALL_VALUE_INDICES = { 0, 1, 2 };
+    private static final byte[][] ALL_VALUE_HASH_BASES = new byte[][] { "true".getBytes(StandardCharsets.UTF_8),
+            "false".getBytes(StandardCharsets.UTF_8), "null".getBytes(StandardCharsets.UTF_8) };
 
     private boolean anonymous;
     private int hashSeed;
@@ -77,22 +83,42 @@ public class UnbanRequest extends ToggleRequest implements DocumentAction, Votab
     }
 
     @Override
-    public Vote createVote() {
+    public Vote createVote(byte[] invitationKey, int valueIndex, int seed, int obfuscationVersion) {
         if (anonymous) {
-            return new ValueVote();
+            int valueHashObfuscation;
+            do {
+                valueHashObfuscation = (int) (Math.random() * Integer.MAX_VALUE);
+            }
+            while (valueHashObfuscation == 0);
+            return new ValueVote(invitationKey, ModelUtility.obfuscateHash(ALL_VALUE_HASH_BASES[valueIndex], seed,
+                    obfuscationVersion, valueHashObfuscation), false, valueHashObfuscation);
         }
-        return new YesNoMaybeVote();
+        return new YesNoMaybeVote(invitationKey, ALL_VALUES[valueIndex]);
     }
 
     @Override
-    public Object[] getAllValues() {
-        return ALL_VALUES;
+    public Object[] getAllValues(boolean forDisplay) {
+        return forDisplay ? ALL_VALUES : ALL_VALUE_INDICES;
     }
 
     @Override
-    public boolean checkWinner() {
-        // TODO Auto-generated method stub
-        return false;
+    public byte[][] getAllValueHashBases() {
+        return null;
+    }
+
+    @Override
+    public int getPlainTextValueIndex(Object value) {
+        if (value == null) {
+            return 2;
+        }
+        return Boolean.TRUE.equals(value) ? 0 : 1;
+    }
+
+    @Override
+    public void expectWinner(Object value, int[] counts) {
+        if (counts[0] <= counts[1]) {
+            throw new ValidationException("Expected yes count to be greater than no count");
+        }
     }
 
     @Override

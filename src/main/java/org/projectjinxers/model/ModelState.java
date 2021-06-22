@@ -62,9 +62,9 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         }
     };
 
-    private static final KeyProvider<SettlementRequest> SEALED_DOCUMENT_KEY_PROVIDER = new KeyProvider<>() {
-        public String getKey(org.projectjinxers.controller.IPLDObject<SettlementRequest> object) {
-            return object.getMapped().getDocument().getMultihash();
+    private static final KeyProvider<SealedDocument> SEALED_DOCUMENT_KEY_PROVIDER = new KeyProvider<>() {
+        public String getKey(IPLDObject<SealedDocument> object) {
+            return object.getMapped().getSettlementRequest().getMapped().getDocument().getMultihash();
         }
     };
 
@@ -80,7 +80,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
     private IPLDObject<ModelState> previousVersion;
     private Map<String, IPLDObject<UserState>> userStates;
     private Map<String, IPLDObject<Voting>> votings;
-    private Map<String, IPLDObject<SettlementRequest>> sealedDocuments;
+    private Map<String, IPLDObject<SealedDocument>> sealedDocuments;
     private Map<String, IPLDObject<OwnershipRequest>[]> ownershipRequests;
 
     @Override
@@ -101,7 +101,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         this.votings = reader.readLinkObjects(KEY_VOTINGS, context, validationContext, LoaderFactory.VOTING, eager,
                 VOTING_KEY_PROVIDER);
         this.sealedDocuments = reader.readLinkObjects(KEY_SEALED_DOCUMENTS, context, validationContext,
-                LoaderFactory.SETTLEMENT_REQUEST, eager, SEALED_DOCUMENT_KEY_PROVIDER);
+                LoaderFactory.SEALED_DOCUMENT, eager, SEALED_DOCUMENT_KEY_PROVIDER);
         this.ownershipRequests = reader.readLinkObjectCollections(KEY_OWNERSHIP_REQUESTS, context, validationContext,
                 LoaderFactory.OWNERSHIP_REQUEST, eager, OWNERSHIP_REQUESTS_KEY_PROVIDER);
         if (validationContext != null) {
@@ -126,6 +126,14 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
 
     public IPLDObject<ModelState> getPreviousVersion() {
         return previousVersion;
+    }
+
+    public Set<String> expectAllUserHashes() {
+        return Collections.unmodifiableSet(userStates.keySet());
+    }
+
+    public Collection<IPLDObject<UserState>> expectAllUserStates() {
+        return Collections.unmodifiableCollection(userStates.values());
     }
 
     public Set<Entry<String, IPLDObject<UserState>>> getAllUserStateEntries() {
@@ -173,7 +181,12 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
      * @return the sealed document with the given hash (no null checks!)
      */
     public Document expectSealedDocument(String documentHash) {
-        return sealedDocuments.get(documentHash).getMapped().getDocument().getMapped();
+        return sealedDocuments.get(documentHash).getMapped().getSettlementRequest().getMapped().getDocument()
+                .getMapped();
+    }
+
+    public IPLDObject<Voting> getVoting(String key) {
+        return votings == null ? null : votings.get(key);
     }
 
     /**
@@ -193,6 +206,10 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
             }
         }
         return null;
+    }
+
+    public IPLDObject<Voting> expectVotingForUnbanRequest(String unbanRequestHash) {
+        return votings.get(unbanRequestHash);
     }
 
     /**
@@ -290,16 +307,44 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         return ModelUtility.getNewForeignKeyLinks(userStates, since == null ? null : since.userStates);
     }
 
-    public Collection<IPLDObject<Voting>> getNewVotings(ModelState since) {
-        return ModelUtility.getNewForeignKeyLinks(votings, since == null ? null : since.votings);
+    public Map<String, IPLDObject<Voting>> getNewVotings(ModelState since) {
+        return ModelUtility.getNewForeignKeyLinksMap(votings, since == null ? null : since.votings);
     }
 
-    public Collection<IPLDObject<SettlementRequest>> getNewSealedDocuments(ModelState since) {
-        return ModelUtility.getNewLinks(sealedDocuments, since == null ? null : since.sealedDocuments);
+    public Map<String, IPLDObject<SealedDocument>> getNewSealedDocuments(ModelState since) {
+        return ModelUtility.getNewLinksMap(sealedDocuments, since == null ? null : since.sealedDocuments);
     }
 
     public Collection<IPLDObject<OwnershipRequest>> getNewOwnershipRequests(ModelState since) {
         return ModelUtility.getNewLinkArrays(ownershipRequests, since == null ? null : since.ownershipRequests);
+    }
+
+    public int validateUnchangedVote(String voteKey, String multihash, String votingKey, int validVersion) {
+        ModelState modelState = this;
+        int res = validVersion;
+        do {
+            if (modelState.version == validVersion || modelState.votings != null) {
+                return res;
+            }
+            IPLDObject<Voting> votingObject = votings.get(votingKey);
+            if (votingObject == null) {
+                return res;
+            }
+            Voting voting = votingObject.getMapped();
+            if (voting.hasVotes()) {
+                IPLDObject<Vote> check = voting.getVote(votingKey);
+                if (check != null && !check.getMultihash().equals(multihash)) {
+                    throw new ValidationException("Found changed vote");
+                }
+                res = modelState.version;
+                modelState = modelState.previousVersion == null ? null : modelState.previousVersion.getMapped();
+            }
+            else {
+                return res;
+            }
+        }
+        while (modelState != null);
+        return res;
     }
 
     public ModelState mergeWith(IPLDObject<ModelState> otherObject, ValidationContext validationContext) {

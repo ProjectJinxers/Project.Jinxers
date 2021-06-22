@@ -22,6 +22,14 @@ public class SecretConfig extends YamlConfig<SecretConfig.Root> {
 
     static class Root {
 
+        public Obfuscation obfuscation;
+
+    }
+
+    static class Obfuscation {
+
+        public int param;
+
     }
 
     private static SecretConfig sharedInstance;
@@ -38,6 +46,10 @@ public class SecretConfig extends YamlConfig<SecretConfig.Root> {
 
     private SecretConfig() {
         super("secret-config.yml", Root.class);
+    }
+
+    public int getObfuscationParam() {
+        return root.obfuscation.param;
     }
 
 }

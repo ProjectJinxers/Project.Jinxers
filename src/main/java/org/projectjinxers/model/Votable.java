@@ -15,6 +15,8 @@ package org.projectjinxers.model;
 
 import java.util.Date;
 
+import org.projectjinxers.controller.ValidationException;
+
 /**
  * Interface for all objects that can be voted for.
  * 
@@ -40,16 +42,26 @@ public interface Votable extends IPLDSerializable {
     /**
      * @return a new empty Vote instance (provisional method, will be changed)
      */
-    Vote createVote();
+    Vote createVote(byte[] invitationKey, int valueIndex, int seed, int obfuscationVersion);
 
     /**
+     * @param forDisplay indicates whether or not the values will be displayed to select from (true) or will be used
+     *                   internally (false, in which case it might just be the indices)
      * @return all values that can be voted for (clear text, no hashes)
      */
-    Object[] getAllValues();
+    Object[] getAllValues(boolean forDisplay);
+
+    byte[][] getAllValueHashBases();
+
+    int getPlainTextValueIndex(Object value);
 
     /**
-     * @return true iff the parameter has won the voting (provisional method, will be changed)
+     * Checks if the parameter has won the voting. If this is not the case, a {@link ValidationException} will be
+     * thrown.
+     * 
+     * @param value  the expected winner
+     * @param counts the actual counts (after tally)
      */
-    boolean checkWinner();
+    void expectWinner(Object value, int[] counts);
 
 }

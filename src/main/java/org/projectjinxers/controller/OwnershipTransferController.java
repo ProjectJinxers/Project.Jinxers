@@ -29,6 +29,7 @@ import org.projectjinxers.model.Review;
 import org.projectjinxers.model.UserState;
 import org.projectjinxers.model.Votable;
 import org.projectjinxers.model.Voting;
+import org.projectjinxers.util.ModelUtility;
 
 /**
  * Handles ownership transfer requests.
@@ -200,7 +201,7 @@ public class OwnershipTransferController {
             if (activeRequests.size() > 1) {
                 this.voting = new IPLDObject<Voting>(new Voting(
                         new IPLDObject<Votable>(new OwnershipSelection(resolvedDocument, activeRequests, anonymous)),
-                        0));
+                        ModelUtility.CURRENT_HASH_OBFUSCATION_VERSION));
                 return true;
             }
             if (request.getMapped().isActive()) {

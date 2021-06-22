@@ -16,12 +16,14 @@ package org.projectjinxers.controller;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
 import org.projectjinxers.model.GrantedOwnership;
 import org.projectjinxers.model.GrantedUnban;
 import org.projectjinxers.model.ModelState;
 import org.projectjinxers.model.OwnershipRequest;
+import org.projectjinxers.model.SealedDocument;
 import org.projectjinxers.model.SettlementRequest;
 import org.projectjinxers.model.UnbanRequest;
 import org.projectjinxers.model.UserState;
@@ -87,17 +89,17 @@ public class ValidationContext {
 
     public void validateModelState(ModelState modelState) {
         findCommonState(modelState);
-        Collection<IPLDObject<Voting>> newVotings = modelState.getNewVotings(commonState);
+        Map<String, IPLDObject<Voting>> newVotings = modelState.getNewVotings(commonState);
         if (newVotings != null) {
-            for (IPLDObject<Voting> voting : newVotings) {
-                validateNewVoting(voting.getMapped(), modelState);
+            for (Entry<String, IPLDObject<Voting>> entry : newVotings.entrySet()) {
+                validateNewVoting(entry.getKey(), entry.getValue().getMapped(), modelState);
             }
         }
-        Collection<IPLDObject<SettlementRequest>> newSealedDocuments = modelState.getNewSealedDocuments(commonState);
+        Map<String, IPLDObject<SealedDocument>> newSealedDocuments = modelState.getNewSealedDocuments(commonState);
         if (newSealedDocuments != null) {
             ModelState requestState = strict ? commonState : modelState.getPreviousVersion().getMapped();
-            for (IPLDObject<SettlementRequest> sealedDocument : newSealedDocuments) {
-                validateSealedDocument(sealedDocument.getMapped(), requestState);
+            for (Entry<String, IPLDObject<SealedDocument>> entry : newSealedDocuments.entrySet()) {
+                validateSealedDocument(entry.getKey(), entry.getValue().getMapped(), requestState);
             }
         }
         Map<String, IPLDObject<OwnershipRequest>> newOwnershipRequestsMap;
@@ -264,15 +266,23 @@ public class ValidationContext {
      * else if voting.subject is UnbanRequest, modelState.userStates[voting.subject.userState.user.multihash] must be
      * voting.subject.userState or contain unban request; unban request must be active
      */
-    private void validateNewVoting(Voting voting, ModelState modelState) {
-
+    private void validateNewVoting(String key, Voting voting, ModelState modelState) {
+        voting.validateNewVotes(commonState, modelState, context);
+        if (voting.getTally() != null) {
+            voting.validateTally();
+        }
     }
 
     /*
-     * requestState.userState[document.userState.user.multihash] must be document.userState or contain document
+     * requestState.userState[document.userState.user.multihash] must be document.userState or contain
+     * document.settlementRequest
      */
-    private void validateSealedDocument(SettlementRequest document, ModelState requestState) {
-
+    private void validateSealedDocument(String key, SealedDocument document, ModelState requestState) {
+        String userHash = document.getUserState().getMapped().getUser().getMultihash();
+        IPLDObject<UserState> userState = requestState.expectUserState(userHash);
+        if (userState != document.getUserState() && !userState.getMapped().expectContainsSettlementRequest(key)) {
+            throw new ValidationException("Expected settlement request");
+        }
     }
 
     /*
@@ -325,7 +335,7 @@ public class ValidationContext {
     /*
      * verify signature, if previousStates (all the way to common - or request.userState if not strict) contain toggled
      * settlement request, check if payload has been increased; check if document was eligible for settlement at
-     * request.userState and there is no conflicting settlement request (w.r.t. timestamp)
+     * request.userState and there is no conflicting settlement request (w.r.t. timestamp) -> SettlementController!!!
      */
     private void validateSettlementRequest(SettlementRequest request, UserState previousState) {
 
@@ -351,7 +361,12 @@ public class ValidationContext {
      * subject in model state
      */
     private void validateGrantedUnban(GrantedUnban granted, UserState userState, ModelState modelState) {
-
+        IPLDObject<UnbanRequest> unbanRequest = granted.getUnbanRequest();
+        if (unbanRequest != userState.expectUnbanRequest(unbanRequest.getMapped().getDocument().getMultihash())) {
+            throw new ValidationException("Expected same unban request reference");
+        }
+        IPLDObject<Voting> voting = modelState.expectVotingForUnbanRequest(unbanRequest.getMultihash());
+        voting.getMapped().expectWinner(Boolean.TRUE);
     }
 
 }

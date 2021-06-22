@@ -13,14 +13,18 @@
  */
 package org.projectjinxers.util;
 
+import static org.ethereum.crypto.HashUtil.sha3;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
+import org.projectjinxers.config.SecretConfig;
 import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.model.IPLDSerializable;
 
@@ -29,6 +33,14 @@ import org.projectjinxers.model.IPLDSerializable;
  *
  */
 public class ModelUtility {
+
+    public static final int CURRENT_HASH_OBFUSCATION_VERSION = 0;
+
+    private static int secretObfuscationParameter;
+
+    static {
+        secretObfuscationParameter = SecretConfig.getSharedInstance().getObfuscationParam();
+    }
 
     public static <D extends IPLDSerializable> Collection<IPLDObject<D>> getNewLinks(Map<String, IPLDObject<D>> now,
             Map<String, IPLDObject<D>> since) {
@@ -42,6 +54,23 @@ public class ModelUtility {
         for (Entry<String, IPLDObject<D>> entry : now.entrySet()) {
             if (!since.containsKey(entry.getKey())) {
                 res.add(entry.getValue());
+            }
+        }
+        return res;
+    }
+
+    public static <D extends IPLDSerializable> Map<String, IPLDObject<D>> getNewLinksMap(Map<String, IPLDObject<D>> now,
+            Map<String, IPLDObject<D>> since) {
+        if (now == null) {
+            return null;
+        }
+        if (since == null) {
+            return Collections.unmodifiableMap(now);
+        }
+        Map<String, IPLDObject<D>> res = new LinkedHashMap<>();
+        for (Entry<String, IPLDObject<D>> entry : now.entrySet()) {
+            if (!since.containsKey(entry.getKey())) {
+                res.put(entry.getKey(), entry.getValue());
             }
         }
         return res;
@@ -62,6 +91,26 @@ public class ModelUtility {
             IPLDObject<D> knownValue = since.get(key);
             if (knownValue == null || !knownValue.getMultihash().equals(value.getMultihash())) {
                 res.add(value);
+            }
+        }
+        return res;
+    }
+
+    public static <D extends IPLDSerializable> Map<String, IPLDObject<D>> getNewForeignKeyLinksMap(
+            Map<String, IPLDObject<D>> now, Map<String, IPLDObject<D>> since) {
+        if (now == null) {
+            return null;
+        }
+        if (since == null) {
+            return Collections.unmodifiableMap(now);
+        }
+        Map<String, IPLDObject<D>> res = new LinkedHashMap<>();
+        for (Entry<String, IPLDObject<D>> entry : now.entrySet()) {
+            String key = entry.getKey();
+            IPLDObject<D> value = entry.getValue();
+            IPLDObject<D> knownValue = since.get(key);
+            if (knownValue == null || !knownValue.getMultihash().equals(value.getMultihash())) {
+                res.put(key, value);
             }
         }
         return res;
@@ -101,6 +150,25 @@ public class ModelUtility {
                         res.add(value);
                     }
                 }
+            }
+        }
+        return res;
+    }
+
+    public static byte[] obfuscateHash(byte[] toHash, int seed, int obfuscationVersion, int valueHashObfuscation) {
+        // just some random stuff, definitely not ideal, maybe even easily crackable, but that's what the version
+        // parameter is for: room for improvement without breaking validation
+        int hashCount = (seed + valueHashObfuscation) * secretObfuscationParameter % 31;
+        byte[] res = toHash;
+        for (int i = 0; i < hashCount; i++) {
+            res = sha3(res);
+        }
+        int i = 0;
+        int obfuscation = secretObfuscationParameter;
+        for (byte b : res) {
+            res[i++] = (byte) (b * obfuscation);
+            if (++obfuscation == 0) {
+                obfuscation = seed;
             }
         }
         return res;

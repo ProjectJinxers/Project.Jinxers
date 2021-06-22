@@ -14,6 +14,7 @@
 package org.projectjinxers.model;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Date;
 import java.util.LinkedHashMap;
@@ -26,6 +27,7 @@ import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDReader.KeyProvider;
 import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.ValidationContext;
+import org.projectjinxers.controller.ValidationException;
 
 /**
  * OwnershipSelection instances can be voted for if more than one user requests ownership of an abandoned document.
@@ -51,7 +53,9 @@ public class OwnershipSelection implements Votable {
     private IPLDObject<Document> document;
     private Map<String, IPLDObject<OwnershipRequest>> selection;
 
-    private Object[] allValues;
+    private Object[] allDisplayValues;
+    private Integer[] allInternalValues;
+    private byte[][] allValueHashBases;
 
     OwnershipSelection() {
 
@@ -112,27 +116,67 @@ public class OwnershipSelection implements Votable {
     }
 
     @Override
-    public Vote createVote() {
-        // TODO Auto-generated method stub
+    public Vote createVote(byte[] invitationKey, int valueIndex, int seed, int obfuscationVersion) {
+        if (anonymous) {
+
+        }
         return null;
     }
 
     @Override
-    public Object[] getAllValues() {
-        if (allValues == null && selection != null) {
-            allValues = new Object[selection.size()];
-            int i = 0;
-            for (IPLDObject<OwnershipRequest> request : selection.values()) {
-                allValues[i++] = request.getMapped().expectUser();
+    public Object[] getAllValues(boolean forDisplay) {
+        if (forDisplay) {
+            if (allDisplayValues == null && selection != null) {
+                allDisplayValues = new Object[selection.size()];
+                int i = 0;
+                for (IPLDObject<OwnershipRequest> request : selection.values()) {
+                    allDisplayValues[i++] = request.getMapped().expectUser();
+                }
+            }
+            return allDisplayValues;
+        }
+        if (allInternalValues == null && selection != null) {
+            int length = selection.size();
+            allInternalValues = new Integer[length];
+            for (int i = 0; i < length; i++) {
+                allInternalValues[i] = i;
             }
         }
-        return allValues;
+        return allInternalValues;
     }
 
     @Override
-    public boolean checkWinner() {
-        // TODO Auto-generated method stub
-        return false;
+    public byte[][] getAllValueHashBases() {
+        if (allValueHashBases == null && selection != null) {
+            int length = selection.size();
+            allValueHashBases = new byte[length][];
+            for (int i = 0; i < length; i++) {
+                allValueHashBases[i] = String.valueOf(i).getBytes(StandardCharsets.UTF_8);
+            }
+        }
+        return allValueHashBases;
+    }
+
+    @Override
+    public int getPlainTextValueIndex(Object value) {
+        return (Integer) value;
+    }
+
+    @Override
+    public void expectWinner(Object value, int[] counts) {
+        int max = 0;
+        int maxIndex = -1;
+        int i = 0;
+        for (int count : counts) {
+            if (count > max) {
+                max = count;
+                maxIndex = i;
+            }
+            i++;
+        }
+        if (((Integer) value).intValue() != maxIndex) {
+            throw new ValidationException("Expected count for " + value + " to be the max");
+        }
     }
 
 }

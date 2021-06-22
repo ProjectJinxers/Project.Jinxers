@@ -21,6 +21,7 @@ import org.ethereum.crypto.ECKey.ECDSASignature;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.model.Loader;
 import org.projectjinxers.model.Metadata;
+import org.projectjinxers.model.User;
 
 /**
  * Context for IPFS operations on IPLD instances. Successfully saved or loaded and fully validated objects will be
@@ -121,6 +122,27 @@ public class IPLDContext {
     public Metadata loadObject(byte[] bytes, Loader<?> loader, ValidationContext validationContext) {
         IPLDReader reader = out.createReader();
         return reader.read(this, validationContext, bytes, loader, eager);
+    }
+
+    /**
+     * Verifies the signature of the given object with the given user.
+     * 
+     * @param object   the object
+     * @param verifier recreates the hash that had been signed and verifies the signature
+     * @param user     the user
+     * @return true iff the signature has been verified successfully
+     */
+    public boolean verifySignature(IPLDObject<?> object, Signer verifier, User user) {
+        IPLDWriter writer = in.createWriter();
+        try {
+            byte[] hashBase = object.getMapped().hashBase(writer, this);
+            ECDSASignature signature = object.getMetadata().getSignature();
+            return signature != null && user.verifySignature(signature, hashBase, verifier);
+        }
+        catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 
     /**

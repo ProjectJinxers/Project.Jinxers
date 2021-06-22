@@ -22,41 +22,48 @@ import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.ValidationContext;
 
 /**
- * A simple Vote for a non-anonymous Voting where users can select 'yes', 'no' and nothing (e.g. maybe).
- * 
  * @author ProjectJinxers
+ *
  */
-public class YesNoMaybeVote extends AbstractVote {
+public class Tally implements IPLDSerializable, Loader<Tally> {
 
-    static final String KEY_BOOLEAN_VALUE = "B";
+    private static final String KEY_COUNTS = "c";
 
-    private Boolean value;
+    private int[] counts;
 
-    YesNoMaybeVote() {
+    Tally() {
 
     }
 
-    public YesNoMaybeVote(byte[] invitationKey, Boolean value) {
-        super(invitationKey, false, 0);
-        this.value = value;
+    public Tally(int[] counts) {
+        this.counts = counts;
     }
 
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {
-        super.read(reader, context, validationContext, eager, metadata);
-        this.value = reader.readBoolean(KEY_BOOLEAN_VALUE);
+        this.counts = reader.readIntArray(KEY_COUNTS);
     }
 
     @Override
     public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
-        super.write(writer, signer, context);
-        writer.writeBoolean(KEY_BOOLEAN_VALUE, value);
+        writer.writeIntArray(KEY_COUNTS, counts);
+    }
+
+    public int[] getCounts() {
+        int[] res = new int[counts.length];
+        System.arraycopy(counts, 0, res, 0, res.length);
+        return res;
     }
 
     @Override
-    public Object getValue() {
-        return value;
+    public Tally getOrCreateDataInstance(IPLDReader reader, Metadata metadata) {
+        return this;
+    }
+
+    @Override
+    public Tally getLoaded() {
+        return this;
     }
 
 }

@@ -146,6 +146,13 @@ public interface LoaderFactory<D extends IPLDSerializable> {
         }
     };
 
+    public static final LoaderFactory<Tally> TALLY = new LoaderFactory<Tally>() {
+        @Override
+        public Loader<Tally> createLoader() {
+            return new Tally();
+        }
+    };
+
     /**
      * The factory for ModelState instances.
      */
@@ -203,6 +210,13 @@ public interface LoaderFactory<D extends IPLDSerializable> {
         @Override
         public Loader<UnbanRequest> createLoader() {
             return new UnbanRequest();
+        }
+    };
+
+    public static final LoaderFactory<SealedDocument> SEALED_DOCUMENT = new LoaderFactory<>() {
+        @Override
+        public Loader<SealedDocument> createLoader() {
+            return new SealedDocument();
         }
     };
 

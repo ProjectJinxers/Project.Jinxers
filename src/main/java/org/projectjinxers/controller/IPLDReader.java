@@ -94,6 +94,8 @@ public interface IPLDReader {
      */
     boolean hasLinkArrayKey(String key);
 
+    Object readPrimitive(String key);
+
     /**
      * Reads a Boolean value.
      * 

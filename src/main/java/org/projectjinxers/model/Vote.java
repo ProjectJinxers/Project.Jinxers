@@ -40,4 +40,6 @@ public interface Vote extends IPLDSerializable {
      */
     int getValueHashObfuscation();
 
+    Object getValue();
+
 }

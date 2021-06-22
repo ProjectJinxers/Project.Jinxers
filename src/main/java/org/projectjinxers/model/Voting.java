@@ -15,8 +15,13 @@ package org.projectjinxers.model;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 
 import org.apache.commons.codec.binary.Base64;
 import org.projectjinxers.account.Signer;
@@ -26,6 +31,8 @@ import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDReader.KeyProvider;
 import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.ValidationContext;
+import org.projectjinxers.controller.ValidationException;
+import org.projectjinxers.util.ModelUtility;
 
 /**
  * Votings can be initiated by eligible users. They can be anonymous. They are executed without any external factors or
@@ -38,7 +45,9 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
     private static final String KEY_SEED = "f"; // f for fallback
     private static final String KEY_OBFUSCATION_VERSION = "o";
     private static final String KEY_SUBJECT = "s";
+    private static final String KEY_INITIAL_MODEL_STATE = "m";
     private static final String KEY_VOTES = "v";
+    private static final String KEY_TALLY = "t";
 
     private static final KeyProvider<Vote> ANONYMOUS_VOTE_KEY_PROVIDER = new KeyProvider<>() {
         @Override
@@ -56,7 +65,9 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
     private int seed;
     private int obfuscationVersion;
     private IPLDObject<Votable> subject;
+    private IPLDObject<ModelState> initialModelState;
     private Map<String, IPLDObject<Vote>> votes;
+    private IPLDObject<Tally> tally;
 
     Voting() {
 
@@ -69,7 +80,10 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
      * @param obfuscationVersion the version of the hash obfuscation algorithm
      */
     public Voting(IPLDObject<Votable> subject, int obfuscationVersion) {
-        this.seed = (int) (Math.random() * Integer.MAX_VALUE);
+        do {
+            this.seed = (int) (Math.random() * Integer.MAX_VALUE);
+        }
+        while (seed == 0);
         this.obfuscationVersion = obfuscationVersion;
         this.subject = subject;
     }
@@ -81,8 +95,11 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
         this.obfuscationVersion = reader.readNumber(KEY_OBFUSCATION_VERSION).intValue();
         this.subject = reader.readLinkObject(KEY_OBFUSCATION_VERSION, context, validationContext, LoaderFactory.VOTABLE,
                 eager);
+        this.initialModelState = reader.readLinkObject(KEY_INITIAL_MODEL_STATE, context, null,
+                LoaderFactory.MODEL_STATE, eager);
         this.votes = reader.readLinkObjects(KEY_VOTES, context, validationContext, LoaderFactory.VOTE, eager,
                 subject.getMapped().isAnonymous() ? ANONYMOUS_VOTE_KEY_PROVIDER : NON_ANONYMOUS_VOTE_KEY_PROVIDER);
+        this.tally = reader.readLinkObject(KEY_TALLY, context, validationContext, null, eager);
     }
 
     @Override
@@ -90,6 +107,7 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
         writer.writeNumber(KEY_SEED, seed);
         writer.writeNumber(KEY_OBFUSCATION_VERSION, obfuscationVersion);
         writer.writeLink(KEY_SUBJECT, subject, signer, context);
+        writer.writeLink(KEY_INITIAL_MODEL_STATE, initialModelState, null, null);
         writer.writeLinkObjects(KEY_VOTES, votes, signer, context);
     }
 
@@ -114,10 +132,22 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
         return subject.getMapped().getDeadline();
     }
 
+    public boolean hasVotes() {
+        return votes != null;
+    }
+
+    public IPLDObject<Vote> getVote(String key) {
+        return votes == null ? null : votes.get(key);
+    }
+
+    public IPLDObject<Tally> getTally() {
+        return tally;
+    }
+
     /**
      * Calculates the invitation key for a given user. The result depends on the anonymity of the voting. If it is
-     * anonymous, the result is calculated by a publich algorithm with secret parameters. Otherwise the result is simply
-     * the the UTF-8 byte array for the user hash. In both cases, the user must exist in the given modelState.
+     * anonymous, the result is calculated by a public algorithm with secret parameters. Otherwise the result is simply
+     * the UTF-8 byte array for the user hash. In both cases, the user must exist in the given modelState.
      * 
      * @param userHash   the multihash of the user
      * @param modelState the model state
@@ -125,12 +155,102 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
      */
     public byte[] getInvitationKey(String userHash, ModelState modelState) {
         if (modelState.containsUserState(userHash)) {
+            byte[] toHash = userHash.getBytes(StandardCharsets.UTF_8);
             if (isAnonymous()) {
-                // TODO hash userHash using seed and obfuscationVersion
+                return ModelUtility.obfuscateHash(toHash, seed, obfuscationVersion, 0);
             }
-            return userHash.getBytes(StandardCharsets.UTF_8);
+            return toHash;
         }
         return null;
+    }
+
+    public void expectWinner(Object value) {
+        int[] counts = tally.getMapped().getCounts();
+        subject.getMapped().expectWinner(value, counts);
+    }
+
+    public void validateNewVotes(ModelState since, ModelState currentState, IPLDContext context) {
+        String votingKey = subject.getMultihash();
+        IPLDObject<Voting> sinceVoting = since == null ? null : since.getVoting(votingKey);
+        Map<String, IPLDObject<Vote>> newVotes = ModelUtility.getNewForeignKeyLinksMap(votes,
+                sinceVoting == null ? null : sinceVoting.getMapped().votes);
+        if (newVotes != null) {
+            int validVersion = since == null ? -1 : since.getVersion();
+            Votable subject = this.subject.getMapped();
+            Collection<IPLDObject<UserState>> allUserStates = initialModelState.getMapped().expectAllUserStates();
+            Map<String, User> allUsers = new HashMap<>();
+            for (IPLDObject<UserState> userState : allUserStates) {
+                IPLDObject<User> userObject = userState.getMapped().getUser();
+                allUsers.put(userObject.getMultihash(), userObject.getMapped());
+            }
+            Set<Entry<String, User>> entrySet = allUsers.entrySet();
+            if (subject.isAnonymous()) {
+                for (Entry<String, IPLDObject<Vote>> entry : newVotes.entrySet()) {
+                    String key = entry.getKey();
+                    IPLDObject<Vote> value = entry.getValue();
+                    currentState.validateUnchangedVote(key, value.getMultihash(), votingKey, validVersion);
+                    for (Entry<String, User> userEntry : entrySet) {
+                        String userHash = userEntry.getKey();
+                        String invitationKey = getInvitationKey(userHash);
+                        if (key.equals(invitationKey)) {
+                            context.verifySignature(value, Signer.VERIFIER, userEntry.getValue());
+                            break;
+                        }
+                    }
+                }
+            }
+            else {
+                for (Entry<String, IPLDObject<Vote>> entry : newVotes.entrySet()) {
+                    String key = entry.getKey();
+                    IPLDObject<Vote> value = entry.getValue();
+                    currentState.validateUnchangedVote(key, value.getMultihash(), votingKey, validVersion);
+                    User user = allUsers.get(key);
+                    context.verifySignature(value, Signer.VERIFIER, user);
+                }
+            }
+        }
+    }
+
+    public void validateTally() {
+        int[] expectedCounts = tally.getMapped().getCounts();
+        Votable subject = this.subject.getMapped();
+        int[] counts = new int[expectedCounts.length];
+        if (subject.isAnonymous()) {
+            byte[][] allValueHashBases = subject.getAllValueHashBases();
+            for (String userHash : initialModelState.getMapped().expectAllUserHashes()) {
+                String invitationKey = getInvitationKey(userHash);
+                IPLDObject<Vote> voteObject = votes.get(invitationKey);
+                if (voteObject != null) {
+                    Vote vote = voteObject.getMapped();
+                    int valueHashObfuscation = vote.getValueHashObfuscation();
+                    byte[] value = (byte[]) vote.getValue();
+                    int i = 0;
+                    for (byte[] valueHashBase : allValueHashBases) {
+                        byte[] obfuscatedHash = ModelUtility.obfuscateHash(valueHashBase, seed, obfuscationVersion,
+                                valueHashObfuscation);
+                        if (Arrays.equals(obfuscatedHash, value)) {
+                            counts[i]++;
+                        }
+                        i++;
+                    }
+                }
+            }
+        }
+        else {
+            for (String userHash : initialModelState.getMapped().expectAllUserHashes()) {
+                IPLDObject<Vote> voteObject = votes.get(userHash);
+                if (voteObject != null) {
+                    Vote vote = voteObject.getMapped();
+                    int index = subject.getPlainTextValueIndex(vote.getValue());
+                    if (index >= 0) {
+                        counts[index]++;
+                    }
+                }
+            }
+        }
+        if (!Arrays.equals(expectedCounts, counts)) {
+            throw new ValidationException("Unexpected tally counts");
+        }
     }
 
     @Override
@@ -141,6 +261,12 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
     @Override
     public Voting getLoaded() {
         return this;
+    }
+
+    private String getInvitationKey(String userHash) {
+        byte[] hashBytes = userHash.getBytes(StandardCharsets.UTF_8);
+        byte[] invitationKeyBytes = ModelUtility.obfuscateHash(hashBytes, seed, obfuscationVersion, 0);
+        return Base64.encodeBase64String(invitationKeyBytes);
     }
 
 }
