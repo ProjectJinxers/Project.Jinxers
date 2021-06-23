@@ -16,8 +16,8 @@ package org.projectjinxers.util;
 import static org.ethereum.crypto.HashUtil.sha3;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -44,11 +44,11 @@ public class ModelUtility {
 
     public static <D extends IPLDSerializable> Collection<IPLDObject<D>> getNewLinks(Map<String, IPLDObject<D>> now,
             Map<String, IPLDObject<D>> since) {
-        if (now == null) {
+        if (now == null || now.size() == 0) {
             return null;
         }
-        if (since == null) {
-            return Collections.unmodifiableCollection(now.values());
+        if (since == null || since.size() == 0) {
+            return new ArrayList<>(now.values());
         }
         Collection<IPLDObject<D>> res = new ArrayList<>();
         for (Entry<String, IPLDObject<D>> entry : now.entrySet()) {
@@ -56,16 +56,16 @@ public class ModelUtility {
                 res.add(entry.getValue());
             }
         }
-        return res;
+        return res.size() == 0 ? null : res;
     }
 
     public static <D extends IPLDSerializable> Map<String, IPLDObject<D>> getNewLinksMap(Map<String, IPLDObject<D>> now,
             Map<String, IPLDObject<D>> since) {
-        if (now == null) {
+        if (now == null || now.size() == 0) {
             return null;
         }
-        if (since == null) {
-            return Collections.unmodifiableMap(now);
+        if (since == null || since.size() == 0) {
+            return new LinkedHashMap<>(now);
         }
         Map<String, IPLDObject<D>> res = new LinkedHashMap<>();
         for (Entry<String, IPLDObject<D>> entry : now.entrySet()) {
@@ -73,16 +73,16 @@ public class ModelUtility {
                 res.put(entry.getKey(), entry.getValue());
             }
         }
-        return res;
+        return res.size() == 0 ? null : res;
     }
 
     public static <D extends IPLDSerializable> Collection<IPLDObject<D>> getNewForeignKeyLinks(
             Map<String, IPLDObject<D>> now, Map<String, IPLDObject<D>> since) {
-        if (now == null) {
+        if (now == null || now.size() == 0) {
             return null;
         }
-        if (since == null) {
-            return Collections.unmodifiableCollection(now.values());
+        if (since == null || since.size() == 0) {
+            return new ArrayList<>(now.values());
         }
         Collection<IPLDObject<D>> res = new ArrayList<>();
         for (Entry<String, IPLDObject<D>> entry : now.entrySet()) {
@@ -93,16 +93,16 @@ public class ModelUtility {
                 res.add(value);
             }
         }
-        return res;
+        return res.size() == 0 ? null : res;
     }
 
     public static <D extends IPLDSerializable> Map<String, IPLDObject<D>> getNewForeignKeyLinksMap(
             Map<String, IPLDObject<D>> now, Map<String, IPLDObject<D>> since) {
-        if (now == null) {
+        if (now == null || now.size() == 0) {
             return null;
         }
-        if (since == null) {
-            return Collections.unmodifiableMap(now);
+        if (since == null || since.size() == 0) {
+            return new LinkedHashMap<>(now);
         }
         Map<String, IPLDObject<D>> res = new LinkedHashMap<>();
         for (Entry<String, IPLDObject<D>> entry : now.entrySet()) {
@@ -113,15 +113,15 @@ public class ModelUtility {
                 res.put(key, value);
             }
         }
-        return res;
+        return res.size() == 0 ? null : res;
     }
 
     public static <D extends IPLDSerializable> Collection<IPLDObject<D>> getNewLinkArrays(
             Map<String, IPLDObject<D>[]> now, Map<String, IPLDObject<D>[]> since) {
-        if (now == null) {
+        if (now == null || now.size() == 0) {
             return null;
         }
-        if (since == null) {
+        if (since == null || since.size() == 0) {
             Collection<IPLDObject<D>> res = new ArrayList<>();
             for (IPLDObject<D>[] vals : now.values()) {
                 for (IPLDObject<D> val : vals) {
@@ -152,7 +152,43 @@ public class ModelUtility {
                 }
             }
         }
-        return res;
+        return res.size() == 0 ? null : res;
+    }
+
+    public static <D extends IPLDSerializable> Map<String, IPLDObject<D>[]> getNewLinkArraysMap(
+            Map<String, IPLDObject<D>[]> now, Map<String, IPLDObject<D>[]> since) {
+        if (now == null || now.size() == 0) {
+            return null;
+        }
+        if (since == null || since.size() == 0) {
+            return new LinkedHashMap<>(now);
+        }
+        Map<String, IPLDObject<D>[]> res = new LinkedHashMap<>();
+        for (Entry<String, IPLDObject<D>[]> entry : now.entrySet()) {
+            String key = entry.getKey();
+            IPLDObject<D>[] values = entry.getValue();
+            IPLDObject<D>[] knownValues = since.get(key);
+            if (knownValues == null) {
+                res.put(key, values);
+            }
+            else {
+                Set<String> knownKeys = new HashSet<>();
+                Collection<IPLDObject<D>> coll = new ArrayList<>();
+                for (IPLDObject<D> knownValue : knownValues) {
+                    coll.add(knownValue);
+                    knownKeys.add(knownValue.getMultihash());
+                }
+                for (IPLDObject<D> value : values) {
+                    if (!knownKeys.contains(value.getMultihash())) {
+                        coll.add(value);
+                    }
+                }
+                IPLDObject<D>[] union = Arrays.copyOf(knownValues, 0);
+                union = coll.toArray(union);
+                res.put(key, union);
+            }
+        }
+        return res.size() == 0 ? null : res;
     }
 
     public static byte[] obfuscateHash(byte[] toHash, int seed, int obfuscationVersion, int valueHashObfuscation) {

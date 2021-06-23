@@ -88,8 +88,12 @@ public class ValidationContext {
         this.currentValidLocalState = currentValidLocalState;
         this.currentLocalHashes = currentLocalHashes;
         this.strict = strict;
-        this.mainSettlementController = new SettlementController();
+        this.mainSettlementController = new SettlementController(true);
         this.currentSettlementController = mainSettlementController;
+    }
+
+    public SettlementController getMainSettlementController() {
+        return mainSettlementController;
     }
 
     public IPLDObject<ModelState> getPreviousVersion() {
@@ -107,8 +111,9 @@ public class ValidationContext {
 
     public boolean isTrivialMerge(String userHash) {
         IPLDObject<UserState> currentValidUserState = currentValidLocalState.getMapped().expectUserState(userHash);
-        IPLDObject<UserState> commonUserState = commonUserStates.get(userHash);
-        return commonUserState == currentValidUserState;
+        IPLDObject<UserState> commonUserState = getPreviousUserState(userHash);
+        return commonUserState == currentValidUserState || commonUserState != null && currentValidUserState != null
+                && commonUserState.getMultihash().equals(currentValidUserState.getMultihash());
     }
 
     public void validateTimestamp(long timestamp) {
@@ -139,26 +144,30 @@ public class ValidationContext {
             }
         }
         Map<String, IPLDObject<OwnershipRequest>> newOwnershipRequestsMap;
-        Collection<IPLDObject<OwnershipRequest>> newOwnershipRequests = modelState.getNewOwnershipRequests(commonState);
+        Map<String, IPLDObject<OwnershipRequest>[]> newOwnershipRequests = modelState
+                .getNewOwnershipRequests(commonState);
         if (newOwnershipRequests == null) {
             newOwnershipRequestsMap = null;
         }
         else {
             newOwnershipRequestsMap = new HashMap<>();
-            for (IPLDObject<OwnershipRequest> ownershipRequest : newOwnershipRequests) {
-                String multihash = ownershipRequest.getMultihash();
-                if (validated.add(multihash)) {
-                    validateOwnershipRequest(ownershipRequest.getMapped(), modelState);
+            for (IPLDObject<OwnershipRequest>[] ownershipRequests : newOwnershipRequests.values()) {
+                for (IPLDObject<OwnershipRequest> ownershipRequest : ownershipRequests) {
+                    String multihash = ownershipRequest.getMultihash();
+                    if (validated.add(multihash)) {
+                        validateOwnershipRequest(ownershipRequest.getMapped(), modelState);
+                    }
+                    newOwnershipRequestsMap.put(multihash, ownershipRequest);
                 }
-                newOwnershipRequestsMap.put(multihash, ownershipRequest);
             }
         }
-        Collection<IPLDObject<UserState>> newUserStates = modelState.getNewUserStates(commonState);
+        Map<String, IPLDObject<UserState>> newUserStates = modelState.getNewUserStates(commonState);
         if (newUserStates != null) {
-            for (IPLDObject<UserState> userStateObject : newUserStates) {
+            for (Entry<String, IPLDObject<UserState>> entry : newUserStates.entrySet()) {
+                IPLDObject<UserState> userStateObject = entry.getValue();
                 if (validated.add(userStateObject.getMultihash())) {
                     UserState userState = userStateObject.getMapped();
-                    String userHash = userState.getUser().getMultihash();
+                    String userHash = entry.getKey();
                     IPLDObject<UserState> commonUserState = commonState == null ? null
                             : commonState.getUserState(userHash);
                     if (currentValidLocalState != null) {
@@ -176,8 +185,51 @@ public class ValidationContext {
         if (newOwnershipRequestsMap != null && newOwnershipRequestsMap.size() > 0) {
             throw new ValidationException("New ownership requests out of sync (model state v user states)");
         }
-        if (validateMustKeepModelStates(modelState.getPreviousVersion())) {
-            mainSettlementController.evaluate();
+        validateMustKeepModelStates(modelState.getPreviousVersion());
+
+        // we already prepare the settlement requests required for merging; in order to prevent them from influencing
+        // the outcome of the validation, we don't set the flag, that makes main validation include them
+        if (currentValidLocalState != null && currentSettlementController == mainSettlementController) {
+            Map<String, IPLDObject<UserState>> checkSettlementRequests = currentValidLocalState.getMapped()
+                    .getNewUserStates(commonState);
+            if (checkSettlementRequests != null) {
+                for (Entry<String, IPLDObject<UserState>> entry : checkSettlementRequests.entrySet()) {
+                    IPLDObject<UserState> previous = getPreviousUserState(entry.getKey());
+                    Collection<IPLDObject<SettlementRequest>> newSettlementRequests = entry.getValue().getMapped()
+                            .getNewSettlementRequests(previous == null ? null : previous.getMapped());
+                    if (newSettlementRequests != null) {
+                        for (IPLDObject<SettlementRequest> request : newSettlementRequests) {
+                            mainSettlementController.checkRequest(request.getMapped(), false);
+                        }
+                    }
+                }
+            }
+        }
+        // the main settlement controller is prepared for skipping reviews where there are no settlement requests for
+        // the documents (including merge); all other settlement controllers won't be used for merging
+        Map<String, UserState> affected = new HashMap<>();
+        modelState.prepareSettlementValidation(currentSettlementController, affected);
+
+        Map<String, UserState> toUpdate = new HashMap<>();
+        for (Entry<String, UserState> entry : affected.entrySet()) {
+            String key = entry.getKey();
+            IPLDObject<UserState> previousUserState = getPreviousUserState(key);
+            if (previousUserState == null) {
+                toUpdate.put(key, new UserState(entry.getValue().getUser()));
+            }
+            else {
+                toUpdate.put(key, entry.getValue().settlementCopy());
+            }
+        }
+        if (currentSettlementController.evaluate()) {
+            currentSettlementController.update(toUpdate);
+        }
+        for (Entry<String, UserState> entry : affected.entrySet()) {
+            String key = entry.getKey();
+            entry.getValue().validateSettlement(toUpdate.get(key));
+        }
+        if (currentSettlementController == mainSettlementController) {
+            mainSettlementController.enterMergeMode();
         }
     }
 
@@ -357,9 +409,9 @@ public class ValidationContext {
                 }
             }
         }
-        Collection<IPLDObject<DocumentRemoval>> newRemovedDocuments = userState.getNewRemovedDocuments(since);
+        Map<String, IPLDObject<DocumentRemoval>> newRemovedDocuments = userState.getNewRemovedDocuments(since);
         if (newRemovedDocuments != null) {
-            for (IPLDObject<DocumentRemoval> removal : newRemovedDocuments) {
+            for (IPLDObject<DocumentRemoval> removal : newRemovedDocuments.values()) {
                 if (validated.add(removal.getMultihash())) {
                     validateDocumentRemoval(removal.getMapped());
                 }
@@ -371,7 +423,7 @@ public class ValidationContext {
                 if (validated.add(settlementRequest.getMultihash())) {
                     validateSettlementRequest(settlementRequest.getMapped(), previousState);
                 }
-                currentSettlementController.checkRequest(settlementRequest.getMapped(), userState);
+                currentSettlementController.checkRequest(settlementRequest.getMapped(), true);
             }
         }
         Collection<IPLDObject<OwnershipRequest>> newOwnershipRequests = userState.getNewOwnershipRequests(since);
@@ -473,7 +525,7 @@ public class ValidationContext {
                 Collections.sort(keys, DESCENDING);
                 for (Long key : keys) {
                     IPLDObject<ModelState> mustKeep = mustKeepModelStates.remove(key);
-                    this.currentSettlementController = new SettlementController();
+                    this.currentSettlementController = new SettlementController(false);
                     IPLDObject<ModelState> toValidate = new IPLDObject<>(mustKeep.getMultihash(),
                             LoaderFactory.MODEL_STATE.createLoader(), context, this);
                     int count = mustKeepModelStates.size();

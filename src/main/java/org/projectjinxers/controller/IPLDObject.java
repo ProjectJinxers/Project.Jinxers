@@ -190,4 +190,13 @@ public class IPLDObject<D extends IPLDSerializable> {
         return metadata;
     }
 
+    IPLDObject<D> withoutContext(LoadResult result) {
+        IPLDObject<D> res = new IPLDObject<>(mapped == null ? loader.getLoaded() : mapped);
+        res.multihash = multihash;
+        res.loader = loader;
+        res.metadata = result == null ? metadata : result.getLoadedMetadata();
+        res.foreignSignature = foreignSignature;
+        return res;
+    }
+
 }

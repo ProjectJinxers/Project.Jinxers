@@ -19,6 +19,7 @@ import java.util.Map;
 
 import org.ethereum.crypto.ECKey.ECDSASignature;
 import org.projectjinxers.account.Signer;
+import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.Loader;
 import org.projectjinxers.model.Metadata;
 import org.projectjinxers.model.User;
@@ -66,7 +67,7 @@ public class IPLDContext {
         byte[] bytes = serializeObject(object, signer);
         String multihash = access.saveObject(in.getIn(), bytes, out.getIn());
         synchronized (cache) {
-            cache.put(multihash, object);
+            cache.put(multihash, object.withoutContext(null));
         }
         return multihash;
     }
@@ -110,12 +111,12 @@ public class IPLDContext {
         return new LoadResult(loadObject(bytes, loader, validationContext));
     }
 
-    LoadResult loadObject(IPLDObject<?> object) throws IOException {
+    <D extends IPLDSerializable> LoadResult loadObject(IPLDObject<D> object) throws IOException {
         String multihash = object.getMultihash();
         LoadResult result = loadObject(multihash, object.getLoader(), object.getValidationContext());
         if (result != null && result.getFromCache() == null) {
             synchronized (cache) {
-                cache.put(multihash, object);
+                cache.put(multihash, object.withoutContext(result));
             }
         }
         return result;

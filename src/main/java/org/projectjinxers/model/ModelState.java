@@ -18,6 +18,7 @@ import java.lang.reflect.Array;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -30,6 +31,7 @@ import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDReader.KeyProvider;
 import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.OwnershipTransferController;
+import org.projectjinxers.controller.SettlementController;
 import org.projectjinxers.controller.ValidationContext;
 import org.projectjinxers.controller.ValidationException;
 import org.projectjinxers.util.ModelUtility;
@@ -83,6 +85,11 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
     private Map<String, IPLDObject<Voting>> votings;
     private Map<String, IPLDObject<SealedDocument>> sealedDocuments;
     private Map<String, IPLDObject<OwnershipRequest>[]> ownershipRequests;
+
+    private Map<String, IPLDObject<UserState>> newUserStates;
+    private Map<String, IPLDObject<Voting>> newVotings;
+    private Map<String, IPLDObject<SealedDocument>> newSealedDocuments;
+    private Map<String, IPLDObject<OwnershipRequest>[]> newOwnershipRequests;
 
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
@@ -304,20 +311,34 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         return updated;
     }
 
-    public Collection<IPLDObject<UserState>> getNewUserStates(ModelState since) {
-        return ModelUtility.getNewForeignKeyLinks(userStates, since == null ? null : since.userStates);
+    public Map<String, IPLDObject<UserState>> getNewUserStates(ModelState since) {
+        if (newUserStates == null) {
+            newUserStates = ModelUtility.getNewForeignKeyLinksMap(userStates, since == null ? null : since.userStates);
+        }
+        return newUserStates;
     }
 
     public Map<String, IPLDObject<Voting>> getNewVotings(ModelState since) {
-        return ModelUtility.getNewForeignKeyLinksMap(votings, since == null ? null : since.votings);
+        if (newVotings == null) {
+            newVotings = ModelUtility.getNewForeignKeyLinksMap(votings, since == null ? null : since.votings);
+        }
+        return newVotings;
     }
 
     public Map<String, IPLDObject<SealedDocument>> getNewSealedDocuments(ModelState since) {
-        return ModelUtility.getNewLinksMap(sealedDocuments, since == null ? null : since.sealedDocuments);
+        if (newSealedDocuments == null) {
+            newSealedDocuments = ModelUtility.getNewLinksMap(sealedDocuments,
+                    since == null ? null : since.sealedDocuments);
+        }
+        return newSealedDocuments;
     }
 
-    public Collection<IPLDObject<OwnershipRequest>> getNewOwnershipRequests(ModelState since) {
-        return ModelUtility.getNewLinkArrays(ownershipRequests, since == null ? null : since.ownershipRequests);
+    public Map<String, IPLDObject<OwnershipRequest>[]> getNewOwnershipRequests(ModelState since) {
+        if (newOwnershipRequests == null) {
+            newOwnershipRequests = ModelUtility.getNewLinkArraysMap(ownershipRequests,
+                    since == null ? null : since.ownershipRequests);
+        }
+        return newOwnershipRequests;
     }
 
     public void validateVotingCause(String votingKey, long validVersion) {
@@ -377,63 +398,104 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         return res;
     }
 
+    public void prepareSettlementValidation(SettlementController controller, Map<String, UserState> affected) {
+        if (userStates != null) {
+            for (Entry<String, IPLDObject<UserState>> entry : userStates.entrySet()) {
+                UserState userState = entry.getValue().getMapped();
+                if (userState.prepareSettlementValidation(controller)) {
+                    affected.put(entry.getKey(), userState);
+                }
+            }
+        }
+    }
+
     public ModelState mergeWith(IPLDObject<ModelState> otherObject, ValidationContext validationContext) {
         ModelState other = otherObject.getMapped();
+        Map<String, IPLDObject<UserState>> newUserStates = other.newUserStates;
+        other.newUserStates = null;
         ModelState res = new ModelState();
         res.userStates = new LinkedHashMap<String, IPLDObject<UserState>>();
+        Map<String, UserState> mergedUserStates = new HashMap<>();
         // can't be null, otherwise it would be a trivial merge
         for (Entry<String, IPLDObject<UserState>> entry : userStates.entrySet()) {
             String key = entry.getKey();
             if (validationContext.isTrivialMerge(key)) {
-                res.userStates.put(key, other.expectUserState(key));
+                if (newUserStates != null) {
+                    newUserStates.remove(key);
+                }
+                res.userStates.put(key, other.userStates.get(key));
             }
             else {
                 IPLDObject<UserState> value = entry.getValue();
-                // other.userStates can't be null, validation would have dropped otherObject
-                IPLDObject<UserState> remoteUserStateObject = other.userStates.remove(key);
+                IPLDObject<UserState> remoteUserStateObject = newUserStates == null ? null : newUserStates.remove(key);
                 if (remoteUserStateObject == null
                         || remoteUserStateObject.getMultihash().equals(value.getMultihash())) {
                     res.userStates.put(key, value);
                 }
                 else {
-                    res.userStates.put(key, new IPLDObject<UserState>(
-                            value.getMapped().mergeWith(remoteUserStateObject, validationContext)));
+                    UserState merged = value.getMapped().mergeWith(remoteUserStateObject, validationContext);
+                    res.userStates.put(key, new IPLDObject<UserState>(merged));
+                    mergedUserStates.put(key, merged);
                 }
             }
         }
-        res.userStates.putAll(other.userStates); // new entries
+        // new users
+        for (UserState userState : mergedUserStates.values()) {
+            IPLDObject<UserState> previous = userState.getPreviousVersion();
+            userState.checkSettlementDocuments(previous == null ? null : previous.getMapped(), validationContext);
+        }
+        if (newUserStates != null && newUserStates.size() > 0) {
+            for (Entry<String, IPLDObject<UserState>> entry : newUserStates.entrySet()) {
+                String key = entry.getKey();
+                IPLDObject<UserState> userState = entry.getValue();
+                UserState u = userState.getMapped();
+                if (u.checkSettlementDocuments(validationContext)) {
+                    mergedUserStates.put(key, u);
+                }
+                res.userStates.put(entry.getKey(), userState);
+            }
+        }
 
         if (this.votings == null) {
             res.votings = other.votings;
+            other.newVotings = null;
         }
         else {
             res.votings = new LinkedHashMap<>(votings);
-            if (other.votings != null) {
-                res.votings.putAll(other.votings);
+            Map<String, IPLDObject<Voting>> newVotings = other.newVotings;
+            if (newVotings != null) {
+                other.newVotings = null;
+                res.votings.putAll(newVotings);
             }
         }
 
         if (this.sealedDocuments == null) {
             res.sealedDocuments = other.sealedDocuments;
+            other.newSealedDocuments = null;
         }
         else {
             res.sealedDocuments = new LinkedHashMap<>(sealedDocuments);
-            if (other.sealedDocuments != null) {
-                res.sealedDocuments.putAll(other.sealedDocuments);
+            Map<String, IPLDObject<SealedDocument>> newSealedDocuments = other.newSealedDocuments;
+            if (newSealedDocuments != null) {
+                other.newSealedDocuments = null;
+                res.sealedDocuments.putAll(newSealedDocuments);
             }
         }
 
         if (this.ownershipRequests == null) {
             res.ownershipRequests = other.ownershipRequests;
+            other.newOwnershipRequests = null;
         }
         else if (other.ownershipRequests == null) {
             res.ownershipRequests = new LinkedHashMap<>(ownershipRequests);
         }
         else {
+            Map<String, IPLDObject<OwnershipRequest>[]> newOwnershipRequests = other.newOwnershipRequests;
+            other.newOwnershipRequests = null;
             res.ownershipRequests = new LinkedHashMap<>();
             for (Entry<String, IPLDObject<OwnershipRequest>[]> entry : ownershipRequests.entrySet()) {
                 String key = entry.getKey();
-                IPLDObject<OwnershipRequest>[] otherRequests = other.ownershipRequests.get(key);
+                IPLDObject<OwnershipRequest>[] otherRequests = newOwnershipRequests.remove(key);
                 if (otherRequests == null) {
                     res.ownershipRequests.put(key, entry.getValue());
                 }
@@ -453,13 +515,20 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
                     res.ownershipRequests.put(key, copy);
                 }
             }
+            res.ownershipRequests.putAll(newOwnershipRequests);
         }
 
         res.previousVersion = validationContext.getPreviousVersion();
         if (res.previousVersion != null) {
             res.version = res.previousVersion.getMapped().version + 1;
         }
-        // TODO: redo settlements (unknown in common state) on merged state (restricted on merged user states)
+        if (mergedUserStates.size() > 0) {
+            SettlementController mainSettlementController = validationContext.getMainSettlementController();
+            if (mainSettlementController.evaluate()) {
+                mainSettlementController.update(mergedUserStates);
+            }
+        }
+
         res.timestamp = System.currentTimeMillis();
         return res;
     }
