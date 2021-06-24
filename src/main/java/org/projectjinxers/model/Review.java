@@ -14,6 +14,7 @@
 package org.projectjinxers.model;
 
 import java.io.IOException;
+import java.util.Map;
 
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
@@ -23,17 +24,26 @@ import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.ValidationContext;
 
 /**
- * Review instances represent users' reviews of a document.
+ * Review instances represent users' reviews of a document. There are also special reviews, which can unseal a sealed
+ * document. They have to be on the opposite side of the majority and must be settled successfully. If settled
+ * successfully, the reviewed document will be resettled, which leads to an inversion of the penalties and rewards. This
+ * operation cascades up if the reviewed document is itself an unsealing review and down to all reviews, that have been
+ * sealed (including unsealing reviews). The links included in unsealing reviews can be marked as documents to include
+ * in the unsealing.
  * 
  * @author ProjectJinxers
  */
 public class Review extends Document implements DocumentAction, Loader<Review> {
 
+    private static final String KEY_UNSEAL = "U";
     private static final String KEY_APPROVE = "r";
     static final String KEY_DOCUMENT = "o";
+    private static final String KEY_UNSEAL_LINKS = "L";
 
+    private boolean unseal;
     private Boolean approve;
     private IPLDObject<Document> document;
+    private Map<String, IPLDObject<Document>> unsealLinks;
 
     Review() {
 
@@ -46,9 +56,11 @@ public class Review extends Document implements DocumentAction, Loader<Review> {
      * @param approve
      */
     public Review(String title, String subtitle, String abstr, String contents, String version, String tags,
-            String source, IPLDObject<Document> document, Boolean approve, IPLDObject<UserState> userState) {
+            String source, IPLDObject<Document> document, boolean unseal, Boolean approve,
+            IPLDObject<UserState> userState) {
         super(title, subtitle, abstr, contents, version, tags, source, userState);
         this.document = document;
+        this.unseal = unseal;
         this.approve = approve;
     }
 
@@ -56,15 +68,27 @@ public class Review extends Document implements DocumentAction, Loader<Review> {
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {
         super.read(reader, context, validationContext, eager, metadata);
+        this.unseal = Boolean.TRUE.equals(reader.readBoolean(KEY_UNSEAL));
         this.approve = reader.readBoolean(KEY_APPROVE);
         this.document = reader.readLinkObject(KEY_DOCUMENT, context, validationContext, LoaderFactory.DOCUMENT, eager);
+        this.unsealLinks = reader.readLinkObjects(KEY_UNSEAL_LINKS, context, validationContext, LoaderFactory.DOCUMENT,
+                eager, Document.LINK_KEY_PROVIDER);
     }
 
     @Override
     public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
         super.write(writer, signer, context);
+        writer.writeIfTrue(KEY_UNSEAL, unseal);
         writer.writeBoolean(KEY_APPROVE, approve);
         writer.writeLink(KEY_DOCUMENT, document, signer, null);
+        writer.writeLinkObjects(KEY_UNSEAL_LINKS, unsealLinks, signer, null);
+    }
+
+    /**
+     * @return if this is a review, which can unseal the reviewed document
+     */
+    public boolean isUnseal() {
+        return unseal;
     }
 
     /**

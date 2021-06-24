@@ -31,6 +31,7 @@ import org.projectjinxers.model.UserState;
 /**
  * @author ProjectJinxers
  *
+ *         TODO: handle unsealing
  */
 public class SettlementController {
 

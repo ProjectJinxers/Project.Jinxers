@@ -24,6 +24,7 @@ import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.IPLDReader;
+import org.projectjinxers.controller.IPLDReader.KeyProvider;
 import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.ValidationContext;
 
@@ -58,6 +59,9 @@ public class Document implements IPLDSerializable {
     private static final String KEY_USER_STATE = "u";
     private static final String KEY_PREVIOUS_VERSION = "p";
     private static final String KEY_LINKS = "l";
+
+    static final KeyProvider<Document> LINK_KEY_PROVIDER = new KeyProvider<Document>() {
+    };
 
     private String title;
     private String subtitle;
@@ -135,7 +139,8 @@ public class Document implements IPLDSerializable {
                 eager);
         this.previousVersion = reader.readLinkObject(KEY_PREVIOUS_VERSION, context, validationContext,
                 LoaderFactory.DOCUMENT, eager);
-        this.links = reader.readLinkObjects(KEY_LINKS, context, validationContext, LoaderFactory.DOCUMENT, false, null);
+        this.links = reader.readLinkObjects(KEY_LINKS, context, validationContext, LoaderFactory.DOCUMENT, false,
+                LINK_KEY_PROVIDER);
         if (validationContext != null) {
             validationContext.addMustKeepUserState(userState);
         }
