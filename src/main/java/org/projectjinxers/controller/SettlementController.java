@@ -21,7 +21,10 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import org.projectjinxers.model.Document;
+import org.projectjinxers.model.GrantedUnban;
+import org.projectjinxers.model.ModelState;
 import org.projectjinxers.model.Review;
+import org.projectjinxers.model.SealedDocument;
 import org.projectjinxers.model.SettlementRequest;
 import org.projectjinxers.model.UserState;
 
@@ -49,6 +52,8 @@ public class SettlementController {
         private String falseClaim;
         private Map<String, IPLDObject<Review>> falseApprovals;
         private Map<String, IPLDObject<Review>> falseDeclinations;
+
+        private SealedDocument sealedDocument;
 
         void addReview(IPLDObject<Review> reviewObject) {
             Review review = reviewObject.getMapped();
@@ -81,25 +86,23 @@ public class SettlementController {
             return sum >= MIN_TOTAL_COUNT;
         }
 
-        boolean evaluate() {
-            if (falseClaim == null && falseApprovals == null && falseDeclinations == null) {
+        SealedDocument evaluate() {
+            if (sealedDocument == null) {
                 int totalCount = approveCount + declineCount + neutralCount;
                 if (totalCount >= MIN_TOTAL_COUNT) {
                     if (approveCount > declineCount) {
                         if (approveCount * 1.0 / declineCount >= MIN_MARGIN) {
-                            approvalsWon();
-                            return true;
+                            return approvalsWon();
                         }
                     }
                     else if (declineCount > approveCount) {
                         if (declineCount * 1.0 / approveCount >= MIN_MARGIN) {
-                            declinationsWon();
-                            return true;
+                            return declinationsWon();
                         }
                     }
                 }
             }
-            return false;
+            return sealedDocument;
         }
 
         boolean isAffected(String userHash) {
@@ -132,9 +135,10 @@ public class SettlementController {
             this.falseClaim = null;
             this.falseApprovals = null;
             this.falseDeclinations = null;
+            this.sealedDocument = null;
         }
 
-        private void approvalsWon() {
+        private SealedDocument approvalsWon() {
             falseDeclinations = new HashMap<>();
             for (Entry<String, IPLDObject<Review>> entry : reviews.entrySet()) {
                 IPLDObject<Review> value = entry.getValue();
@@ -142,9 +146,11 @@ public class SettlementController {
                     falseDeclinations.put(entry.getKey(), value);
                 }
             }
+            sealedDocument = new SealedDocument(document);
+            return sealedDocument;
         }
 
-        private void declinationsWon() {
+        private SealedDocument declinationsWon() {
             falseClaim = document.getMapped().expectUserState().getUser().getMultihash();
             falseApprovals = new HashMap<>();
             for (Entry<String, IPLDObject<Review>> entry : reviews.entrySet()) {
@@ -153,6 +159,8 @@ public class SettlementController {
                     falseApprovals.put(entry.getKey(), value);
                 }
             }
+            sealedDocument = new SealedDocument(document);
+            return sealedDocument;
         }
 
     }
@@ -167,15 +175,19 @@ public class SettlementController {
     private Set<String> documentOwners = new TreeSet<>();
     private Set<String> invalidRequests = new TreeSet<>();
     private Map<String, SettlementData> eligibleSettlements = new HashMap<>();
+    private Set<String> unbanned;
+    private Map<String, String> grantedClaimUnbans;
+    private Map<String, String> grantedApprovalUnbans;
+    private Map<String, String> grantedDeclinationUnbans;
 
     private Map<String, String> invalidByReview;
     private Set<String> removedDocuments;
     private Set<String> documentOwnersMainValidation;
     private Map<String, SettlementData> eligibleMainValidation;
 
-    SettlementController(boolean main) {
+    SettlementController(boolean main, long timestamp) {
         this.main = main;
-        this.timestamp = System.currentTimeMillis() + ValidationContext.TIMESTAMP_TOLERANCE;
+        this.timestamp = timestamp;
         if (main) {
             invalidByReview = new HashMap<>();
             removedDocuments = new TreeSet<>();
@@ -203,8 +215,13 @@ public class SettlementController {
         return true;
     }
 
-    public boolean checkReview(IPLDObject<Document> document, boolean needRequest) {
+    public boolean checkDocument(IPLDObject<Document> document, boolean needRequest) {
         Document doc = document.getMapped();
+        String previousVersionHash = doc.getPreviousVersionHash();
+        if (previousVersionHash != null) {
+            invalidRequests.add(previousVersionHash);
+            eligibleSettlements.remove(previousVersionHash);
+        }
         if (doc instanceof Review) {
             Review review = (Review) doc;
             IPLDObject<Document> reviewed = review.getDocument();
@@ -248,28 +265,62 @@ public class SettlementController {
         return false;
     }
 
-    public boolean checkRemovedDocument(IPLDObject<Document> removed) {
+    public boolean checkRemovedDocument(IPLDObject<Document> removed, ModelState current) {
         String removedHash = removed.getMultihash();
         if (main) {
             removedDocuments.add(removedHash);
         }
-        if (invalidRequests.add(removedHash)) {
-            eligibleSettlements.remove(removedHash);
-            Document document = removed.getMapped();
-            if (document instanceof Review) {
-                Review review = (Review) document;
-                IPLDObject<Document> reviewed = review.getDocument();
-                if (main) {
-                    invalidByReview.remove(removedHash);
-                }
-                SettlementData data = eligibleSettlements.get(reviewed.getMultihash());
-                if (data != null) {
-                    data.removeReview(document.expectUserState().getUser().getMultihash());
-                }
+        if (!current.isSealedDocument(removedHash)) {
+            if (invalidRequests.add(removedHash)) {
+                eligibleSettlements.remove(removedHash);
             }
-            return true;
+            else {
+                return false;
+            }
         }
-        return false;
+        Document document = removed.getMapped();
+        if (document instanceof Review) {
+            Review review = (Review) document;
+            IPLDObject<Document> reviewed = review.getDocument();
+            if (main) {
+                invalidByReview.remove(removedHash);
+            }
+            SettlementData data = eligibleSettlements.get(reviewed.getMultihash());
+            if (data != null) {
+                data.removeReview(document.expectUserState().getUser().getMultihash());
+            }
+        }
+        return true;
+    }
+
+    public void checkGrantedUnban(GrantedUnban unban, String userHash) {
+        IPLDObject<Document> document = unban.getUnbanRequest().getMapped().getDocument();
+        String documentHash = document.getMultihash();
+        Document doc = document.getMapped();
+        if (doc instanceof Review) {
+            if (((Review) doc).getApprove()) {
+                if (grantedApprovalUnbans == null) {
+                    grantedApprovalUnbans = new HashMap<>();
+                }
+                grantedApprovalUnbans.put(documentHash, userHash);
+            }
+            else {
+                if (grantedDeclinationUnbans == null) {
+                    grantedDeclinationUnbans = new HashMap<>();
+                }
+                grantedDeclinationUnbans.put(documentHash, userHash);
+            }
+        }
+        else {
+            if (grantedClaimUnbans == null) {
+                grantedClaimUnbans = new HashMap<>();
+            }
+            grantedClaimUnbans.put(documentHash, userHash);
+        }
+        if (unbanned == null) {
+            unbanned = new HashSet<>();
+        }
+        unbanned.add(userHash);
     }
 
     private SettlementData addEligibleSettlement(IPLDObject<Document> document, boolean needRequest) {
@@ -292,23 +343,30 @@ public class SettlementController {
         return data;
     }
 
-    public boolean isDocumentOwner(String userHash) {
+    public boolean checkUser(String userHash) {
+        if (unbanned != null && unbanned.contains(userHash)) {
+            return true;
+        }
         if (main && validationMode && documentOwnersMainValidation != null) {
             return documentOwnersMainValidation.contains(userHash);
         }
         return documentOwners.contains(userHash);
     }
 
-    public boolean evaluate() {
+    public boolean evaluate(Map<String, SealedDocument> sealedDocuments) {
         if (main && validationMode) {
-            return evaluateMainValidation();
+            return evaluateMainValidation(sealedDocuments);
         }
         boolean res = false;
         Set<String> toRemove = new HashSet<>();
         for (Entry<String, SettlementData> entry : eligibleSettlements.entrySet()) {
             SettlementData data = entry.getValue();
-            if (data.requested && data.count() && data.evaluate()) {
-                res = true;
+            if (data.requested && data.count()) {
+                SealedDocument evaluated = data.evaluate();
+                if (evaluated != null) {
+                    res = true;
+                    sealedDocuments.put(entry.getKey(), evaluated);
+                }
             }
             else {
                 toRemove.add(entry.getKey());
@@ -317,10 +375,10 @@ public class SettlementController {
         for (String key : toRemove) {
             eligibleSettlements.remove(key);
         }
-        return res;
+        return res || unbanned != null;
     }
 
-    private boolean evaluateMainValidation() {
+    private boolean evaluateMainValidation(Map<String, SealedDocument> sealedDocuments) {
         if (eligibleMainValidation == null) {
             eligibleMainValidation = new HashMap<>();
             documentOwnersMainValidation = new TreeSet<>();
@@ -330,18 +388,25 @@ public class SettlementController {
                 if (data.requested && data.forMainValidation) {
                     String documentHash = entry.getKey();
                     if (!invalid.contains(documentHash)) {
-                        if (data.count() && data.evaluate()) {
-                            eligibleMainValidation.put(documentHash, data);
-                            documentOwnersMainValidation.add(data.documentOwner);
+                        if (data.count()) {
+                            SealedDocument evaluated = data.evaluate();
+                            if (evaluated != null) {
+                                eligibleMainValidation.put(documentHash, data);
+                                documentOwnersMainValidation.add(data.documentOwner);
+                                sealedDocuments.put(documentHash, evaluated);
+                            }
                         }
                     }
                 }
             }
         }
-        return eligibleMainValidation.size() > 0;
+        return unbanned != null || eligibleMainValidation.size() > 0;
     }
 
     public boolean isAffected(String userHash) {
+        if (unbanned != null && unbanned.contains(userHash)) {
+            return true;
+        }
         Map<String, SettlementData> eligible = main && validationMode ? eligibleMainValidation : eligibleSettlements;
         for (SettlementData data : eligible.values()) {
             if (data.isAffected(userHash)) {
@@ -355,6 +420,23 @@ public class SettlementController {
         Map<String, SettlementData> eligible = main && validationMode ? eligibleMainValidation : eligibleSettlements;
         for (SettlementData data : eligible.values()) {
             data.update(userStates);
+        }
+        if (unbanned != null) {
+            if (grantedClaimUnbans != null) {
+                for (Entry<String, String> entry : grantedClaimUnbans.entrySet()) {
+                    userStates.get(entry.getValue()).removeFalseClaim(entry.getKey());
+                }
+            }
+            if (grantedApprovalUnbans != null) {
+                for (Entry<String, String> entry : grantedApprovalUnbans.entrySet()) {
+                    userStates.get(entry.getValue()).removeFalseApproval(entry.getKey());
+                }
+            }
+            if (grantedDeclinationUnbans != null) {
+                for (Entry<String, String> entry : grantedDeclinationUnbans.entrySet()) {
+                    userStates.get(entry.getValue()).removeFalseDeclination(entry.getKey());
+                }
+            }
         }
     }
 

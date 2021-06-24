@@ -101,7 +101,7 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
                 LoaderFactory.MODEL_STATE, eager);
         this.votes = reader.readLinkObjects(KEY_VOTES, context, validationContext, LoaderFactory.VOTE, eager,
                 subject.getMapped().isAnonymous() ? ANONYMOUS_VOTE_KEY_PROVIDER : NON_ANONYMOUS_VOTE_KEY_PROVIDER);
-        this.tally = reader.readLinkObject(KEY_TALLY, context, validationContext, null, eager);
+        this.tally = reader.readLinkObject(KEY_TALLY, context, validationContext, LoaderFactory.TALLY, eager);
         if (validationContext != null) {
             validationContext.addMustKeepModelState(initialModelState);
         }

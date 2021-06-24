@@ -35,6 +35,7 @@ import org.projectjinxers.model.SealedDocument;
 import org.projectjinxers.model.SettlementRequest;
 import org.projectjinxers.model.Tally;
 import org.projectjinxers.model.UnbanRequest;
+import org.projectjinxers.model.User;
 import org.projectjinxers.model.UserState;
 import org.projectjinxers.model.Voting;
 
@@ -55,7 +56,7 @@ public class ValidationContext {
 
     // if changed in a running system, all affected model meta versions must be changed as well and validation must be
     // adjusted
-    public static final long TIMESTAMP_TOLERANCE = 1000L * 60 * 60 * 4;
+    public static final long TIMESTAMP_TOLERANCE = 1000L * 60 * 2;
 
     private static final Comparator<Long> DESCENDING = new Comparator<>() {
         @Override
@@ -64,11 +65,12 @@ public class ValidationContext {
         }
     };
 
-    private IPLDContext context; // we might actually not need it (it's used indirectly in getMapped() calls)
+    private final IPLDContext context; // we might actually not need it (it's used indirectly in getMapped() calls)
     private IPLDObject<ModelState> currentValidLocalState;
-    private Set<String> currentLocalHashes;
-    private boolean strict;
-    private SettlementController mainSettlementController;
+    private final Set<String> currentLocalHashes;
+    private final long timestamp;
+    private final boolean strict;
+    private final SettlementController mainSettlementController;
 
     private SettlementController currentSettlementController;
     private IPLDObject<ModelState> commonStateObject;
@@ -83,12 +85,13 @@ public class ValidationContext {
     private Set<String> validated = new TreeSet<>();
 
     public ValidationContext(IPLDContext context, IPLDObject<ModelState> currentValidLocalState,
-            Set<String> currentLocalHashes, boolean strict) {
+            Set<String> currentLocalHashes, long timestamp, boolean strict) {
         this.context = context;
         this.currentValidLocalState = currentValidLocalState;
         this.currentLocalHashes = currentLocalHashes;
+        this.timestamp = timestamp;
         this.strict = strict;
-        this.mainSettlementController = new SettlementController(true);
+        this.mainSettlementController = new SettlementController(true, timestamp);
         this.currentSettlementController = mainSettlementController;
     }
 
@@ -124,7 +127,7 @@ public class ValidationContext {
 
     public void validateModelState(ModelState modelState) {
         findCommonState(modelState);
-        Map<String, IPLDObject<Voting>> newVotings = modelState.getNewVotings(commonState);
+        Map<String, IPLDObject<Voting>> newVotings = modelState.getNewVotings(commonState, false);
         if (newVotings != null) {
             for (Entry<String, IPLDObject<Voting>> entry : newVotings.entrySet()) {
                 IPLDObject<Voting> voting = entry.getValue();
@@ -133,19 +136,25 @@ public class ValidationContext {
                 }
             }
         }
-        Map<String, IPLDObject<SealedDocument>> newSealedDocuments = modelState.getNewSealedDocuments(commonState);
-        if (newSealedDocuments != null) {
-            ModelState requestState = strict ? commonState : modelState.getPreviousVersion().getMapped();
-            for (Entry<String, IPLDObject<SealedDocument>> entry : newSealedDocuments.entrySet()) {
-                IPLDObject<SealedDocument> sealed = entry.getValue();
-                if (validated.add(sealed.getMultihash())) {
-                    validateSealedDocument(entry.getKey(), sealed.getMapped(), requestState);
+        Map<String, IPLDObject<SettlementRequest>> newSettlementRequestsMap;
+        Map<String, IPLDObject<SettlementRequest>> newSettlementRequests = modelState
+                .getNewSettlementRequests(commonState, false);
+        if (newSettlementRequests == null) {
+            newSettlementRequestsMap = null;
+        }
+        else {
+            newSettlementRequestsMap = new HashMap<>();
+            for (IPLDObject<SettlementRequest> settlementRequest : newSettlementRequests.values()) {
+                String multihash = settlementRequest.getMultihash();
+                if (validated.add(multihash)) {
+                    validateSettlementRequest(settlementRequest.getMapped(), modelState);
                 }
+                newSettlementRequestsMap.put(multihash, settlementRequest);
             }
         }
         Map<String, IPLDObject<OwnershipRequest>> newOwnershipRequestsMap;
         Map<String, IPLDObject<OwnershipRequest>[]> newOwnershipRequests = modelState
-                .getNewOwnershipRequests(commonState);
+                .getNewOwnershipRequests(commonState, false);
         if (newOwnershipRequests == null) {
             newOwnershipRequestsMap = null;
         }
@@ -161,7 +170,7 @@ public class ValidationContext {
                 }
             }
         }
-        Map<String, IPLDObject<UserState>> newUserStates = modelState.getNewUserStates(commonState);
+        Map<String, IPLDObject<UserState>> newUserStates = modelState.getNewUserStates(commonState, false);
         if (newUserStates != null) {
             for (Entry<String, IPLDObject<UserState>> entry : newUserStates.entrySet()) {
                 IPLDObject<UserState> userStateObject = entry.getValue();
@@ -178,9 +187,12 @@ public class ValidationContext {
                             findBestCommonUserState(userHash, userStateObject, commonUserState);
                         }
                     }
-                    validateUserState(userState, modelState, newOwnershipRequestsMap);
+                    validateUserState(userState, modelState, newSettlementRequestsMap, newOwnershipRequestsMap);
                 }
             }
+        }
+        if (newSettlementRequestsMap != null && newSettlementRequestsMap.size() > 0) {
+            throw new ValidationException("New settlement requests out of sync (model state v user states)");
         }
         if (newOwnershipRequestsMap != null && newOwnershipRequestsMap.size() > 0) {
             throw new ValidationException("New ownership requests out of sync (model state v user states)");
@@ -190,18 +202,11 @@ public class ValidationContext {
         // we already prepare the settlement requests required for merging; in order to prevent them from influencing
         // the outcome of the validation, we don't set the flag, that makes main validation include them
         if (currentValidLocalState != null && currentSettlementController == mainSettlementController) {
-            Map<String, IPLDObject<UserState>> checkSettlementRequests = currentValidLocalState.getMapped()
-                    .getNewUserStates(commonState);
-            if (checkSettlementRequests != null) {
-                for (Entry<String, IPLDObject<UserState>> entry : checkSettlementRequests.entrySet()) {
-                    IPLDObject<UserState> previous = getPreviousUserState(entry.getKey());
-                    Collection<IPLDObject<SettlementRequest>> newSettlementRequests = entry.getValue().getMapped()
-                            .getNewSettlementRequests(previous == null ? null : previous.getMapped());
-                    if (newSettlementRequests != null) {
-                        for (IPLDObject<SettlementRequest> request : newSettlementRequests) {
-                            mainSettlementController.checkRequest(request.getMapped(), false);
-                        }
-                    }
+            Map<String, IPLDObject<SettlementRequest>> newSettlementReqs = currentValidLocalState.getMapped()
+                    .getNewSettlementRequests(commonState, true);
+            if (newSettlementReqs != null) {
+                for (IPLDObject<SettlementRequest> request : newSettlementReqs.values()) {
+                    mainSettlementController.checkRequest(request.getMapped(), false);
                 }
             }
         }
@@ -221,12 +226,28 @@ public class ValidationContext {
                 toUpdate.put(key, entry.getValue().settlementCopy());
             }
         }
-        if (currentSettlementController.evaluate()) {
+        Map<String, SealedDocument> sealedDocuments = new HashMap<>();
+        if (currentSettlementController.evaluate(sealedDocuments)) {
             currentSettlementController.update(toUpdate);
         }
         for (Entry<String, UserState> entry : affected.entrySet()) {
             String key = entry.getKey();
             entry.getValue().validateSettlement(toUpdate.get(key));
+        }
+        Map<String, IPLDObject<SealedDocument>> newSealedDocuments = modelState.getNewSealedDocuments(commonState,
+                false);
+        if (newSealedDocuments != null) {
+            for (Entry<String, IPLDObject<SealedDocument>> entry : newSealedDocuments.entrySet()) {
+                IPLDObject<SealedDocument> sealed = entry.getValue();
+                SealedDocument expected = sealedDocuments.get(entry.getKey());
+                if (!sealed.getMapped().getDocument().getMultihash().equals(expected.getDocument().getMultihash())) {
+                    throw new ValidationException("Sealed document inconsistency");
+                }
+                validated.add(sealed.getMultihash());
+            }
+        }
+        if (sealedDocuments.size() > 0) {
+            throw new ValidationException("Unmatched expected sealed documents");
         }
         if (currentSettlementController == mainSettlementController) {
             mainSettlementController.enterMergeMode();
@@ -377,15 +398,12 @@ public class ValidationContext {
     }
 
     /*
-     * requestState.userState[document.userState.user.multihash] must be document.userState or contain
-     * document.settlementRequest
+     * verify signature, if previousStates (all the way to common ) contain toggled settlement request, check if payload
+     * has been increased; check if document was eligible for settlement at request.userState and there is no
+     * conflicting settlement request (w.r.t. timestamp) -> SettlementController!!!
      */
-    private void validateSealedDocument(String key, SealedDocument document, ModelState requestState) {
-        String userHash = document.getUserState().getMapped().getUser().getMultihash();
-        IPLDObject<UserState> userState = requestState.expectUserState(userHash);
-        if (userState != document.getUserState() && !userState.getMapped().expectContainsSettlementRequest(key)) {
-            throw new ValidationException("Expected settlement request");
-        }
+    private void validateSettlementRequest(SettlementRequest request, ModelState modelState) {
+
     }
 
     /*
@@ -395,13 +413,14 @@ public class ValidationContext {
 
     }
 
+    // In contrast to merging, we don't reset the new instance maps or collections, because we are validating a remote
+    // state, which, if valid, is never validated again, and if invalid, is dropped immediately.
     private void validateUserState(UserState userState, ModelState modelState,
+            Map<String, IPLDObject<SettlementRequest>> newSettlementRequestsMap,
             Map<String, IPLDObject<OwnershipRequest>> newOwnershipRequestsMap) {
         IPLDObject<UserState> common = commonUserStates.get(userState.getUser().getMultihash());
         UserState since = common == null ? null : common.getMapped();
-        IPLDObject<UserState> prev = userState.getPreviousVersion();
-        UserState previousState = prev == null ? null : prev.getMapped();
-        Collection<IPLDObject<Document>> newDocuments = userState.getNewDocuments(since);
+        Collection<IPLDObject<Document>> newDocuments = userState.getNewDocuments(since, false);
         if (newDocuments != null) {
             for (IPLDObject<Document> document : newDocuments) {
                 if (validated.add(document.getMultihash())) {
@@ -409,7 +428,7 @@ public class ValidationContext {
                 }
             }
         }
-        Map<String, IPLDObject<DocumentRemoval>> newRemovedDocuments = userState.getNewRemovedDocuments(since);
+        Map<String, IPLDObject<DocumentRemoval>> newRemovedDocuments = userState.getNewRemovedDocuments(since, false);
         if (newRemovedDocuments != null) {
             for (IPLDObject<DocumentRemoval> removal : newRemovedDocuments.values()) {
                 if (validated.add(removal.getMultihash())) {
@@ -417,16 +436,20 @@ public class ValidationContext {
                 }
             }
         }
-        Collection<IPLDObject<SettlementRequest>> newSettlementRequests = userState.getNewSettlementRequests(since);
+        Collection<IPLDObject<SettlementRequest>> newSettlementRequests = userState.getNewSettlementRequests(since,
+                false);
         if (newSettlementRequests != null) {
+            User user = userState.getUser().getMapped();
             for (IPLDObject<SettlementRequest> settlementRequest : newSettlementRequests) {
-                if (validated.add(settlementRequest.getMultihash())) {
-                    validateSettlementRequest(settlementRequest.getMapped(), previousState);
+                String multihash = settlementRequest.getMultihash();
+                if (newSettlementRequestsMap.remove(multihash).getMapped().getUserState().getMapped().getUser()
+                        .getMapped() != user) {
+                    throw new ValidationException("Settlement request inconsistency: expected same user");
                 }
                 currentSettlementController.checkRequest(settlementRequest.getMapped(), true);
             }
         }
-        Collection<IPLDObject<OwnershipRequest>> newOwnershipRequests = userState.getNewOwnershipRequests(since);
+        Collection<IPLDObject<OwnershipRequest>> newOwnershipRequests = userState.getNewOwnershipRequests(since, false);
         if (newOwnershipRequests != null) {
             for (IPLDObject<OwnershipRequest> ownershipRequest : newOwnershipRequests) {
                 if (newOwnershipRequestsMap.remove(ownershipRequest.getMultihash()) == null) {
@@ -434,15 +457,15 @@ public class ValidationContext {
                 }
             }
         }
-        Collection<IPLDObject<UnbanRequest>> newUnbanRequests = userState.getNewUnbanRequests(since);
+        Collection<IPLDObject<UnbanRequest>> newUnbanRequests = userState.getNewUnbanRequests(since, false);
         if (newUnbanRequests != null) {
             for (IPLDObject<UnbanRequest> unbanRequest : newUnbanRequests) {
                 if (validated.add(unbanRequest.getMultihash())) {
-                    validateUnbanRequest(unbanRequest.getMapped(), previousState);
+                    validateUnbanRequest(unbanRequest.getMapped(), userState);
                 }
             }
         }
-        Collection<IPLDObject<GrantedOwnership>> newGrantedOwnerships = userState.getNewGrantedOwnerships(since);
+        Collection<IPLDObject<GrantedOwnership>> newGrantedOwnerships = userState.getNewGrantedOwnerships(since, false);
         if (newGrantedOwnerships != null) {
             for (IPLDObject<GrantedOwnership> grantedOwnership : newGrantedOwnerships) {
                 if (validated.add(grantedOwnership.getMultihash())) {
@@ -450,12 +473,14 @@ public class ValidationContext {
                 }
             }
         }
-        Collection<IPLDObject<GrantedUnban>> newGrantedUnbans = userState.getNewGrantedUnbans(since);
+        Collection<IPLDObject<GrantedUnban>> newGrantedUnbans = userState.getNewGrantedUnbans(since, false);
         if (newGrantedUnbans != null) {
+            String userHash = userState.getUser().getMultihash();
             for (IPLDObject<GrantedUnban> grantedUnban : newGrantedUnbans) {
                 if (validated.add(grantedUnban.getMultihash())) {
                     validateGrantedUnban(grantedUnban.getMapped(), userState, modelState);
                 }
+                currentSettlementController.checkGrantedUnban(grantedUnban.getMapped(), userHash);
             }
         }
     }
@@ -470,18 +495,10 @@ public class ValidationContext {
 
     /*
      * verify signature, if previousStates (all the way to common - or request.userState if not strict) contain toggled
-     * settlement request, check if payload has been increased; check if document was eligible for settlement at
-     * request.userState and there is no conflicting settlement request (w.r.t. timestamp) -> SettlementController!!!
+     * unban request, check if payload has been increased; check if request.userState was banned, contains a false-entry
+     * and does not already contain a granted unban for the document
      */
-    private void validateSettlementRequest(SettlementRequest request, UserState previousState) {
-
-    }
-
-    /*
-     * verify signature, if previousStates (all the way to common - or request.userState if not strict) contain toggled
-     * unban request, check if payload has been increased; check if request.userState was banned
-     */
-    private void validateUnbanRequest(UnbanRequest request, UserState previousState) {
+    private void validateUnbanRequest(UnbanRequest request, UserState currentState) {
 
     }
 
@@ -525,7 +542,7 @@ public class ValidationContext {
                 Collections.sort(keys, DESCENDING);
                 for (Long key : keys) {
                     IPLDObject<ModelState> mustKeep = mustKeepModelStates.remove(key);
-                    this.currentSettlementController = new SettlementController(false);
+                    this.currentSettlementController = new SettlementController(false, timestamp);
                     IPLDObject<ModelState> toValidate = new IPLDObject<>(mustKeep.getMultihash(),
                             LoaderFactory.MODEL_STATE.createLoader(), context, this);
                     int count = mustKeepModelStates.size();

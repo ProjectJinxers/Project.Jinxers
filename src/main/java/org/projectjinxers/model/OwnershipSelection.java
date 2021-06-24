@@ -66,10 +66,10 @@ public class OwnershipSelection implements Votable {
     }
 
     public OwnershipSelection(IPLDObject<Document> document, Collection<IPLDObject<OwnershipRequest>> selection,
-            boolean anonymous) {
+            boolean anonymous, long timestamp) {
         this.anonymous = anonymous;
         this.hashSeed = (int) (Math.random() * Integer.MAX_VALUE);
-        this.deadline = new Date(System.currentTimeMillis() + ValidationContext.TIMESTAMP_TOLERANCE + DURATION);
+        this.deadline = new Date(timestamp + DURATION);
         this.document = document;
         this.selection = new LinkedHashMap<>();
         for (IPLDObject<OwnershipRequest> request : selection) {

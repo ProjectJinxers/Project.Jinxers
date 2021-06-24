@@ -28,45 +28,31 @@ import org.projectjinxers.controller.ValidationContext;
  */
 public class SealedDocument implements IPLDSerializable, Loader<SealedDocument> {
 
-    private static final String KEY_SETTLEMENT_REQUEST = "r";
-    private static final String KEY_USER_STATE = "u";
+    private static final String KEY_DOCUMENT = "d";
 
-    private IPLDObject<SettlementRequest> settlementRequest;
-    private IPLDObject<UserState> userState;
+    private IPLDObject<Document> document;
 
     SealedDocument() {
 
     }
 
-    public SealedDocument(IPLDObject<SettlementRequest> settlementRequest, IPLDObject<UserState> userState) {
-        this.settlementRequest = settlementRequest;
-        this.userState = userState;
+    public SealedDocument(IPLDObject<Document> document) {
+        this.document = document;
     }
 
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {
-        this.settlementRequest = reader.readLinkObject(KEY_SETTLEMENT_REQUEST, context, validationContext,
-                LoaderFactory.SETTLEMENT_REQUEST, eager);
-        this.userState = reader.readLinkObject(KEY_USER_STATE, context, validationContext, LoaderFactory.USER_STATE,
-                eager);
-        if (validationContext != null) {
-            validationContext.addMustKeepUserState(userState);
-        }
+        this.document = reader.readLinkObject(KEY_DOCUMENT, context, validationContext, LoaderFactory.DOCUMENT, eager);
     }
 
     @Override
     public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
-        writer.writeLink(KEY_SETTLEMENT_REQUEST, settlementRequest, signer, context);
-        writer.writeLink(KEY_USER_STATE, userState, signer, context);
+        writer.writeLink(KEY_DOCUMENT, document, signer, context);
     }
 
-    public IPLDObject<SettlementRequest> getSettlementRequest() {
-        return settlementRequest;
-    }
-
-    public IPLDObject<UserState> getUserState() {
-        return userState;
+    public IPLDObject<Document> getDocument() {
+        return document;
     }
 
     @Override

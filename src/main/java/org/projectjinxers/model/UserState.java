@@ -72,7 +72,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             return object.getMapped().getDocument().getMultihash();
         }
     };
-    private static final KeyProvider<SettlementRequest> SETTLEMENT_REQUEST_KEY_PROVIDER = new KeyProvider<>() {
+    static final KeyProvider<SettlementRequest> SETTLEMENT_REQUEST_KEY_PROVIDER = new KeyProvider<>() {
         @Override
         public String getKey(IPLDObject<SettlementRequest> object) {
             return object.getMapped().getDocument().getMultihash();
@@ -223,10 +223,6 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
      */
     public Document expectDocument(String documentHash) {
         return documents.get(documentHash).getMapped();
-    }
-
-    public boolean expectContainsSettlementRequest(String key) {
-        return settlementRequests.containsKey(key);
     }
 
     /**
@@ -444,55 +440,70 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         rating += TRUE_DECLINATION_REWARD;
     }
 
-    public Collection<IPLDObject<Document>> getNewDocuments(UserState since) {
-        if (newDocuments == null) {
+    public void removeFalseClaim(String documentHash) {
+        falseClaims.remove(documentHash);
+        rating += FALSE_CLAIM_PENALTY;
+    }
+
+    public void removeFalseApproval(String documentHash) {
+        falseApprovals.remove(documentHash);
+        rating += FALSE_APPROVAL_PENALTY;
+    }
+
+    public void removeFalseDeclination(String documentHash) {
+        falseDeclinations.remove(documentHash);
+        rating += FALSE_DECLINATION_PENALTY;
+    }
+
+    public Collection<IPLDObject<Document>> getNewDocuments(UserState since, boolean ignoreCached) {
+        if (ignoreCached || newDocuments == null) {
             newDocuments = ModelUtility.getNewForeignKeyLinks(documents, since == null ? null : since.documents);
         }
         return newDocuments;
     }
 
-    public Map<String, IPLDObject<DocumentRemoval>> getNewRemovedDocuments(UserState since) {
-        if (newRemovedDocuments == null) {
+    public Map<String, IPLDObject<DocumentRemoval>> getNewRemovedDocuments(UserState since, boolean ignoreCached) {
+        if (ignoreCached || newRemovedDocuments == null) {
             newRemovedDocuments = ModelUtility.getNewForeignKeyLinksMap(removedDocuments,
                     since == null ? null : since.removedDocuments);
         }
         return newRemovedDocuments;
     }
 
-    public Collection<IPLDObject<SettlementRequest>> getNewSettlementRequests(UserState since) {
-        if (newSettlementRequests == null) {
+    public Collection<IPLDObject<SettlementRequest>> getNewSettlementRequests(UserState since, boolean ignoreCached) {
+        if (ignoreCached || newSettlementRequests == null) {
             newSettlementRequests = ModelUtility.getNewForeignKeyLinks(settlementRequests,
                     since == null ? null : since.settlementRequests);
         }
         return newSettlementRequests;
     }
 
-    public Collection<IPLDObject<OwnershipRequest>> getNewOwnershipRequests(UserState since) {
-        if (newOwnershipRequests == null) {
+    public Collection<IPLDObject<OwnershipRequest>> getNewOwnershipRequests(UserState since, boolean ignoreCached) {
+        if (ignoreCached || newOwnershipRequests == null) {
             newOwnershipRequests = ModelUtility.getNewForeignKeyLinks(ownershipRequests,
                     since == null ? null : since.ownershipRequests);
         }
         return newOwnershipRequests;
     }
 
-    public Collection<IPLDObject<UnbanRequest>> getNewUnbanRequests(UserState since) {
-        if (newUnbanRequests == null) {
+    public Collection<IPLDObject<UnbanRequest>> getNewUnbanRequests(UserState since, boolean ignoreCached) {
+        if (ignoreCached || newUnbanRequests == null) {
             newUnbanRequests = ModelUtility.getNewForeignKeyLinks(unbanRequests,
                     since == null ? null : since.unbanRequests);
         }
         return newUnbanRequests;
     }
 
-    public Collection<IPLDObject<GrantedOwnership>> getNewGrantedOwnerships(UserState since) {
-        if (newGrantedOwnerships == null) {
+    public Collection<IPLDObject<GrantedOwnership>> getNewGrantedOwnerships(UserState since, boolean ignoreCached) {
+        if (ignoreCached || newGrantedOwnerships == null) {
             newGrantedOwnerships = ModelUtility.getNewForeignKeyLinks(grantedOwnerships,
                     since == null ? null : since.grantedOwnerships);
         }
         return newGrantedOwnerships;
     }
 
-    public Collection<IPLDObject<GrantedUnban>> getNewGrantedUnbans(UserState since) {
-        if (newGrantedUnbans == null) {
+    public Collection<IPLDObject<GrantedUnban>> getNewGrantedUnbans(UserState since, boolean ignoreCached) {
+        if (ignoreCached || newGrantedUnbans == null) {
             newGrantedUnbans = ModelUtility.getNewForeignKeyLinks(grantedUnbans,
                     since == null ? null : since.grantedUnbans);
         }
@@ -503,11 +514,13 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         if (documents != null) {
             boolean res = false;
             for (IPLDObject<Document> document : documents.values()) {
-                res = controller.checkReview(document, true) || res;
+                res = controller.checkDocument(document, true) || res;
             }
-            return res || controller.isDocumentOwner(user.getMultihash());
+            if (res) {
+                return true;
+            }
         }
-        return false;
+        return controller.checkUser(user.getMultihash());
     }
 
     UserState mergeWith(IPLDObject<UserState> otherObject, ValidationContext validationContext) {
@@ -515,13 +528,11 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         UserState res = new UserState(user);
         if (this.documents == null) {
             res.documents = other.documents;
-            other.newDocuments = null;
         }
         else {
             res.documents = new LinkedHashMap<>(documents);
             Collection<IPLDObject<Document>> newDocuments = other.newDocuments;
             if (newDocuments != null) {
-                other.newDocuments = null;
                 for (IPLDObject<Document> document : newDocuments) {
                     String hash = document.getMultihash();
                     if (removedDocuments == null || !removedDocuments.containsKey(hash)) {
@@ -531,7 +542,6 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             }
         }
         Map<String, IPLDObject<DocumentRemoval>> newRemovedDocuments = other.newRemovedDocuments;
-        other.newRemovedDocuments = null;
         if (this.removedDocuments == null) {
             res.removedDocuments = other.removedDocuments;
             if (newRemovedDocuments != null) {
@@ -552,13 +562,11 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         }
         if (this.settlementRequests == null) {
             res.settlementRequests = other.settlementRequests;
-            other.newSettlementRequests = null;
         }
         else {
             res.settlementRequests = new LinkedHashMap<>(settlementRequests);
             Collection<IPLDObject<SettlementRequest>> newSettlementRequests = other.newSettlementRequests;
             if (newSettlementRequests != null) {
-                other.newSettlementRequests = null;
                 for (IPLDObject<SettlementRequest> request : newSettlementRequests) {
                     res.settlementRequests.put(SETTLEMENT_REQUEST_KEY_PROVIDER.getKey(request), request);
                 }
@@ -566,13 +574,11 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         }
         if (this.ownershipRequests == null) {
             res.ownershipRequests = other.ownershipRequests;
-            other.newOwnershipRequests = null;
         }
         else {
             res.ownershipRequests = new LinkedHashMap<>(ownershipRequests);
             Collection<IPLDObject<OwnershipRequest>> newOwnershipRequests = other.newOwnershipRequests;
             if (newOwnershipRequests != null) {
-                other.newOwnershipRequests = null;
                 for (IPLDObject<OwnershipRequest> request : newOwnershipRequests) {
                     res.ownershipRequests.put(OWNERSHIP_REQUEST_KEY_PROVIDER.getKey(request), request);
                 }
@@ -580,13 +586,11 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         }
         if (this.unbanRequests == null) {
             res.unbanRequests = other.unbanRequests;
-            other.newUnbanRequests = null;
         }
         else {
             res.unbanRequests = new LinkedHashMap<>(unbanRequests);
             Collection<IPLDObject<UnbanRequest>> newUnbanRequests = other.newUnbanRequests;
             if (newUnbanRequests != null) {
-                other.newUnbanRequests = null;
                 for (IPLDObject<UnbanRequest> request : newUnbanRequests) {
                     res.unbanRequests.put(UNBAN_REQUEST_KEY_PROVIDER.getKey(request), request);
                 }
@@ -594,13 +598,11 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         }
         if (this.grantedOwnerships == null) {
             res.grantedOwnerships = other.grantedOwnerships;
-            other.newGrantedOwnerships = null;
         }
         else {
             res.grantedOwnerships = new LinkedHashMap<>(grantedOwnerships);
             Collection<IPLDObject<GrantedOwnership>> newGrantedOwnerships = other.newGrantedOwnerships;
             if (newGrantedOwnerships != null) {
-                other.newGrantedOwnerships = null;
                 for (IPLDObject<GrantedOwnership> granted : newGrantedOwnerships) {
                     res.grantedOwnerships.put(GRANTED_OWNERSHIP_KEY_PROVIDER.getKey(granted), granted);
                 }
@@ -608,13 +610,11 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         }
         if (this.grantedUnbans == null) {
             res.grantedUnbans = other.grantedUnbans;
-            other.newGrantedUnbans = null;
         }
         else {
             res.grantedUnbans = new LinkedHashMap<>(grantedUnbans);
             Collection<IPLDObject<GrantedUnban>> newGrantedUnbans = other.newGrantedUnbans;
             if (newGrantedUnbans != null) {
-                other.newGrantedUnbans = null;
                 for (IPLDObject<GrantedUnban> granted : newGrantedUnbans) {
                     res.grantedUnbans.put(GRANTED_UNBAN_KEY_PROVIDER.getKey(granted), granted);
                 }
@@ -638,36 +638,46 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             if (previous.falseDeclinations != null) {
                 res.falseDeclinations = new LinkedHashMap<>(previous.falseDeclinations);
             }
+            Collection<IPLDObject<GrantedUnban>> newGrantedUnbans = getNewGrantedUnbans(previous, true);
+            if (newGrantedUnbans != null) {
+                SettlementController mainSettlementController = validationContext.getMainSettlementController();
+                String userHash = user.getMultihash();
+                for (IPLDObject<GrantedUnban> request : newGrantedUnbans) {
+                    mainSettlementController.checkGrantedUnban(request.getMapped(), userHash);
+                }
+            }
         }
         return res;
     }
 
     boolean checkSettlementDocuments(ValidationContext validationContext) {
+        SettlementController mainSettlementController = validationContext.getMainSettlementController();
         if (documents != null) {
             boolean res = false;
-            SettlementController mainSettlementController = validationContext.getMainSettlementController();
             for (IPLDObject<Document> document : documents.values()) {
-                res = mainSettlementController.checkReview(document, true) || res;
+                res = mainSettlementController.checkDocument(document, true) || res;
             }
-            return res || mainSettlementController.isDocumentOwner(user.getMultihash());
+            if (res) {
+                return true;
+            }
         }
-        return false;
+        return mainSettlementController.checkUser(user.getMultihash());
     }
 
-    void checkSettlementDocuments(UserState previous, ValidationContext validationContext) {
+    void checkSettlementDocuments(UserState previous, ModelState current, ValidationContext validationContext) {
         SettlementController mainSettlementController = validationContext.getMainSettlementController();
-        Map<String, IPLDObject<DocumentRemoval>> newRemovedDocs = getNewRemovedDocuments(previous);
+        Map<String, IPLDObject<DocumentRemoval>> newRemovedDocs = getNewRemovedDocuments(previous, true);
         if (newRemovedDocs != null) {
             this.newRemovedDocuments = null;
-            for (IPLDObject<DocumentRemoval> removed : newRemovedDocs.values()) {
-                mainSettlementController.checkRemovedDocument(removed.getMapped().getDocument());
+            for (Entry<String, IPLDObject<DocumentRemoval>> entry : newRemovedDocs.entrySet()) {
+                mainSettlementController.checkRemovedDocument(entry.getValue().getMapped().getDocument(), current);
             }
         }
-        Collection<IPLDObject<Document>> newDocuments = getNewDocuments(previous);
+        Collection<IPLDObject<Document>> newDocuments = getNewDocuments(previous, true);
         if (newDocuments != null) {
             this.newDocuments = null;
             for (IPLDObject<Document> document : newDocuments) {
-                mainSettlementController.checkReview(document, true);
+                mainSettlementController.checkDocument(document, true);
             }
         }
     }

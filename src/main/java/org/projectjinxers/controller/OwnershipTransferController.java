@@ -85,9 +85,10 @@ public class OwnershipTransferController {
      * @param modelState      the current model state
      * @param context         the context
      * @param signature       the signature
+     * @param timestamp       the timestamp (including tolerance) when the ownership request has been received
      */
     OwnershipTransferController(String documentHash, String userHash, boolean anonymousVoting,
-            IPLDObject<ModelState> modelState, IPLDContext context, ECDSASignature signature) {
+            IPLDObject<ModelState> modelState, IPLDContext context, ECDSASignature signature, long timestamp) {
         this.documentHash = documentHash;
         this.userHash = userHash;
         this.anonymousVoting = anonymousVoting;
@@ -95,7 +96,7 @@ public class OwnershipTransferController {
         this.modelState = modelState.getMapped();
         this.context = context;
         this.signature = signature;
-        this.timestamp = System.currentTimeMillis() + ValidationContext.TIMESTAMP_TOLERANCE;
+        this.timestamp = timestamp;
     }
 
     public OwnershipTransferController(OwnershipSelection selection, IPLDObject<ModelState> modelState) {
@@ -223,7 +224,8 @@ public class OwnershipTransferController {
         if (duration >= MIN_REQUEST_PHASE_DURATION) {
             if (activeRequests.size() > 1) {
                 this.voting = new IPLDObject<Voting>(new Voting(
-                        new IPLDObject<Votable>(new OwnershipSelection(resolvedDocument, activeRequests, anonymous)),
+                        new IPLDObject<Votable>(
+                                new OwnershipSelection(resolvedDocument, activeRequests, anonymous, timestamp)),
                         modelStateObject, ModelUtility.CURRENT_HASH_OBFUSCATION_VERSION));
                 return true;
             }

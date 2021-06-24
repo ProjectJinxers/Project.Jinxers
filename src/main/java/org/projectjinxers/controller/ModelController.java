@@ -49,12 +49,23 @@ import org.spongycastle.util.encoders.Base64;
  */
 public class ModelController {
 
+    static class PendingSubMessage {
+
+        final String message;
+        final long timestamp;
+
+        PendingSubMessage(String message, long timestamp) {
+            this.message = message;
+            this.timestamp = timestamp;
+        }
+    }
+
     private static final String PUBSUB_SUB_KEY_DATA = "data";
     private static final String PUBSUB_TOPIC_PREFIX_OWNERSHIP_REQUEST = "or";
 
     private final IPFSAccess access;
-    private boolean validateTimestamps;
     private final IPLDContext context;
+    private long timestampTolerance;
 
     private final String mainIOTAAddress;
     private IPLDObject<ModelState> currentValidatedState;
@@ -63,8 +74,8 @@ public class ModelController {
     private ValidationContext currentValidationContext;
 
     private boolean validatingModelState;
-    private Stack<String> pendingModelStates;
-    private Stack<String> pendingOwnershipRequests;
+    private Stack<PendingSubMessage> pendingModelStates;
+    private Stack<PendingSubMessage> pendingOwnershipRequests;
 
     private Map<String, IPLDObject<UserState>> pendingUserStates;
     private Map<String, Queue<IPLDObject<Document>>> queuedDocuments;
@@ -79,17 +90,20 @@ public class ModelController {
      * Constructor. If it returns without throwing an exception, the instance is completely initialized and continuously
      * listens for model states and ownership requests from peers.
      * 
-     * @param access the access to the IPFS API
-     * @param config the config (provides initialization and configuration parameters, pass null for defaults)
+     * @param access             the access to the IPFS API
+     * @param config             the config (provides initialization and configuration parameters, pass null for
+     *                           defaults)
+     * @param timestampTolerance the tolerance when validating deadlines and other timestamps in milliseconds (0 or
+     *                           negative disables timestamp validation, does not affect validating relative durations)
      * @throws Exception if initialization failed and the application should not continue running.
      */
-    public ModelController(IPFSAccess access, Config config, boolean validateTimestamps) throws Exception {
+    public ModelController(IPFSAccess access, Config config, long timestampTolerance) throws Exception {
         this.access = access;
         if (config == null) {
             config = Config.getSharedInstance();
         }
-        this.validateTimestamps = validateTimestamps;
         this.context = new IPLDContext(access, IPLDEncoding.JSON, IPLDEncoding.CBOR, false);
+        this.timestampTolerance = timestampTolerance;
         mainIOTAAddress = config.getIOTAMainAddress();
         String currentModelStateHash;
         try {
@@ -103,7 +117,8 @@ public class ModelController {
                 currentModelStateHash = readNextModelStateHashFromTangle(mainIOTAAddress);
                 if (currentModelStateHash != null) {
                     try {
-                        this.currentValidationContext = new ValidationContext(context, null, null, false);
+                        this.currentValidationContext = new ValidationContext(context, null, null,
+                                System.currentTimeMillis() + timestampTolerance, false);
                         this.currentValidatedState = loadModelState(currentModelStateHash, true);
                         access.saveModelStateHash(mainIOTAAddress, currentModelStateHash);
                         break;
@@ -127,7 +142,7 @@ public class ModelController {
                     access.subscribe(mainIOTAAddress).forEach(map -> {
                         try {
                             String pubSubData = (String) map.get(PUBSUB_SUB_KEY_DATA);
-                            handleIncomingModelState(pubSubData);
+                            handleIncomingModelState(pubSubData, System.currentTimeMillis() + timestampTolerance);
                         }
                         catch (Exception e) {
                             e.printStackTrace();
@@ -150,7 +165,7 @@ public class ModelController {
                     access.subscribe(PUBSUB_TOPIC_PREFIX_OWNERSHIP_REQUEST + mainIOTAAddress).forEach(map -> {
                         try {
                             String pubSubData = (String) map.get(PUBSUB_SUB_KEY_DATA);
-                            handleIncomingOwnershipRequest(pubSubData);
+                            handleIncomingOwnershipRequest(pubSubData, System.currentTimeMillis() + timestampTolerance);
                         }
                         catch (Exception e) {
                             e.printStackTrace();
@@ -190,9 +205,9 @@ public class ModelController {
         return object.getMapped() == null ? null : object;
     }
 
-    boolean handleIncomingModelState(String pubSubData) {
+    boolean handleIncomingModelState(String pubSubData, long timestamp) {
         if (validatingModelState) {
-            storePotentialModelStateHash(pubSubData);
+            storePotentialModelStateHash(pubSubData, timestamp);
             return false;
         }
         validatingModelState = true;
@@ -205,7 +220,7 @@ public class ModelController {
             }
             else {
                 currentValidationContext = new ValidationContext(context, currentValidatedState, currentLocalHashes,
-                        validateTimestamps);
+                        timestamp, timestampTolerance > 0);
                 IPLDObject<ModelState> loaded = loadModelState(multihash, true);
                 mergeWithValidated(loaded);
             }
@@ -217,9 +232,9 @@ public class ModelController {
         return true;
     }
 
-    boolean handleIncomingOwnershipRequest(String pubSubData) {
+    boolean handleIncomingOwnershipRequest(String pubSubData, long timestamp) {
         if (validatingModelState) {
-            storePotentialOwnershipRequestHash(pubSubData);
+            storePotentialOwnershipRequestHash(pubSubData, timestamp);
             return false;
         }
         String decoded = convertPubSubDataToOriginal(pubSubData);
@@ -236,7 +251,7 @@ public class ModelController {
         IPLDObject<ModelState> currentModelState = currentValidatedState;
         OwnershipTransferController controller = new OwnershipTransferController(requestParts[2], requestParts[1],
                 OwnershipTransferController.OWNERSHIP_VOTING_ANONYMOUS.equals(requestParts[0]), currentModelState,
-                context, signature);
+                context, signature, timestamp);
         if (controller.process()) {
             try {
                 saveLocalChanges(null, controller);
@@ -615,21 +630,21 @@ public class ModelController {
         }
     }
 
-    private void storePotentialModelStateHash(String pubSubData) {
+    private void storePotentialModelStateHash(String pubSubData, long timestamp) {
         if (pendingModelStates == null) {
             pendingModelStates = new Stack<>();
         }
         synchronized (pendingModelStates) {
-            pendingModelStates.push(pubSubData);
+            pendingModelStates.push(new PendingSubMessage(pubSubData, timestamp));
         }
     }
 
-    private void storePotentialOwnershipRequestHash(String pubSubData) {
+    private void storePotentialOwnershipRequestHash(String pubSubData, long timestamp) {
         if (pendingOwnershipRequests == null) {
             pendingOwnershipRequests = new Stack<>();
         }
         synchronized (pendingOwnershipRequests) {
-            pendingOwnershipRequests.push(pubSubData);
+            pendingOwnershipRequests.push(new PendingSubMessage(pubSubData, timestamp));
         }
     }
 
@@ -766,20 +781,20 @@ public class ModelController {
     private void processPendingModelStates() {
         if (pendingModelStates != null) {
             do {
-                String pubSubData;
+                PendingSubMessage pending;
                 synchronized (pendingModelStates) {
-                    pubSubData = pendingModelStates.isEmpty() ? null : pendingModelStates.pop();
+                    pending = pendingModelStates.isEmpty() ? null : pendingModelStates.pop();
                 }
-                if (pubSubData == null) {
+                if (pending == null) {
                     break;
                 }
                 try {
-                    if (!handleIncomingModelState(pubSubData)) {
+                    if (!handleIncomingModelState(pending.message, pending.timestamp)) {
                         break;
                     }
                 }
                 catch (Exception e) {
-                    System.out.println("Couldn't handle received model state hash: " + pubSubData);
+                    System.out.println("Couldn't handle received model state hash: " + pending.message);
                     e.printStackTrace();
                 }
             }
@@ -790,20 +805,20 @@ public class ModelController {
     private void processPendingOwnershipRequests() {
         if (pendingOwnershipRequests != null) {
             do {
-                String pubSubData;
+                PendingSubMessage pending;
                 synchronized (pendingOwnershipRequests) {
-                    pubSubData = pendingOwnershipRequests.isEmpty() ? null : pendingOwnershipRequests.pop();
+                    pending = pendingOwnershipRequests.isEmpty() ? null : pendingOwnershipRequests.pop();
                 }
-                if (pubSubData == null) {
+                if (pending == null) {
                     break;
                 }
                 try {
-                    if (!handleIncomingOwnershipRequest(pubSubData)) {
+                    if (!handleIncomingOwnershipRequest(pending.message, pending.timestamp)) {
                         break;
                     }
                 }
                 catch (Exception e) {
-                    System.out.println("Couldn't handle received ownership request: " + pubSubData);
+                    System.out.println("Couldn't handle received ownership request: " + pending.message);
                     e.printStackTrace();
                 }
             }
