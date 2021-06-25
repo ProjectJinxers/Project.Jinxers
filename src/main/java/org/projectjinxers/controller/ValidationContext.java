@@ -227,12 +227,27 @@ public class ValidationContext {
             }
         }
         Map<String, SealedDocument> sealedDocuments = new HashMap<>();
-        if (currentSettlementController.evaluate(sealedDocuments)) {
+        if (currentSettlementController.evaluate(sealedDocuments, modelState)) {
             currentSettlementController.update(toUpdate);
         }
         for (Entry<String, UserState> entry : affected.entrySet()) {
             String key = entry.getKey();
-            entry.getValue().validateSettlement(toUpdate.get(key));
+            entry.getValue().validateSettlement(toUpdate.remove(key));
+        }
+        if (toUpdate.size() > 0) { // remaining entries have been added by the settlement controller for unsealing
+            for (Entry<String, UserState> entry : toUpdate.entrySet()) {
+                String key = entry.getKey();
+                UserState current = modelState.expectUserState(key).getMapped();
+                IPLDObject<UserState> previous = getPreviousUserState(key);
+                if (previous == null) {
+                    current.validateSettlement(entry.getValue());
+                }
+                else {
+                    UserState copy = previous.getMapped().settlementCopy();
+                    copy.applySettlement(entry.getValue());
+                    current.validateSettlement(copy);
+                }
+            }
         }
         Map<String, IPLDObject<SealedDocument>> newSealedDocuments = modelState.getNewSealedDocuments(commonState,
                 false);

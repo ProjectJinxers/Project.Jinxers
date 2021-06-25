@@ -85,7 +85,7 @@ public class Review extends Document implements DocumentAction, Loader<Review> {
     }
 
     /**
-     * @return if this is a review, which can unseal the reviewed document
+     * @return whether or not this is a review, which can unseal the reviewed document
      */
     public boolean isUnseal() {
         return unseal;

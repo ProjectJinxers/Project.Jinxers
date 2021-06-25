@@ -127,6 +127,10 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
     private Collection<IPLDObject<GrantedOwnership>> newGrantedOwnerships;
     private Collection<IPLDObject<GrantedUnban>> newGrantedUnbans;
 
+    private Set<String> invertedFalseClaims;
+    private Set<String> invertedFalseApprovals;
+    private Set<String> invertedFalseDeclinations;
+
     UserState() {
 
     }
@@ -704,6 +708,34 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         validateFalseMap(expectedValues.falseClaims, falseClaims);
         validateFalseMap(expectedValues.falseApprovals, falseApprovals);
         validateFalseMap(expectedValues.falseDeclinations, falseDeclinations);
+    }
+
+    public void applySettlement(UserState settlementValues) {
+        this.rating += settlementValues.rating;
+        if (settlementValues.invertedFalseClaims != null) {
+            for (String invertedFalseClaim : settlementValues.invertedFalseClaims) {
+                falseClaims.remove(invertedFalseClaim);
+            }
+        }
+        if (settlementValues.falseClaims != null) {
+            falseClaims.putAll(settlementValues.falseClaims);
+        }
+        if (settlementValues.invertedFalseApprovals != null) {
+            for (String invertedFalseApproval : settlementValues.invertedFalseApprovals) {
+                falseApprovals.remove(invertedFalseApproval);
+            }
+        }
+        if (settlementValues.falseApprovals != null) {
+            falseApprovals.putAll(settlementValues.falseApprovals);
+        }
+        if (settlementValues.invertedFalseDeclinations != null) {
+            for (String invertedFalseDeclination : settlementValues.invertedFalseDeclinations) {
+                falseDeclinations.remove(invertedFalseDeclination);
+            }
+        }
+        if (settlementValues.falseDeclinations != null) {
+            falseDeclinations.putAll(settlementValues.falseDeclinations);
+        }
     }
 
     private <D extends IPLDSerializable> void validateFalseMap(Map<String, IPLDObject<D>> expected,

@@ -31,7 +31,6 @@ import org.projectjinxers.model.UserState;
 /**
  * @author ProjectJinxers
  *
- *         TODO: handle unsealing
  */
 public class SettlementController {
 
@@ -44,6 +43,7 @@ public class SettlementController {
         private boolean forMainValidation;
         private String documentOwner;
         private IPLDObject<Document> document;
+        private IPLDObject<Document> unsealing;
         private Map<String, IPLDObject<Review>> reviews = new HashMap<>();
 
         private int approveCount;
@@ -53,6 +53,9 @@ public class SettlementController {
         private String falseClaim;
         private Map<String, IPLDObject<Review>> falseApprovals;
         private Map<String, IPLDObject<Review>> falseDeclinations;
+        private String trueClaim;
+        private Set<String> trueApprovals;
+        private Set<String> trueDeclinations;
 
         private SealedDocument sealedDocument;
 
@@ -114,17 +117,24 @@ public class SettlementController {
         void update(Map<String, UserState> userStates) {
             if (falseClaim != null) {
                 userStates.get(falseClaim).addFalseClaim(document);
-            }
-            if (falseApprovals != null) {
                 for (Entry<String, IPLDObject<Review>> entry : falseApprovals.entrySet()) {
-                    String key = entry.getKey();
-                    userStates.get(key).addFalseApproval(entry.getValue());
+                    userStates.get(entry.getKey()).addFalseApproval(entry.getValue());
+                }
+                if (trueDeclinations != null) {
+                    for (String user : trueDeclinations) {
+                        userStates.get(user).handleTrueDeclination();
+                    }
                 }
             }
             else if (falseDeclinations != null) {
+                if (trueClaim != null) {
+                    userStates.get(trueClaim).handleTrueClaim();
+                    for (String user : trueApprovals) {
+                        userStates.get(user).handleTrueApproval();
+                    }
+                }
                 for (Entry<String, IPLDObject<Review>> entry : falseDeclinations.entrySet()) {
-                    String key = entry.getKey();
-                    userStates.get(key).addFalseDeclination(entry.getValue());
+                    userStates.get(entry.getKey()).addFalseDeclination(entry.getValue());
                 }
             }
         }
@@ -141,10 +151,25 @@ public class SettlementController {
 
         private SealedDocument approvalsWon() {
             falseDeclinations = new HashMap<>();
-            for (Entry<String, IPLDObject<Review>> entry : reviews.entrySet()) {
-                IPLDObject<Review> value = entry.getValue();
-                if (Boolean.FALSE.equals(value.getMapped().getApprove())) {
-                    falseDeclinations.put(entry.getKey(), value);
+            if (unsealing == null) {
+                trueClaim = document.getMapped().expectUserState().getUser().getMultihash();
+                trueApprovals = new HashSet<>();
+                for (Entry<String, IPLDObject<Review>> entry : reviews.entrySet()) {
+                    IPLDObject<Review> value = entry.getValue();
+                    if (Boolean.FALSE.equals(value.getMapped().getApprove())) {
+                        falseDeclinations.put(entry.getKey(), value);
+                    }
+                    else {
+                        trueApprovals.add(entry.getKey());
+                    }
+                }
+            }
+            else {
+                for (Entry<String, IPLDObject<Review>> entry : reviews.entrySet()) {
+                    IPLDObject<Review> value = entry.getValue();
+                    if (Boolean.FALSE.equals(value.getMapped().getApprove())) {
+                        falseDeclinations.put(entry.getKey(), value);
+                    }
                 }
             }
             sealedDocument = new SealedDocument(document);
@@ -154,10 +179,24 @@ public class SettlementController {
         private SealedDocument declinationsWon() {
             falseClaim = document.getMapped().expectUserState().getUser().getMultihash();
             falseApprovals = new HashMap<>();
-            for (Entry<String, IPLDObject<Review>> entry : reviews.entrySet()) {
-                IPLDObject<Review> value = entry.getValue();
-                if (Boolean.TRUE.equals(value.getMapped().getApprove())) {
-                    falseApprovals.put(entry.getKey(), value);
+            if (unsealing == null) {
+                trueDeclinations = new HashSet<>();
+                for (Entry<String, IPLDObject<Review>> entry : reviews.entrySet()) {
+                    IPLDObject<Review> value = entry.getValue();
+                    if (Boolean.TRUE.equals(value.getMapped().getApprove())) {
+                        falseApprovals.put(entry.getKey(), value);
+                    }
+                    else {
+                        trueDeclinations.add(entry.getKey());
+                    }
+                }
+            }
+            else {
+                for (Entry<String, IPLDObject<Review>> entry : reviews.entrySet()) {
+                    IPLDObject<Review> value = entry.getValue();
+                    if (Boolean.TRUE.equals(value.getMapped().getApprove())) {
+                        falseApprovals.put(entry.getKey(), value);
+                    }
                 }
             }
             sealedDocument = new SealedDocument(document);
@@ -332,9 +371,16 @@ public class SettlementController {
                 return null;
             }
             data = new SettlementData();
-            String owner = document.getMapped().expectUserState().getUser().getMultihash();
+            Document doc = document.getMapped();
+            String owner = doc.expectUserState().getUser().getMultihash();
             data.documentOwner = owner;
             data.document = document;
+            if (doc instanceof Review) {
+                Review review = (Review) doc;
+                if (review.isUnseal()) {
+                    data.unsealing = review.getDocument();
+                }
+            }
             documentOwners.add(owner);
             eligibleSettlements.put(documentMultihash, data);
         }
@@ -354,7 +400,7 @@ public class SettlementController {
         return documentOwners.contains(userHash);
     }
 
-    public boolean evaluate(Map<String, SealedDocument> sealedDocuments) {
+    public boolean evaluate(Map<String, SealedDocument> sealedDocuments, ModelState modelState) {
         if (main && validationMode) {
             return evaluateMainValidation(sealedDocuments);
         }
@@ -367,6 +413,9 @@ public class SettlementController {
                 if (evaluated != null) {
                     res = true;
                     sealedDocuments.put(entry.getKey(), evaluated);
+                    if (data.unsealing != null) {
+                        // TODO: create unsealing tree and traverse it
+                    }
                 }
             }
             else {

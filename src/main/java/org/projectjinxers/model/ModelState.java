@@ -539,7 +539,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         if (mergedUserStates.size() > 0) {
             SettlementController mainSettlementController = validationContext.getMainSettlementController();
             Map<String, SealedDocument> sealedDocuments = new HashMap<>();
-            if (mainSettlementController.evaluate(sealedDocuments)) {
+            if (mainSettlementController.evaluate(sealedDocuments, res)) {
                 mainSettlementController.update(mergedUserStates);
                 if (sealedDocuments.size() > 0) {
                     if (res.sealedDocuments == null) {
@@ -547,6 +547,14 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
                     }
                     for (Entry<String, SealedDocument> entry : sealedDocuments.entrySet()) {
                         res.sealedDocuments.put(entry.getKey(), new IPLDObject<>(entry.getValue()));
+                    }
+                }
+                if (mergedUserStates.size() > 0) { // remaining entries have been added by the settlement controller for
+                                                   // unsealing
+                    for (Entry<String, UserState> entry : mergedUserStates.entrySet()) {
+                        String key = entry.getKey();
+                        UserState current = res.expectUserState(key).getMapped();
+                        current.applySettlement(entry.getValue());
                     }
                 }
             }
