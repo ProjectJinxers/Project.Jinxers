@@ -17,7 +17,6 @@ import java.io.IOException;
 
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
-import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.ValidationContext;
@@ -26,61 +25,43 @@ import org.projectjinxers.controller.ValidationContext;
  * @author ProjectJinxers
  *
  */
-public class SealedDocument implements IPLDSerializable, Loader<SealedDocument> {
+public class DocumentContents implements IPLDSerializable, Loader<DocumentContents> {
 
-    private static final String KEY_TRUTH_INVERTED = "i";
-    private static final String KEY_DOCUMENT = "d";
+    private static final String KEY_ABSTRACT = "a";
+    private static final String KEY_CONTENTS = "c";
 
-    private boolean truthInverted;
-    private IPLDObject<Document> document;
+    private String abstr;
+    private String contents;
 
-    SealedDocument() {
+    DocumentContents() {
 
     }
 
-    /**
-     * Constructor for a new sealed document.
-     * 
-     * @param document the document
-     */
-    public SealedDocument(IPLDObject<Document> document) {
-        this.document = document;
+    public DocumentContents(String abstr, String contents) {
+        this.abstr = abstr;
+        this.contents = contents;
     }
 
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {
-        this.truthInverted = Boolean.TRUE.equals(reader.readBoolean(KEY_TRUTH_INVERTED));
-        this.document = reader.readLinkObject(KEY_DOCUMENT, context, validationContext, LoaderFactory.DOCUMENT, eager);
+        this.abstr = reader.readString(KEY_ABSTRACT);
+        this.contents = reader.readString(KEY_CONTENTS);
     }
 
     @Override
     public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
-        writer.writeIfTrue(KEY_TRUTH_INVERTED, truthInverted);
-        writer.writeLink(KEY_DOCUMENT, document, signer, context);
-    }
-
-    public boolean isTruthInverted() {
-        return truthInverted;
-    }
-
-    public IPLDObject<Document> getDocument() {
-        return document;
-    }
-
-    public SealedDocument invertTruth() {
-        SealedDocument res = new SealedDocument(document);
-        res.truthInverted = !truthInverted;
-        return res;
+        writer.writeString(KEY_ABSTRACT, abstr);
+        writer.writeString(KEY_CONTENTS, contents);
     }
 
     @Override
-    public SealedDocument getOrCreateDataInstance(IPLDReader reader, Metadata metadata) {
+    public DocumentContents getOrCreateDataInstance(IPLDReader reader, Metadata metadata) {
         return this;
     }
 
     @Override
-    public SealedDocument getLoaded() {
+    public DocumentContents getLoaded() {
         return this;
     }
 

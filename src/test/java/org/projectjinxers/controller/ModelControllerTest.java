@@ -76,7 +76,7 @@ class ModelControllerTest {
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
-        Document document = new Document("Title", "Subtitle", "Abstract", "Contents", "Version", "Tags", "Source",
+        Document document = new Document("Title", "Subtitle", "Version", "Tags", "Source", null,
                 modelState.getUserState(userHash));
         IPLDObject<Document> documentObject = new IPLDObject<Document>(document);
         IPLDObject<UserState> userState = modelState.getUserState(userHash);
@@ -102,8 +102,7 @@ class ModelControllerTest {
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
         IPLDObject<UserState> userState = modelState.getUserState(userHash);
-        Document document = new Document("Title", "Subtitle", "Abstract", "Contents", "Version", "Tags", "Source",
-                userState);
+        Document document = new Document("Title", "Subtitle", "Version", "Tags", "Source", null, userState);
         IPLDObject<Document> documentObject = new IPLDObject<Document>(document);
         // simulate a save failure for everything but the document
         access.addNoSaveFailure(documentObject, controller.getContext(), DEFAULT_SIGNER);
@@ -140,8 +139,7 @@ class ModelControllerTest {
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
         IPLDObject<UserState> userState = modelState.getUserState(userHash);
-        Document document = new Document("Title", "Subtitle", "Abstract", "Contents", "Version", "Tags", "Source",
-                userState);
+        Document document = new Document("Title", "Subtitle", "Version", "Tags", "Source", null, userState);
         IPLDObject<Document> documentObject = new IPLDObject<Document>(document);
         // simulate a save failure for everything but the document
         access.addNoSaveFailure(documentObject, controller.getContext(), DEFAULT_SIGNER);
@@ -188,7 +186,7 @@ class ModelControllerTest {
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
-        Document document = new Document("Title", "Subtitle", "Abstract", "Contents", "Version", "Tags", "Source",
+        Document document = new Document("Title", "Subtitle", "Version", "Tags", "Source", null,
                 modelState.getUserState(userHash));
         IPLDObject<Document> documentObject = new IPLDObject<Document>(document);
         IPLDObject<UserState> userState = modelState.getUserState(userHash);

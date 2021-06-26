@@ -228,13 +228,13 @@ public class ValidationContext {
         }
         Map<String, SealedDocument> sealedDocuments = new HashMap<>();
         if (currentSettlementController.evaluate(sealedDocuments, modelState)) {
-            currentSettlementController.update(toUpdate);
+            currentSettlementController.update(toUpdate, modelState, sealedDocuments);
         }
         for (Entry<String, UserState> entry : affected.entrySet()) {
             String key = entry.getKey();
             entry.getValue().validateSettlement(toUpdate.remove(key));
         }
-        if (toUpdate.size() > 0) { // remaining entries have been added by the settlement controller for unsealing
+        if (toUpdate.size() > 0) { // remaining entries have been added by the settlement controller for truth inversion
             for (Entry<String, UserState> entry : toUpdate.entrySet()) {
                 String key = entry.getKey();
                 UserState current = modelState.expectUserState(key).getMapped();
@@ -415,7 +415,7 @@ public class ValidationContext {
     /*
      * verify signature, if previousStates (all the way to common ) contain toggled settlement request, check if payload
      * has been increased; check if document was eligible for settlement at request.userState and there is no
-     * conflicting settlement request (w.r.t. timestamp) -> SettlementController!!!
+     * conflicting settlement request (w.r.t. timestamp, respecting truth inversion links) -> SettlementController!!!
      */
     private void validateSettlementRequest(SettlementRequest request, ModelState modelState) {
 
@@ -439,7 +439,7 @@ public class ValidationContext {
         if (newDocuments != null) {
             for (IPLDObject<Document> document : newDocuments) {
                 if (validated.add(document.getMultihash())) {
-                    validateDocument(document.getMapped());
+                    validateDocument(document.getMapped(), userState);
                 }
             }
         }
@@ -500,7 +500,11 @@ public class ValidationContext {
         }
     }
 
-    private void validateDocument(Document document) {
+    /*
+     * verify signature, if review, assert that there is no unrelated (i.e. no previous version) review for the same doc
+     * assert user is not banned, assert previous version exists and is from same user
+     */
+    private void validateDocument(Document document, UserState userState) {
 
     }
 

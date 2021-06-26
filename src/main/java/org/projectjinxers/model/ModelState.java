@@ -190,12 +190,22 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         return sealedDocuments != null && sealedDocuments.containsKey(documentHash);
     }
 
+    public boolean isTruthInverted(String documentHash) {
+        if (sealedDocuments != null) {
+            IPLDObject<SealedDocument> sealed = sealedDocuments.get(documentHash);
+            if (sealed != null) {
+                return sealed.getMapped().isTruthInverted();
+            }
+        }
+        return false;
+    }
+
     /**
      * @param documentHash the document hash
      * @return the sealed document with the given hash (no null checks!)
      */
-    public Document expectSealedDocument(String documentHash) {
-        return sealedDocuments.get(documentHash).getMapped().getDocument().getMapped();
+    public SealedDocument expectSealedDocument(String documentHash) {
+        return sealedDocuments.get(documentHash).getMapped();
     }
 
     public IPLDObject<Voting> getVoting(String key) {
@@ -540,7 +550,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
             SettlementController mainSettlementController = validationContext.getMainSettlementController();
             Map<String, SealedDocument> sealedDocuments = new HashMap<>();
             if (mainSettlementController.evaluate(sealedDocuments, res)) {
-                mainSettlementController.update(mergedUserStates);
+                mainSettlementController.update(mergedUserStates, res, sealedDocuments);
                 if (sealedDocuments.size() > 0) {
                     if (res.sealedDocuments == null) {
                         res.sealedDocuments = new LinkedHashMap<>();
@@ -550,7 +560,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
                     }
                 }
                 if (mergedUserStates.size() > 0) { // remaining entries have been added by the settlement controller for
-                                                   // unsealing
+                                                   // truth inversion
                     for (Entry<String, UserState> entry : mergedUserStates.entrySet()) {
                         String key = entry.getKey();
                         UserState current = res.expectUserState(key).getMapped();

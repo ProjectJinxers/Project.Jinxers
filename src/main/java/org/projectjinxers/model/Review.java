@@ -14,6 +14,7 @@
 package org.projectjinxers.model;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Map;
 
 import org.projectjinxers.account.Signer;
@@ -24,26 +25,26 @@ import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.ValidationContext;
 
 /**
- * Review instances represent users' reviews of a document. There are also special reviews, which can unseal a sealed
- * document. They have to be on the opposite side of the majority and must be settled successfully. If settled
- * successfully, the reviewed document will be resettled, which leads to an inversion of the penalties and rewards. This
- * operation cascades up if the reviewed document is itself an unsealing review and down to all reviews, that have been
- * sealed (including unsealing reviews). The links included in unsealing reviews can be marked as documents to include
- * in the unsealing.
+ * Review instances represent users' reviews of a document. There are also special reviews, which can invert the truth
+ * for a sealed document. They have to be on the opposite side of the majority and must be settled successfully. If
+ * settled successfully, the reviewed document will be resettled, which leads to an inversion of the penalties and
+ * rewards. This operation cascades up if the reviewed document is itself a truth inverting review and down to all
+ * reviews, that have been sealed (including truth inverting reviews). The links included in truth inverting reviews can
+ * be marked as documents to include in the inversion.
  * 
  * @author ProjectJinxers
  */
 public class Review extends Document implements DocumentAction, Loader<Review> {
 
-    private static final String KEY_UNSEAL = "U";
+    private static final String KEY_INVERT_TRUTH = "I";
     private static final String KEY_APPROVE = "r";
     static final String KEY_DOCUMENT = "o";
-    private static final String KEY_UNSEAL_LINKS = "L";
+    private static final String KEY_INVERT_TRUTH_LINKS = "L";
 
-    private boolean unseal;
+    private boolean invertTruth;
     private Boolean approve;
     private IPLDObject<Document> document;
-    private Map<String, IPLDObject<Document>> unsealLinks;
+    private Map<String, IPLDObject<Document>> invertTruthLinks;
 
     Review() {
 
@@ -55,12 +56,12 @@ public class Review extends Document implements DocumentAction, Loader<Review> {
      * @param document
      * @param approve
      */
-    public Review(String title, String subtitle, String abstr, String contents, String version, String tags,
-            String source, IPLDObject<Document> document, boolean unseal, Boolean approve,
+    public Review(String title, String subtitle, String version, String tags, String source,
+            IPLDObject<DocumentContents> contents, IPLDObject<Document> document, boolean invertTruth, Boolean approve,
             IPLDObject<UserState> userState) {
-        super(title, subtitle, abstr, contents, version, tags, source, userState);
+        super(title, subtitle, version, tags, source, contents, userState);
         this.document = document;
-        this.unseal = unseal;
+        this.invertTruth = invertTruth;
         this.approve = approve;
     }
 
@@ -68,27 +69,27 @@ public class Review extends Document implements DocumentAction, Loader<Review> {
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {
         super.read(reader, context, validationContext, eager, metadata);
-        this.unseal = Boolean.TRUE.equals(reader.readBoolean(KEY_UNSEAL));
+        this.invertTruth = Boolean.TRUE.equals(reader.readBoolean(KEY_INVERT_TRUTH));
         this.approve = reader.readBoolean(KEY_APPROVE);
         this.document = reader.readLinkObject(KEY_DOCUMENT, context, validationContext, LoaderFactory.DOCUMENT, eager);
-        this.unsealLinks = reader.readLinkObjects(KEY_UNSEAL_LINKS, context, validationContext, LoaderFactory.DOCUMENT,
-                eager, Document.LINK_KEY_PROVIDER);
+        this.invertTruthLinks = reader.readLinkObjects(KEY_INVERT_TRUTH_LINKS, context, validationContext,
+                LoaderFactory.DOCUMENT, eager, Document.LINK_KEY_PROVIDER);
     }
 
     @Override
     public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
         super.write(writer, signer, context);
-        writer.writeIfTrue(KEY_UNSEAL, unseal);
+        writer.writeIfTrue(KEY_INVERT_TRUTH, invertTruth);
         writer.writeBoolean(KEY_APPROVE, approve);
         writer.writeLink(KEY_DOCUMENT, document, signer, null);
-        writer.writeLinkObjects(KEY_UNSEAL_LINKS, unsealLinks, signer, null);
+        writer.writeLinkObjects(KEY_INVERT_TRUTH_LINKS, invertTruthLinks, signer, null);
     }
 
     /**
-     * @return whether or not this is a review, which can unseal the reviewed document
+     * @return whether or not this is a review, which can invert the truth for the reviewed document
      */
-    public boolean isUnseal() {
-        return unseal;
+    public boolean isInvertTruth() {
+        return invertTruth;
     }
 
     /**
@@ -103,6 +104,10 @@ public class Review extends Document implements DocumentAction, Loader<Review> {
         return document;
     }
 
+    public Map<String, IPLDObject<Document>> getAllInvertTruthLinks() {
+        return invertTruthLinks == null ? null : Collections.unmodifiableMap(invertTruthLinks);
+    }
+
     /**
      * Updates the properties of this review. Whether or not that is done in a copy depends on the parameter 'current'.
      * If that parameter's value is null, this object will be updated. Otherwise a copy of this object, where the
@@ -110,19 +115,18 @@ public class Review extends Document implements DocumentAction, Loader<Review> {
      * 
      * @param title    the updated title
      * @param subtitle the updated subtitle
-     * @param abstr    the updated abstract
-     * @param contents the updated contents
      * @param version  the updated version
      * @param tags     the updated tags
      * @param source   the updated source
+     * @param contents the updated contents
      * @param approve  the updated approve value
      * @param current  the current wrapper (pass null for updating this object, non-null for creating a new version
      *                 copy)
      * @return the updated object
      */
-    public Review update(String title, String subtitle, String abstr, String contents, String version, String tags,
-            String source, Boolean approve, IPLDObject<Document> current) {
-        Review res = (Review) super.update(title, subtitle, abstr, contents, version, tags, source, current);
+    public Review update(String title, String subtitle, String version, String tags, String source,
+            IPLDObject<DocumentContents> contents, Boolean approve, IPLDObject<Document> current) {
+        Review res = (Review) super.update(title, subtitle, version, tags, source, contents, current);
         res.approve = approve;
         return res;
     }

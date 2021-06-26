@@ -53,6 +53,13 @@ public interface LoaderFactory<D extends IPLDSerializable> {
         }
     };
 
+    public static final LoaderFactory<DocumentContents> DOCUMENT_CONTENTS = new LoaderFactory<>() {
+        @Override
+        public Loader<DocumentContents> createLoader() {
+            return new DocumentContents();
+        }
+    };
+
     /**
      * The factory for Review instances.
      */

@@ -42,7 +42,7 @@ class UserStateTest {
 
     @Test
     void testNonNegativeAndNonPositiveReview() {
-        Review review = new Review(null, null, null, null, null, null, null,
+        Review review = new Review(null, null, null, null, null, null,
                 new TestIPLDObject<Document>("hash", new Document()), false, null, null);
         UserState userState = new UserState();
         UserState updated = userState.updateLinks(Arrays.asList(new TestIPLDObject<>("review", review)), null, null,
@@ -54,8 +54,8 @@ class UserStateTest {
     @Test
     void testNegativeReview() {
         IPLDObject<Document> reviewed = new TestIPLDObject<Document>("hash", new Document());
-        Review review = new Review(null, null, null, null, null, null, null, reviewed, false, Boolean.TRUE, null);
-        Review negative = new Review(null, null, null, null, null, null, null, reviewed, false, Boolean.FALSE, null);
+        Review review = new Review(null, null, null, null, null, null, reviewed, false, Boolean.TRUE, null);
+        Review negative = new Review(null, null, null, null, null, null, reviewed, false, Boolean.FALSE, null);
         UserState userState = new UserState();
         userState.updateLinks(
                 Arrays.asList(new TestIPLDObject<>("review", review), new TestIPLDObject<>("negative", negative)), null,
@@ -66,8 +66,8 @@ class UserStateTest {
     @Test
     void testPositiveReview() {
         IPLDObject<Document> reviewed = new TestIPLDObject<Document>("hash", new Document());
-        Review review = new Review(null, null, null, null, null, null, null, reviewed, false, Boolean.FALSE, null);
-        Review positive = new Review(null, null, null, null, null, null, null, reviewed, false, Boolean.TRUE, null);
+        Review review = new Review(null, null, null, null, null, null, reviewed, false, Boolean.FALSE, null);
+        Review positive = new Review(null, null, null, null, null, null, reviewed, false, Boolean.TRUE, null);
         UserState userState = new UserState();
         userState.updateLinks(
                 Arrays.asList(new TestIPLDObject<>("review", review), new TestIPLDObject<>("positive", positive)), null,
@@ -78,9 +78,9 @@ class UserStateTest {
     @Test
     void testNonNegativeReviewSandwich() {
         IPLDObject<Document> reviewed = new TestIPLDObject<Document>("hash", new Document());
-        Review review = new Review(null, null, null, null, null, null, null, reviewed, false, Boolean.TRUE, null);
-        Review negative = new Review(null, null, null, null, null, null, null, reviewed, false, Boolean.FALSE, null);
-        Review restoring = new Review(null, null, null, null, null, null, null, reviewed, false, null, null);
+        Review review = new Review(null, null, null, null, null, null, reviewed, false, Boolean.TRUE, null);
+        Review negative = new Review(null, null, null, null, null, null, reviewed, false, Boolean.FALSE, null);
+        Review restoring = new Review(null, null, null, null, null, null, reviewed, false, null, null);
         UserState userState = new UserState();
         UserState updated = userState.updateLinks(Arrays.asList(new TestIPLDObject<>("review", review),
                 new TestIPLDObject<>("negative", negative), new TestIPLDObject<>("restoring", restoring)), null, null,
@@ -91,9 +91,9 @@ class UserStateTest {
     @Test
     void testNonPositiveReviewSandwich() {
         IPLDObject<Document> reviewed = new TestIPLDObject<Document>("hash", new Document());
-        Review review = new Review(null, null, null, null, null, null, null, reviewed, false, Boolean.FALSE, null);
-        Review positive = new Review(null, null, null, null, null, null, null, reviewed, false, Boolean.TRUE, null);
-        Review restoring = new Review(null, null, null, null, null, null, null, reviewed, false, null, null);
+        Review review = new Review(null, null, null, null, null, null, reviewed, false, Boolean.FALSE, null);
+        Review positive = new Review(null, null, null, null, null, null, reviewed, false, Boolean.TRUE, null);
+        Review restoring = new Review(null, null, null, null, null, null, reviewed, false, null, null);
         UserState userState = new UserState();
         UserState updated = userState.updateLinks(Arrays.asList(new TestIPLDObject<>("review", review),
                 new TestIPLDObject<>("positive", positive), new TestIPLDObject<>("restoring", restoring)), null, null,
@@ -119,11 +119,11 @@ class UserStateTest {
 
     @Test
     void testLastActivityOneNextVersion() {
-        Document previousVersion = new Document(null, null, null, null, null, null, null, null);
+        Document previousVersion = new Document(null, null, null, null, null, null, null);
         IPLDObject<Document> prev = new TestIPLDObject<>("hash", previousVersion);
         Date previousVersionDate = previousVersion.getDate();
         waitFor(1);
-        Document document = previousVersion.update(null, null, null, null, null, null, null, prev);
+        Document document = previousVersion.update(null, null, null, null, null, null, prev);
         Date updatedDate = document.getDate();
         assertNotNull(updatedDate);
         assertNotEquals(previousVersionDate, updatedDate);
@@ -135,17 +135,17 @@ class UserStateTest {
 
     @Test
     void testLastActivityTwoNextVersions() {
-        Document previousVersion = new Document(null, null, null, null, null, null, null, null);
+        Document previousVersion = new Document(null, null, null, null, null, null, null);
         IPLDObject<Document> prev = new TestIPLDObject<>("hash", previousVersion);
         Date previousVersionDate = previousVersion.getDate();
         waitFor(1);
-        Document firstUpdate = previousVersion.update(null, null, null, null, null, null, null, prev);
+        Document firstUpdate = previousVersion.update(null, null, null, null, null, null, prev);
         Date updatedDate = firstUpdate.getDate();
         assertNotNull(updatedDate);
         assertNotEquals(previousVersionDate, updatedDate);
         IPLDObject<Document> first = new TestIPLDObject<>("first", firstUpdate);
         waitFor(1);
-        Document secondUpdate = firstUpdate.update(null, null, null, null, null, null, null, first);
+        Document secondUpdate = firstUpdate.update(null, null, null, null, null, null, first);
         Date secondUpdatedDate = secondUpdate.getDate();
         assertNotNull(secondUpdatedDate);
         assertNotEquals(updatedDate, secondUpdatedDate);
@@ -160,23 +160,23 @@ class UserStateTest {
         Document unrelatedPrev = new Document();
         IPLDObject<Document> unrelated = new TestIPLDObject<>("unrelated", unrelatedPrev);
         waitFor(1);
-        Document previousVersion = new Document(null, null, null, null, null, null, null, null);
+        Document previousVersion = new Document(null, null, null, null, null, null, null);
         IPLDObject<Document> prev = new TestIPLDObject<>("hash", previousVersion);
         Date previousVersionDate = previousVersion.getDate();
         waitFor(1);
-        Document firstUpdate = previousVersion.update(null, null, null, null, null, null, null, prev);
+        Document firstUpdate = previousVersion.update(null, null, null, null, null, null, prev);
         Date updatedDate = firstUpdate.getDate();
         assertNotNull(updatedDate);
         assertNotEquals(previousVersionDate, updatedDate);
         IPLDObject<Document> first = new TestIPLDObject<>("first", firstUpdate);
         waitFor(1);
-        Document secondUpdate = firstUpdate.update(null, null, null, null, null, null, null, first);
+        Document secondUpdate = firstUpdate.update(null, null, null, null, null, null, first);
         Date secondUpdatedDate = secondUpdate.getDate();
         assertNotNull(secondUpdatedDate);
         assertNotEquals(updatedDate, secondUpdatedDate);
         UserState userState = new UserState();
         waitFor(1);
-        Document unrelatedUpdate = unrelatedPrev.update(null, null, null, null, null, null, null, unrelated);
+        Document unrelatedUpdate = unrelatedPrev.update(null, null, null, null, null, null, unrelated);
         UserState updated = userState
                 .updateLinks(Arrays.asList(unrelated, prev, first, new TestIPLDObject<>("updated", secondUpdate),
                         new TestIPLDObject<>("unrelatedUpdate", unrelatedUpdate)), null, null, null, null);
@@ -188,10 +188,10 @@ class UserStateTest {
         Document reviewed = new Document();
         IPLDObject<Document> reviewedObject = new TestIPLDObject<>("reviewed", reviewed);
         waitFor(1);
-        Review review = new Review(null, null, null, null, null, null, null, reviewedObject, false, null, null);
+        Review review = new Review(null, null, null, null, null, null, reviewedObject, false, null, null);
         IPLDObject<Document> reviewObject = new TestIPLDObject<>("review", review);
         waitFor(1);
-        Review ofReview = new Review(null, null, null, null, null, null, null, reviewObject, false, null, null);
+        Review ofReview = new Review(null, null, null, null, null, null, reviewObject, false, null, null);
         IPLDObject<Document> reviewOfReview = new TestIPLDObject<>("ofReview", ofReview);
         Date expected = ofReview.getDate();
         waitFor(1);
@@ -206,50 +206,49 @@ class UserStateTest {
         Document unrelatedPrev = new Document();
         IPLDObject<Document> unrelated = new TestIPLDObject<>("unrelated", unrelatedPrev);
         waitFor(1);
-        Document previousVersion = new Document(null, null, null, null, null, null, null, null);
+        Document previousVersion = new Document(null, null, null, null, null, null, null);
         IPLDObject<Document> prev = new TestIPLDObject<>("hash", previousVersion);
         Date previousVersionDate = previousVersion.getDate();
         waitFor(1);
         IPLDObject<Document> unrelatedReviewed = new TestIPLDObject<>("unrelatedReviewed", new Document());
-        Review unrelatedReview = new Review(null, null, null, null, null, null, null, unrelatedReviewed, false, null,
-                null);
+        Review unrelatedReview = new Review(null, null, null, null, null, null, unrelatedReviewed, false, null, null);
         IPLDObject<Document> unrelatedReviewObject = new TestIPLDObject<>("unrelatedReview", unrelatedReview);
         waitFor(1);
-        Document firstUpdate = previousVersion.update(null, null, null, null, null, null, null, prev);
+        Document firstUpdate = previousVersion.update(null, null, null, null, null, null, prev);
         Date updatedDate = firstUpdate.getDate();
         assertNotNull(updatedDate);
         assertNotEquals(previousVersionDate, updatedDate);
         IPLDObject<Document> first = new TestIPLDObject<>("first", firstUpdate);
         waitFor(1);
-        Document secondUpdate = firstUpdate.update(null, null, null, null, null, null, null, first);
+        Document secondUpdate = firstUpdate.update(null, null, null, null, null, null, first);
         Date secondUpdatedDate = secondUpdate.getDate();
         assertNotNull(secondUpdatedDate);
         assertNotEquals(updatedDate, secondUpdatedDate);
         UserState userState = new UserState();
         waitFor(1);
-        Review review = new Review(null, null, null, null, null, null, null, first, false, null, null);
+        Review review = new Review(null, null, null, null, null, null, first, false, null, null);
         IPLDObject<Document> reviewObject = new TestIPLDObject<>("review", review);
         waitFor(1);
-        Review intermediate = new Review(null, null, null, null, null, null, null, reviewObject, false, null, null);
+        Review intermediate = new Review(null, null, null, null, null, null, reviewObject, false, null, null);
         IPLDObject<Document> intermediateObject = new TestIPLDObject<>("intermediate", intermediate);
         waitFor(1);
-        Review ofReview = new Review(null, null, null, null, null, null, null, intermediateObject, false, null, null);
+        Review ofReview = new Review(null, null, null, null, null, null, intermediateObject, false, null, null);
         IPLDObject<Document> reviewOfReview = new TestIPLDObject<>("ofReview", ofReview);
         Date expected = ofReview.getDate();
         waitFor(1);
-        Document unrelatedUpdate = unrelatedPrev.update(null, null, null, null, null, null, null, unrelated);
-        Review updatedUnrelatedReview = unrelatedReview.update(null, null, null, null, null, null, null, null,
+        Document unrelatedUpdate = unrelatedPrev.update(null, null, null, null, null, null, unrelated);
+        Review updatedUnrelatedReview = unrelatedReview.update(null, null, null, null, null, null, null,
                 unrelatedReviewObject);
         IPLDObject<Document> updatedUnrelatedReviewObject = new TestIPLDObject<>("updatedUnrelatedReview",
                 updatedUnrelatedReview);
         waitFor(1);
         Review updatedUnrelatedReviewUpdate = updatedUnrelatedReview.update(null, null, null, null, null, null, null,
-                null, updatedUnrelatedReviewObject);
-        Review ofUnrelatedReview = new Review(null, null, null, null, null, null, null, unrelatedReviewObject, false,
-                null, null);
+                updatedUnrelatedReviewObject);
+        Review ofUnrelatedReview = new Review(null, null, null, null, null, null, unrelatedReviewObject, false, null,
+                null);
         IPLDObject<Document> reviewOfUnrelatedReview = new TestIPLDObject<Document>("ofUnrelatedReview",
                 ofUnrelatedReview);
-        Review hundo = new Review(null, null, null, null, null, null, null, reviewOfUnrelatedReview, false, null, null);
+        Review hundo = new Review(null, null, null, null, null, null, reviewOfUnrelatedReview, false, null, null);
         UserState updated = userState.updateLinks(Arrays.asList(unrelated, prev, unrelatedReviewObject, first,
                 new TestIPLDObject<>("updated", secondUpdate), reviewOfReview,
                 new TestIPLDObject<>("unrelatedUpdate", unrelatedUpdate), updatedUnrelatedReviewObject,

@@ -15,6 +15,7 @@ package org.projectjinxers.model;
 
 import java.io.IOException;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -227,6 +228,10 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
      */
     public Document expectDocument(String documentHash) {
         return documents.get(documentHash).getMapped();
+    }
+
+    public Map<String, IPLDObject<Document>> getAllDocuments() {
+        return documents == null ? null : Collections.unmodifiableMap(documents);
     }
 
     /**
@@ -445,18 +450,36 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
     }
 
     public void removeFalseClaim(String documentHash) {
-        falseClaims.remove(documentHash);
         rating += FALSE_CLAIM_PENALTY;
+        falseClaims.remove(documentHash);
+        rating += TRUE_CLAIM_REWARD;
     }
 
     public void removeFalseApproval(String documentHash) {
-        falseApprovals.remove(documentHash);
         rating += FALSE_APPROVAL_PENALTY;
+        falseApprovals.remove(documentHash);
+        rating += TRUE_APPROVAL_REWARD;
     }
 
     public void removeFalseDeclination(String documentHash) {
-        falseDeclinations.remove(documentHash);
         rating += FALSE_DECLINATION_PENALTY;
+        falseDeclinations.remove(documentHash);
+        rating += TRUE_DECLINATION_REWARD;
+    }
+
+    public void removeTrueClaim(IPLDObject<Document> falseClaim) {
+        rating -= TRUE_CLAIM_REWARD;
+        addFalseClaim(falseClaim);
+    }
+
+    public void removeTrueApproval(IPLDObject<Review> falseApproval) {
+        rating -= TRUE_APPROVAL_REWARD;
+        addFalseApproval(falseApproval);
+    }
+
+    public void removeTrueDeclination(IPLDObject<Review> falseDeclination) {
+        rating -= TRUE_DECLINATION_REWARD;
+        addFalseDeclination(falseDeclination);
     }
 
     public Collection<IPLDObject<Document>> getNewDocuments(UserState since, boolean ignoreCached) {

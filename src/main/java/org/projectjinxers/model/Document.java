@@ -50,12 +50,11 @@ public class Document implements IPLDSerializable {
 
     private static final String KEY_TITLE = "t";
     private static final String KEY_SUBTITLE = "b";
-    private static final String KEY_ABSTRACT = "a";
-    private static final String KEY_CONTENTS = "c";
     private static final String KEY_VERSION = "v";
     private static final String KEY_TAGS = "g";
     private static final String KEY_DATE = "d";
     private static final String KEY_SOURCE = "s";
+    private static final String KEY_CONTENTS = "C";
     private static final String KEY_USER_STATE = "u";
     private static final String KEY_PREVIOUS_VERSION = "p";
     private static final String KEY_LINKS = "l";
@@ -65,12 +64,11 @@ public class Document implements IPLDSerializable {
 
     private String title;
     private String subtitle;
-    private String abstr;
-    private String contents;
     private String version;
     private String tags;
     private Date date;
     private String source;
+    private IPLDObject<DocumentContents> contents;
     private IPLDObject<UserState> userState;
     private IPLDObject<Document> previousVersion;
     private Map<String, IPLDObject<Document>> links;
@@ -91,16 +89,15 @@ public class Document implements IPLDSerializable {
      * @param source    the source
      * @param userState the current user state (before adding the document)
      */
-    public Document(String title, String subtitle, String abstr, String contents, String version, String tags,
-            String source, IPLDObject<UserState> userState) {
+    public Document(String title, String subtitle, String version, String tags, String source,
+            IPLDObject<DocumentContents> contents, IPLDObject<UserState> userState) {
         this.title = title;
         this.subtitle = subtitle;
-        this.abstr = abstr;
-        this.contents = contents;
         this.version = version;
         this.tags = tags;
         this.date = new Date();
         this.source = source;
+        this.contents = contents;
         this.userState = userState;
     }
 
@@ -114,7 +111,6 @@ public class Document implements IPLDSerializable {
         Document doc = previousVersion.getMapped();
         this.title = doc.title;
         this.subtitle = doc.subtitle;
-        this.abstr = doc.abstr;
         this.contents = doc.contents;
         this.version = doc.version;
         this.tags = doc.tags;
@@ -129,12 +125,12 @@ public class Document implements IPLDSerializable {
             Metadata metadata) {
         this.title = reader.readString(KEY_TITLE);
         this.subtitle = reader.readString(KEY_SUBTITLE);
-        this.abstr = reader.readString(KEY_ABSTRACT);
-        this.contents = reader.readString(KEY_CONTENTS);
         this.version = reader.readString(KEY_VERSION);
         this.tags = reader.readString(KEY_TAGS);
         this.date = new Date(reader.readNumber(KEY_DATE).longValue());
         this.source = reader.readString(KEY_SOURCE);
+        this.contents = reader.readLinkObject(KEY_CONTENTS, context, validationContext, LoaderFactory.DOCUMENT_CONTENTS,
+                eager);
         this.userState = reader.readLinkObject(KEY_USER_STATE, context, validationContext, LoaderFactory.USER_STATE,
                 eager);
         this.previousVersion = reader.readLinkObject(KEY_PREVIOUS_VERSION, context, validationContext,
@@ -150,12 +146,11 @@ public class Document implements IPLDSerializable {
     public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
         writer.writeString(KEY_TITLE, title);
         writer.writeString(KEY_SUBTITLE, subtitle);
-        writer.writeString(KEY_ABSTRACT, abstr);
-        writer.writeString(KEY_CONTENTS, contents);
         writer.writeString(KEY_VERSION, version);
         writer.writeString(KEY_TAGS, tags);
         writer.writeNumber(KEY_DATE, date.getTime());
         writer.writeString(KEY_SOURCE, source);
+        writer.writeLink(KEY_CONTENTS, contents, signer, context);
         writer.writeLink(KEY_USER_STATE, userState, signer, null);
         writer.writeLink(KEY_PREVIOUS_VERSION, previousVersion, signer, null);
         writer.writeLinkObjects(KEY_LINKS, links, signer, context);
@@ -251,17 +246,16 @@ public class Document implements IPLDSerializable {
      *                 copy)
      * @return the updated object
      */
-    public Document update(String title, String subtitle, String abstr, String contents, String version, String tags,
-            String source, IPLDObject<Document> current) {
+    public Document update(String title, String subtitle, String version, String tags, String source,
+            IPLDObject<DocumentContents> contents, IPLDObject<Document> current) {
         Document updated = current == null ? this : createCopyInstance();
         updated.title = title;
         updated.subtitle = subtitle;
-        updated.abstr = abstr;
-        updated.contents = contents;
         updated.version = version;
         updated.tags = tags;
         updated.source = source;
         updated.date = new Date();
+        updated.contents = contents;
         if (current != null) {
             updated.previousVersion = current;
             updated.links = links == null ? null : new LinkedHashMap<>(links);
@@ -289,12 +283,11 @@ public class Document implements IPLDSerializable {
         Document res = createCopyInstance();
         res.title = title;
         res.subtitle = subtitle;
-        res.abstr = abstr;
-        res.contents = contents;
         res.version = version;
         res.tags = tags;
         res.date = date;
         res.source = source;
+        res.contents = contents;
         res.links = links;
         res.userState = userState;
         res.previousVersion = previousVersion;
