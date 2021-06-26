@@ -146,4 +146,23 @@ public class UnbanRequest extends ToggleRequest implements DocumentAction, Votab
         return this;
     }
 
+    @Override
+    public void validate(Voting voting, ValidationContext validationContext) {
+        String userHash = expectUserHash();
+        User user = validationContext.getCurrentValidLocalState().getMapped().expectUserState(userHash).getMapped()
+                .getUser().getMapped();
+        validationContext.getContext().verifySignature(voting.getSubject(), Signer.VERIFIER, user);
+        IPLDObject<UserState> userState = voting.getInitialModelState().getMapped().expectUserState(userHash);
+        UnbanRequest unbanRequest;
+        if (userState == getUserState()) {
+            unbanRequest = this;
+        }
+        else {
+            unbanRequest = userState.getMapped().expectUnbanRequest(document.getMultihash()).getMapped();
+        }
+        if (!unbanRequest.isActive()) {
+            throw new ValidationException("Created voting from inactive unban request");
+        }
+    }
+
 }

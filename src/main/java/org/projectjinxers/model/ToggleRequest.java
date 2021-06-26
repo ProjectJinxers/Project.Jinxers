@@ -83,6 +83,10 @@ public abstract class ToggleRequest implements IPLDSerializable {
         return active;
     }
 
+    public IPLDObject<UserState> getUserState() {
+        return userState;
+    }
+
     /**
      * @return the unwrapped user
      */

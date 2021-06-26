@@ -28,6 +28,7 @@ import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDReader.KeyProvider;
 import org.projectjinxers.controller.IPLDWriter;
+import org.projectjinxers.controller.OwnershipTransferController;
 import org.projectjinxers.controller.ValidationContext;
 import org.projectjinxers.controller.ValidationException;
 
@@ -183,7 +184,13 @@ public class OwnershipSelection implements Votable {
         }
     }
 
-    void validateReconstructed(OwnershipSelection reconstructed) {
+    @Override
+    public void validate(Voting voting, ValidationContext validationContext) {
+        // TODO: can voting.initialModelState be invalid?!?
+        OwnershipTransferController checkController = new OwnershipTransferController(this,
+                voting.getInitialModelState());
+        Voting reconstructedVoting = checkController.getVoting().getMapped();
+        OwnershipSelection reconstructed = (OwnershipSelection) reconstructedVoting.getSubject().getMapped();
         if (selection.size() != reconstructed.selection.size()) {
             throw new ValidationException("Expected same selection size");
         }

@@ -178,8 +178,7 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
         subject.getMapped().expectWinner(value, counts);
     }
 
-    public boolean validateNewVotes(ModelState since, ModelState currentState, IPLDContext context,
-            ValidationContext validationContext) {
+    public boolean validateNewVotes(ModelState since, ModelState currentState, ValidationContext validationContext) {
         String votingKey = subject.getMultihash();
         IPLDObject<Voting> sinceVoting = since == null ? null : since.getVoting(votingKey);
         Map<String, IPLDObject<Vote>> newVotes = ModelUtility.getNewForeignKeyLinksMap(votes,
@@ -194,6 +193,7 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
                 allUsers.put(userObject.getMultihash(), userObject.getMapped());
             }
             Set<Entry<String, User>> entrySet = allUsers.entrySet();
+            IPLDContext context = validationContext.getContext();
             if (subject.isAnonymous()) {
                 for (Entry<String, IPLDObject<Vote>> entry : newVotes.entrySet()) {
                     String key = entry.getKey();

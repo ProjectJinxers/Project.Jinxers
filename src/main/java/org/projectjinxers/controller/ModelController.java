@@ -118,7 +118,7 @@ public class ModelController {
                 if (currentModelStateHash != null) {
                     try {
                         this.currentValidationContext = new ValidationContext(context, null, null,
-                                System.currentTimeMillis() + timestampTolerance, false);
+                                System.currentTimeMillis() + timestampTolerance, 0);
                         this.currentValidatedState = loadModelState(currentModelStateHash, true);
                         access.saveModelStateHash(mainIOTAAddress, currentModelStateHash);
                         break;
@@ -142,7 +142,7 @@ public class ModelController {
                     access.subscribe(mainIOTAAddress).forEach(map -> {
                         try {
                             String pubSubData = (String) map.get(PUBSUB_SUB_KEY_DATA);
-                            handleIncomingModelState(pubSubData, System.currentTimeMillis() + timestampTolerance);
+                            handleIncomingModelState(pubSubData, System.currentTimeMillis());
                         }
                         catch (Exception e) {
                             e.printStackTrace();
@@ -220,7 +220,7 @@ public class ModelController {
             }
             else {
                 currentValidationContext = new ValidationContext(context, currentValidatedState, currentLocalHashes,
-                        timestamp, timestampTolerance > 0);
+                        timestamp, timestampTolerance);
                 IPLDObject<ModelState> loaded = loadModelState(multihash, true);
                 mergeWithValidated(loaded);
             }

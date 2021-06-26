@@ -15,6 +15,7 @@ package org.projectjinxers.model;
 
 import java.util.Date;
 
+import org.projectjinxers.controller.ValidationContext;
 import org.projectjinxers.controller.ValidationException;
 
 /**
@@ -63,5 +64,7 @@ public interface Votable extends IPLDSerializable {
      * @param counts the actual counts (after tally)
      */
     void expectWinner(Object value, int[] counts);
+
+    void validate(Voting voting, ValidationContext validationContext);
 
 }

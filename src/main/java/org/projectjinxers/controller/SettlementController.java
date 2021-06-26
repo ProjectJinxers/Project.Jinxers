@@ -255,8 +255,183 @@ public class SettlementController {
 
     static class TruthInversionGraphNode {
 
-        static TruthInversionGraphNode createGraph(IPLDObject<Document> invertTruth) {
-            TruthInversionGraphNode res = new TruthInversionGraphNode();
+        IPLDObject<Document> document;
+        Review review;
+        Map<String, TruthInversionGraphNode> children; // reviews
+        Map<String, TruthInversionGraphNode> links;
+        TruthInversionGraphNode parent; // reviewed
+
+        void traverse(Map<String, UserState> userStates, ModelState modelState,
+                Map<String, SealedDocument> sealedDocuments, Set<String> visited, boolean isDefinitelyReview) {
+            SealedDocument sealed = invertTruth(userStates, modelState, sealedDocuments, visited, null,
+                    isDefinitelyReview);
+            sealedDocuments.put(document.getMultihash(), sealed);
+            if (!isDefinitelyReview && parent != null) {
+                String key = parent.document.getMultihash();
+                if (visited.add(key)) {
+                    sealed = parent.invertTruth(userStates, modelState, sealedDocuments, visited, this, false);
+                    sealedDocuments.put(key, sealed);
+                    parent.traverse(userStates, modelState, sealedDocuments, visited, false);
+                }
+            }
+            if (links != null) {
+                for (Entry<String, TruthInversionGraphNode> entry : links.entrySet()) {
+                    if (visited.add(entry.getKey())) {
+                        entry.getValue().traverse(userStates, modelState, sealedDocuments, visited, false);
+                    }
+                }
+            }
+        }
+
+        private SealedDocument invertTruth(Map<String, UserState> userStates, ModelState modelState,
+                Map<String, SealedDocument> sealedDocuments, Set<String> visited, TruthInversionGraphNode exclude,
+                boolean isDefinitelyReview) {
+            SealedDocument sealed = modelState.expectSealedDocument(document.getMultihash());
+            boolean wasInverted = sealed.isTruthInverted();
+            SealedDocument res = sealed.invertTruth();
+            Document doc = document.getMapped();
+            Review review = (isDefinitelyReview || doc instanceof Review) ? (Review) doc : null;
+            boolean noNeutralReview = review == null || review.getApprove() != null;
+            IPLDObject<User> user = doc.expectUserState().getUser();
+            String userHash = user.getMultihash();
+            UserState userState = userStates.get(userHash);
+            if (userState == null) {
+                userState = new UserState(user);
+                userStates.put(userHash, userState);
+            }
+            Map<String, UserState> approvers = new HashMap<>();
+            Map<String, UserState> decliners = new HashMap<>();
+            Map<String, IPLDObject<Review>> reviews = new HashMap<>();
+            for (Entry<String, TruthInversionGraphNode> entry : children.entrySet()) {
+                TruthInversionGraphNode child = entry.getValue();
+                Boolean approve = child.review.getApprove();
+                if (approve != null) {
+                    user = child.review.expectUserState().getUser();
+                    userHash = user.getMultihash();
+                    UserState reviewerState = userStates.get(userHash);
+                    if (reviewerState == null) {
+                        reviewerState = new UserState(user);
+                        userStates.put(userHash, reviewerState);
+                    }
+                    if (approve) {
+                        approvers.put(userHash, reviewerState);
+                    }
+                    else {
+                        decliners.put(userHash, reviewerState);
+                    }
+                    @SuppressWarnings("rawtypes")
+                    IPLDObject childDoc = child.document;
+                    @SuppressWarnings("unchecked")
+                    IPLDObject<Review> reviewObject = childDoc;
+                    reviews.put(userHash, reviewObject);
+                }
+                if (child != exclude && visited.add(entry.getKey()) && modelState.isSealedDocument(entry.getKey())) {
+                    child.traverse(userStates, modelState, sealedDocuments, visited, true);
+                }
+            }
+            if (approvers.size() > decliners.size()) {
+                if (review != null && Boolean.TRUE.equals(review.getApprove())
+                        && modelState.isTruthInverted(review.getDocument().getMultihash())) {
+                    if (wasInverted) {
+                        restoreDeclinersWon(userState, approvers, decliners, reviews, noNeutralReview);
+                    }
+                    else {
+                        invertDeclinersWon(userState, approvers, decliners, reviews, noNeutralReview);
+                    }
+                }
+                else if (wasInverted) {
+                    restoreApproversWon(userState, approvers, decliners, reviews, noNeutralReview);
+                }
+                else {
+                    invertApproversWon(userState, approvers, decliners, reviews, noNeutralReview);
+                }
+            }
+            else {
+                if (review != null && Boolean.FALSE.equals(review.getApprove())
+                        && modelState.isTruthInverted(review.getDocument().getMultihash())) {
+                    if (wasInverted) {
+                        restoreApproversWon(userState, approvers, decliners, reviews, noNeutralReview);
+                    }
+                    else {
+                        invertApproversWon(userState, approvers, decliners, reviews, noNeutralReview);
+                    }
+                }
+                else if (wasInverted) {
+                    restoreDeclinersWon(userState, approvers, decliners, reviews, noNeutralReview);
+                }
+                else {
+                    invertDeclinersWon(userState, approvers, decliners, reviews, noNeutralReview);
+                }
+            }
+            return res;
+        }
+
+        private void invertApproversWon(UserState ownerState, Map<String, UserState> approvers,
+                Map<String, UserState> decliners, Map<String, IPLDObject<Review>> reviews, boolean noNeutralReview) {
+            for (Entry<String, UserState> entry : decliners.entrySet()) {
+                entry.getValue().removeFalseDeclination(reviews.get(entry.getKey()).getMultihash());
+            }
+            if (review == null || !review.isInvertTruth()) {
+                if (noNeutralReview) {
+                    ownerState.removeTrueClaim(document);
+                }
+                for (Entry<String, UserState> entry : approvers.entrySet()) {
+                    entry.getValue().removeTrueApproval(reviews.get(entry.getKey()));
+                }
+            }
+        }
+
+        private void restoreApproversWon(UserState ownerState, Map<String, UserState> approvers,
+                Map<String, UserState> decliners, Map<String, IPLDObject<Review>> reviews, boolean noNeutralReview) {
+            for (Entry<String, UserState> entry : decliners.entrySet()) {
+                entry.getValue().addFalseDeclination(reviews.get(entry.getKey()));
+            }
+            if (review == null || !review.isInvertTruth()) {
+                if (noNeutralReview) {
+                    ownerState.removeFalseClaim(document.getMultihash());
+                }
+                for (Entry<String, UserState> entry : approvers.entrySet()) {
+                    entry.getValue().removeFalseApproval(reviews.get(entry.getKey()).getMultihash());
+                }
+            }
+        }
+
+        private void invertDeclinersWon(UserState ownerState, Map<String, UserState> approvers,
+                Map<String, UserState> decliners, Map<String, IPLDObject<Review>> reviews, boolean noNeutralReview) {
+            for (Entry<String, UserState> entry : approvers.entrySet()) {
+                entry.getValue().removeFalseApproval(reviews.get(entry.getKey()).getMultihash());
+            }
+            if (review == null || !review.isInvertTruth()) {
+                if (noNeutralReview) {
+                    ownerState.removeFalseClaim(document.getMultihash());
+                }
+                for (Entry<String, UserState> entry : decliners.entrySet()) {
+                    entry.getValue().removeTrueDeclination(reviews.get(entry.getKey()));
+                }
+            }
+        }
+
+        private void restoreDeclinersWon(UserState ownerState, Map<String, UserState> approvers,
+                Map<String, UserState> decliners, Map<String, IPLDObject<Review>> reviews, boolean noNeutralReview) {
+            for (Entry<String, UserState> entry : approvers.entrySet()) {
+                entry.getValue().addFalseApproval(reviews.get(entry.getKey()));
+            }
+            if (review == null || !review.isInvertTruth()) {
+                if (noNeutralReview) {
+                    ownerState.removeTrueClaim(document);
+                }
+                for (Entry<String, UserState> entry : decliners.entrySet()) {
+                    entry.getValue().removeFalseDeclination(reviews.get(entry.getKey()).getMultihash());
+                }
+            }
+        }
+
+    }
+
+    static class TruthInversionGraph extends TruthInversionGraphNode {
+
+        static TruthInversionGraph createGraph(IPLDObject<Document> invertTruth) {
+            TruthInversionGraph res = new TruthInversionGraph();
             res.index = new HashMap<>();
             res.secondaryEntryPoints = new HashMap<>();
             res.document = invertTruth;
@@ -268,15 +443,8 @@ public class SettlementController {
             return res;
         }
 
-        // root only
         private Map<String, TruthInversionGraphNode> index;
         private Map<String, TruthInversionGraphNode> secondaryEntryPoints;
-        // all nodes
-        private IPLDObject<Document> document;
-        private Review review;
-        private Map<String, TruthInversionGraphNode> children; // reviews
-        private Map<String, TruthInversionGraphNode> links;
-        private TruthInversionGraphNode parent; // reviewed
 
         // initialization
         TruthInversionGraphNode addTruthInversion(IPLDObject<Document> document) {
@@ -422,171 +590,6 @@ public class SettlementController {
             }
         }
 
-        private void traverse(Map<String, UserState> userStates, ModelState modelState,
-                Map<String, SealedDocument> sealedDocuments, Set<String> visited, boolean isDefinitelyReview) {
-            SealedDocument sealed = invertTruth(userStates, modelState, sealedDocuments, visited, null,
-                    isDefinitelyReview);
-            sealedDocuments.put(document.getMultihash(), sealed);
-            if (!isDefinitelyReview && parent != null) {
-                String key = parent.document.getMultihash();
-                if (visited.add(key)) {
-                    sealed = parent.invertTruth(userStates, modelState, sealedDocuments, visited, this, false);
-                    sealedDocuments.put(key, sealed);
-                    parent.traverse(userStates, modelState, sealedDocuments, visited, false);
-                }
-            }
-            if (links != null) {
-                for (Entry<String, TruthInversionGraphNode> entry : links.entrySet()) {
-                    if (visited.add(entry.getKey())) {
-                        entry.getValue().traverse(userStates, modelState, sealedDocuments, visited, false);
-                    }
-                }
-            }
-        }
-
-        private SealedDocument invertTruth(Map<String, UserState> userStates, ModelState modelState,
-                Map<String, SealedDocument> sealedDocuments, Set<String> visited, TruthInversionGraphNode exclude,
-                boolean isDefinitelyReview) {
-            SealedDocument sealed = modelState.expectSealedDocument(document.getMultihash());
-            boolean wasInverted = sealed.isTruthInverted();
-            SealedDocument res = sealed.invertTruth();
-            Document doc = document.getMapped();
-            Review review = (isDefinitelyReview || doc instanceof Review) ? (Review) doc : null;
-            boolean noNeutralReview = review == null || review.getApprove() != null;
-            IPLDObject<User> user = doc.expectUserState().getUser();
-            String userHash = user.getMultihash();
-            UserState userState = userStates.get(userHash);
-            if (userState == null) {
-                userState = new UserState(user);
-                userStates.put(userHash, userState);
-            }
-            Map<String, UserState> approvers = new HashMap<>();
-            Map<String, UserState> decliners = new HashMap<>();
-            Map<String, IPLDObject<Review>> reviews = new HashMap<>();
-            for (Entry<String, TruthInversionGraphNode> entry : children.entrySet()) {
-                TruthInversionGraphNode child = entry.getValue();
-                Boolean approve = child.review.getApprove();
-                if (approve != null) {
-                    user = child.review.expectUserState().getUser();
-                    userHash = user.getMultihash();
-                    UserState reviewerState = userStates.get(userHash);
-                    if (reviewerState == null) {
-                        reviewerState = new UserState(user);
-                        userStates.put(userHash, reviewerState);
-                    }
-                    if (approve) {
-                        approvers.put(userHash, reviewerState);
-                    }
-                    else {
-                        decliners.put(userHash, reviewerState);
-                    }
-                    @SuppressWarnings("rawtypes")
-                    IPLDObject childDoc = child.document;
-                    @SuppressWarnings("unchecked")
-                    IPLDObject<Review> reviewObject = childDoc;
-                    reviews.put(userHash, reviewObject);
-                }
-                if (child != exclude && modelState.isSealedDocument(entry.getKey())) {
-                    child.traverse(userStates, modelState, sealedDocuments, visited, true);
-                }
-            }
-            if (approvers.size() > decliners.size()) {
-                if (review != null && Boolean.TRUE.equals(review.getApprove())
-                        && modelState.isTruthInverted(review.getDocument().getMultihash())) {
-                    if (wasInverted) {
-                        restoreDeclinersWon(userState, approvers, decliners, reviews, noNeutralReview);
-                    }
-                    else {
-                        invertDeclinersWon(userState, approvers, decliners, reviews, noNeutralReview);
-                    }
-                }
-                else if (wasInverted) {
-                    restoreApproversWon(userState, approvers, decliners, reviews, noNeutralReview);
-                }
-                else {
-                    invertApproversWon(userState, approvers, decliners, reviews, noNeutralReview);
-                }
-            }
-            else {
-                if (review != null && Boolean.FALSE.equals(review.getApprove())
-                        && modelState.isTruthInverted(review.getDocument().getMultihash())) {
-                    if (wasInverted) {
-                        restoreApproversWon(userState, approvers, decliners, reviews, noNeutralReview);
-                    }
-                    else {
-                        invertApproversWon(userState, approvers, decliners, reviews, noNeutralReview);
-                    }
-                }
-                else if (wasInverted) {
-                    restoreDeclinersWon(userState, approvers, decliners, reviews, noNeutralReview);
-                }
-                else {
-                    invertDeclinersWon(userState, approvers, decliners, reviews, noNeutralReview);
-                }
-            }
-            return res;
-        }
-
-        private void invertApproversWon(UserState ownerState, Map<String, UserState> approvers,
-                Map<String, UserState> decliners, Map<String, IPLDObject<Review>> reviews, boolean noNeutralReview) {
-            for (Entry<String, UserState> entry : decliners.entrySet()) {
-                entry.getValue().removeFalseDeclination(reviews.get(entry.getKey()).getMultihash());
-            }
-            if (review == null || !review.isInvertTruth()) {
-                if (noNeutralReview) {
-                    ownerState.removeTrueClaim(document);
-                }
-                for (Entry<String, UserState> entry : approvers.entrySet()) {
-                    entry.getValue().removeTrueApproval(reviews.get(entry.getKey()));
-                }
-            }
-        }
-
-        private void restoreApproversWon(UserState ownerState, Map<String, UserState> approvers,
-                Map<String, UserState> decliners, Map<String, IPLDObject<Review>> reviews, boolean noNeutralReview) {
-            for (Entry<String, UserState> entry : decliners.entrySet()) {
-                entry.getValue().addFalseDeclination(reviews.get(entry.getKey()));
-            }
-            if (review == null || !review.isInvertTruth()) {
-                if (noNeutralReview) {
-                    ownerState.removeFalseClaim(document.getMultihash());
-                }
-                for (Entry<String, UserState> entry : approvers.entrySet()) {
-                    entry.getValue().removeFalseApproval(reviews.get(entry.getKey()).getMultihash());
-                }
-            }
-        }
-
-        private void invertDeclinersWon(UserState ownerState, Map<String, UserState> approvers,
-                Map<String, UserState> decliners, Map<String, IPLDObject<Review>> reviews, boolean noNeutralReview) {
-            for (Entry<String, UserState> entry : approvers.entrySet()) {
-                entry.getValue().removeFalseApproval(reviews.get(entry.getKey()).getMultihash());
-            }
-            if (review == null || !review.isInvertTruth()) {
-                if (noNeutralReview) {
-                    ownerState.removeFalseClaim(document.getMultihash());
-                }
-                for (Entry<String, UserState> entry : decliners.entrySet()) {
-                    entry.getValue().removeTrueDeclination(reviews.get(entry.getKey()));
-                }
-            }
-        }
-
-        private void restoreDeclinersWon(UserState ownerState, Map<String, UserState> approvers,
-                Map<String, UserState> decliners, Map<String, IPLDObject<Review>> reviews, boolean noNeutralReview) {
-            for (Entry<String, UserState> entry : approvers.entrySet()) {
-                entry.getValue().addFalseApproval(reviews.get(entry.getKey()));
-            }
-            if (review == null || !review.isInvertTruth()) {
-                if (noNeutralReview) {
-                    ownerState.removeTrueClaim(document);
-                }
-                for (Entry<String, UserState> entry : decliners.entrySet()) {
-                    entry.getValue().removeFalseDeclination(reviews.get(entry.getKey()).getMultihash());
-                }
-            }
-        }
-
     }
 
     private static final Long SETTLEMENT_THRESHOLD = 1000L * 60 * 60 * 24 * 4;
@@ -595,6 +598,8 @@ public class SettlementController {
     private long timestamp;
 
     private boolean validationMode = true;
+    private boolean forMainValidation;
+    private boolean resetSettlementData;
 
     private Set<String> documentOwners = new TreeSet<>();
     private Set<String> invalidRequests = new TreeSet<>();
@@ -609,18 +614,27 @@ public class SettlementController {
     private Set<String> documentOwnersMainValidation;
     private Map<String, SettlementData> eligibleMainValidation;
 
-    private TruthInversionGraphNode truthInversionGraph;
+    private TruthInversionGraph truthInversionGraph;
 
     SettlementController(boolean main, long timestamp) {
         this.main = main;
         this.timestamp = timestamp;
         if (main) {
-            invalidByReview = new HashMap<>();
-            removedDocuments = new TreeSet<>();
+            this.forMainValidation = true;
+            this.invalidByReview = new HashMap<>();
+            this.removedDocuments = new TreeSet<>();
         }
     }
 
+    public long getTimestamp() {
+        return timestamp;
+    }
+
     public boolean checkRequest(SettlementRequest request, boolean forMainValidation) {
+        if (main && forMainValidation != this.forMainValidation) {
+            this.timestamp = System.currentTimeMillis();
+            this.forMainValidation = forMainValidation;
+        }
         IPLDObject<Document> document = request.getDocument();
         String documentMultihash = document.getMultihash();
         if (invalidRequests.contains(documentMultihash)) {
@@ -792,6 +806,12 @@ public class SettlementController {
             res = evaluateMainValidation(sealedDocuments, modelState);
         }
         else {
+            if (resetSettlementData) {
+                for (SettlementData data : eligibleMainValidation.values()) {
+                    data.reset();
+                }
+                resetSettlementData = false;
+            }
             res = false;
             Set<String> toRemove = new HashSet<>();
             for (Entry<String, SettlementData> entry : eligibleSettlements.entrySet()) {
@@ -803,7 +823,7 @@ public class SettlementController {
                         sealedDocuments.put(entry.getKey(), evaluated);
                         if (data.falseClaim == null && data.invertTruth != null) {
                             if (truthInversionGraph == null) {
-                                truthInversionGraph = TruthInversionGraphNode.createGraph(data.invertTruth);
+                                truthInversionGraph = TruthInversionGraph.createGraph(data.invertTruth);
                             }
                             else {
                                 truthInversionGraph.addTruthInversion(data.invertTruth);
@@ -876,7 +896,7 @@ public class SettlementController {
                                 sealedDocuments.put(documentHash, evaluated);
                                 if (data.falseClaim == null && data.invertTruth != null) {
                                     if (truthInversionGraph == null) {
-                                        truthInversionGraph = TruthInversionGraphNode.createGraph(data.invertTruth);
+                                        truthInversionGraph = TruthInversionGraph.createGraph(data.invertTruth);
                                     }
                                     else {
                                         truthInversionGraph.addTruthInversion(data.invertTruth);
@@ -934,10 +954,12 @@ public class SettlementController {
 
     boolean enterMergeMode() {
         if (main && validationMode) {
-            for (SettlementData data : eligibleMainValidation.values()) {
-                data.reset();
-            }
             validationMode = false;
+            resetSettlementData = true;
+            if (forMainValidation) {
+                this.timestamp = System.currentTimeMillis();
+                forMainValidation = false;
+            }
             return true;
         }
         return false;

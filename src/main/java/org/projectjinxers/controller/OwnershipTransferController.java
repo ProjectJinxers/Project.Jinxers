@@ -98,6 +98,22 @@ public class OwnershipTransferController {
         this.signature = signature;
         this.timestamp = timestamp;
     }
+    
+    public OwnershipTransferController(IPLDObject<OwnershipRequest> ownershipRequest, IPLDObject<ModelState> modelState,
+            IPLDContext context) {
+        OwnershipRequest req = ownershipRequest.getMapped();
+        this.documentHash = req.getDocument().getMultihash();
+        this.userHash = req.expectUserHash();
+        this.anonymousVoting = req.isAnonymousVoting();
+        this.modelStateObject = modelState;
+        this.modelState = modelStateObject.getMapped();
+        this.context = context;
+        this.signature = ownershipRequest.getMetadata().getSignature();
+        this.timestamp = req.getTimestamp();
+        if (!process() || this.ownershipRequest == null) {
+            throw new ValidationException("Expected ownership request");
+        }
+    }
 
     public OwnershipTransferController(OwnershipSelection selection, IPLDObject<ModelState> modelState) {
         this.modelStateObject = modelState;

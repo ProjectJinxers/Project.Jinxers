@@ -30,7 +30,6 @@ import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDReader.KeyProvider;
 import org.projectjinxers.controller.IPLDWriter;
-import org.projectjinxers.controller.OwnershipTransferController;
 import org.projectjinxers.controller.SettlementController;
 import org.projectjinxers.controller.ValidationContext;
 import org.projectjinxers.controller.ValidationException;
@@ -136,6 +135,10 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
 
     public long getVersion() {
         return version;
+    }
+
+    public long getTimestamp() {
+        return timestamp;
     }
 
     public IPLDObject<ModelState> getPreviousVersion() {
@@ -364,7 +367,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         return newOwnershipRequests;
     }
 
-    public void validateVotingCause(String votingKey, long validVersion) {
+    public void validateVotingCause(String votingKey, long validVersion, ValidationContext validationContext) {
         ModelState modelState = this;
         IPLDObject<Voting> voting = null;
         while (modelState.previousVersion != null) {
@@ -380,14 +383,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
             voting = prevVoting;
         }
         Voting v = voting.getMapped();
-        Votable subject = v.getSubject().getMapped();
-        if (subject instanceof OwnershipSelection) {
-            OwnershipSelection selection = (OwnershipSelection) subject;
-            OwnershipTransferController checkController = new OwnershipTransferController(selection,
-                    v.getInitialModelState());
-            Voting reconstructedVoting = checkController.getVoting().getMapped();
-            selection.validateReconstructed((OwnershipSelection) reconstructedVoting.getSubject().getMapped());
-        }
+        v.getSubject().getMapped().validate(v, validationContext);
     }
 
     public long validateUnchangedVote(String voteKey, String multihash, String votingKey, long validVersion) {
@@ -570,7 +566,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
             }
         }
 
-        res.timestamp = System.currentTimeMillis();
+        res.timestamp = validationContext.getMainSettlementController().getTimestamp();
         return res;
     }
 
