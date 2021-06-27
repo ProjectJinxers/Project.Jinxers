@@ -13,10 +13,12 @@
  */
 package org.projectjinxers.controller;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -78,6 +80,7 @@ public class ValidationContext {
     private SettlementController currentSettlementController;
     private IPLDObject<ModelState> commonStateObject;
     private ModelState commonState;
+    private Deque<ModelState> previousStates = new ArrayDeque<>();
     private Map<String, IPLDObject<UserState>> commonUserStates = new HashMap<>();
 
     private Map<Long, IPLDObject<ModelState>> mustKeepModelStates;
@@ -145,6 +148,9 @@ public class ValidationContext {
             currentSettlementController = mainSettlementController;
         }
         findCommonState(modelState);
+        ModelState.USER_STATE_KEY_COLLECTOR.validateUndeletableEntries(previousStates);
+        ModelState.VOTING_KEY_COLLECTOR.validateUndeletableEntries(previousStates);
+        ModelState.SETTLEMENT_KEY_COLLECTOR.validateMoveOnceUndeletableEntries(previousStates);
         Map<String, IPLDObject<Voting>> newVotings = modelState.getNewVotings(commonState, false);
         if (newVotings != null) {
             for (Entry<String, IPLDObject<Voting>> entry : newVotings.entrySet()) {
@@ -197,14 +203,17 @@ public class ValidationContext {
                     String userHash = entry.getKey();
                     IPLDObject<UserState> commonUserState = commonState == null ? null
                             : commonState.getUserState(userHash);
-                    if (currentValidLocalState != null) {
-                        if (commonUserState == null) {
-                            findCommonUserState(userHash, userStateObject);
-                        }
-                        else {
-                            findBestCommonUserState(userHash, userStateObject, commonUserState);
-                        }
+                    Deque<UserState> previousStates = new ArrayDeque<>();
+                    if (commonUserState == null) {
+                        findCommonUserState(userHash, userStateObject, previousStates);
                     }
+                    else {
+                        findBestCommonUserState(userHash, userStateObject, commonUserState, previousStates);
+                    }
+                    UserState.DOCUMENT_KEY_COLLECTOR.validateMoveOnceUndeletableEntries(previousStates);
+                    UserState.SETTLEMENT_KEY_COLLECTOR.validateUndeletableEntries(previousStates, this.previousStates);
+                    UserState.OWNERSHIP_KEY_COLLECTOR.validateMoveOnceUndeletableEntries(previousStates);
+                    UserState.UNBAN_KEY_COLLECTOR.validateMoveOnceUndeletableEntries(previousStates);
                     validateUserState(userState, modelState, newSettlementRequestsMap, newOwnershipRequestsMap);
                 }
             }
@@ -288,7 +297,15 @@ public class ValidationContext {
     }
 
     private void findCommonState(ModelState modelState) {
-        if (currentValidLocalState != null) {
+        if (currentValidLocalState == null) {
+            IPLDObject<ModelState> remoteStateObject = modelState.getPreviousVersion();
+            while (remoteStateObject != null) {
+                ModelState remoteState = remoteStateObject.getMapped();
+                previousStates.push(remoteState);
+                remoteStateObject = remoteState.getPreviousVersion();
+            }
+        }
+        else {
             IPLDObject<ModelState> localStateObject = currentValidLocalState;
             ModelState localState = localStateObject.getMapped();
             IPLDObject<ModelState> remoteStateObject = null;
@@ -302,6 +319,7 @@ public class ValidationContext {
                         return;
                     }
                     remoteState = remoteStateObject.getMapped();
+                    previousStates.push(remoteState);
                     remoteVersion = remoteState.getVersion();
                     if (currentLocalHashes.contains(remoteStateObject.getMultihash())) {
                         commonStateObject = remoteStateObject;
@@ -339,48 +357,60 @@ public class ValidationContext {
         }
     }
 
-    private void findCommonUserState(String userHash, IPLDObject<UserState> userState) {
-        IPLDObject<UserState> localUserStateObject = currentValidLocalState.getMapped().expectUserState(userHash);
-        UserState localUserState = localUserStateObject.getMapped();
+    private void findCommonUserState(String userHash, IPLDObject<UserState> userState,
+            Deque<UserState> previousStates) {
         IPLDObject<UserState> remoteUserStateObject = userState;
         UserState remoteUserState = remoteUserStateObject.getMapped();
-        long localVersion = localUserState.getVersion();
-        long remoteVersion = remoteUserState.getVersion();
-        do {
-            while (remoteVersion > localVersion) {
-                remoteUserStateObject = remoteUserState.getPreviousVersion();
-                if (remoteUserStateObject == null) {
-                    return;
-                }
+        if (currentValidLocalState == null) {
+            remoteUserStateObject = remoteUserState.getPreviousVersion();
+            while (remoteUserStateObject != null) {
                 remoteUserState = remoteUserStateObject.getMapped();
-                remoteVersion = remoteUserState.getVersion();
-            }
-            while (localVersion > remoteVersion) {
-                localUserStateObject = localUserState.getPreviousVersion();
-                if (localUserStateObject == null) {
-                    return;
-                }
-                localUserState = localUserStateObject.getMapped();
-                localVersion = localUserState.getVersion();
-            }
-            if (localVersion == remoteVersion) {
-                if (localUserStateObject.getMultihash().equals(remoteUserStateObject.getMultihash())) {
-                    commonUserStates.put(userHash, localUserStateObject);
-                    return;
-                }
-                localUserStateObject = localUserState.getPreviousVersion();
-                if (localUserStateObject == null) {
-                    return;
-                }
-                localUserState = localUserStateObject.getMapped();
-                localVersion = localUserState.getVersion();
+                previousStates.push(remoteUserState);
+                remoteUserStateObject = remoteUserState.getPreviousVersion();
             }
         }
-        while (true);
+        else {
+            IPLDObject<UserState> localUserStateObject = currentValidLocalState.getMapped().expectUserState(userHash);
+            UserState localUserState = localUserStateObject.getMapped();
+            long localVersion = localUserState.getVersion();
+            long remoteVersion = remoteUserState.getVersion();
+            do {
+                while (remoteVersion > localVersion) {
+                    remoteUserStateObject = remoteUserState.getPreviousVersion();
+                    if (remoteUserStateObject == null) {
+                        return;
+                    }
+                    remoteUserState = remoteUserStateObject.getMapped();
+                    previousStates.push(remoteUserState);
+                    remoteVersion = remoteUserState.getVersion();
+                }
+                while (localVersion > remoteVersion) {
+                    localUserStateObject = localUserState.getPreviousVersion();
+                    if (localUserStateObject == null) {
+                        return;
+                    }
+                    localUserState = localUserStateObject.getMapped();
+                    localVersion = localUserState.getVersion();
+                }
+                if (localVersion == remoteVersion) {
+                    if (localUserStateObject.getMultihash().equals(remoteUserStateObject.getMultihash())) {
+                        commonUserStates.put(userHash, localUserStateObject);
+                        return;
+                    }
+                    localUserStateObject = localUserState.getPreviousVersion();
+                    if (localUserStateObject == null) {
+                        return;
+                    }
+                    localUserState = localUserStateObject.getMapped();
+                    localVersion = localUserState.getVersion();
+                }
+            }
+            while (true);
+        }
     }
 
     private void findBestCommonUserState(String userHash, IPLDObject<UserState> userState,
-            IPLDObject<UserState> minCommonState) {
+            IPLDObject<UserState> minCommonState, Deque<UserState> previousStates) {
         IPLDObject<UserState> localUserStateObject = currentValidLocalState.getMapped().expectUserState(userHash);
         UserState localUserState = localUserStateObject.getMapped();
         IPLDObject<UserState> remoteUserStateObject = userState;
@@ -409,6 +439,7 @@ public class ValidationContext {
                 break;
             }
             remoteUserState = remoteUserStateObject.getMapped();
+            previousStates.push(remoteUserState);
             remoteVersion = remoteUserState.getVersion();
         }
         commonUserStates.put(userHash, minCommonState);
@@ -420,6 +451,16 @@ public class ValidationContext {
      * voting.subject.userState or contain unban request; unban request must be active
      */
     private void validateNewVoting(String key, Voting voting, ModelState modelState) {
+        if (previousStates.size() > 0) {
+            Collection<Voting> previousVersions = new ArrayList<>();
+            for (ModelState previous : previousStates) {
+                IPLDObject<Voting> previousVoting = previous.getVoting(key);
+                if (previousVoting != null) {
+                    previousVersions.add(previousVoting.getMapped());
+                }
+            }
+            Voting.VOTE_KEY_COLLECTOR.validateUndeletableEntries(previousVersions);
+        }
         boolean hasNewVotes = voting.validateNewVotes(commonState, modelState, this);
         IPLDObject<Tally> tally = voting.getTally();
         if (tally != null && validated.add(tally.getMultihash())) {

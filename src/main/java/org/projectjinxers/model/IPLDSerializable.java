@@ -14,6 +14,10 @@
 package org.projectjinxers.model;
 
 import java.io.IOException;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Set;
 
 import org.ethereum.crypto.ECKey;
 import org.projectjinxers.account.Signer;
@@ -21,6 +25,7 @@ import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.ValidationContext;
+import org.projectjinxers.controller.ValidationException;
 
 /**
  * The base interface for all data model classes, that can be saved as IPLD in IPFS.
@@ -28,6 +33,113 @@ import org.projectjinxers.controller.ValidationContext;
  * @author ProjectJinxers
  */
 public interface IPLDSerializable {
+
+    public static interface KeyCollector<D extends IPLDSerializable> {
+
+        Set<String> getHashes(D instance);
+
+        default Set<String> getSplitHashes(D instance) {
+            Set<String> firstHashes = getFirstHashes(instance);
+            Set<String> secondHashes = getSecondHashes(instance);
+            if (firstHashes == null) {
+                return secondHashes;
+            }
+            if (secondHashes == null) {
+                return firstHashes;
+            }
+            Set<String> union = new HashSet<>(firstHashes);
+            union.addAll(secondHashes);
+            if (union.size() < firstHashes.size() + secondHashes.size()) {
+                throw new ValidationException("intersection of first and second hashes is not empty");
+            }
+            return union;
+        }
+
+        default Set<String> getFirstHashes(D instance) {
+            return null;
+        }
+
+        default Set<String> getSecondHashes(D instance) {
+            return null;
+        }
+
+        default void validateUndeletableEntries(Collection<D> previousStates) {
+            Set<String> previousHashes = null;
+            for (D previousState : previousStates) {
+                Set<String> hashes = getHashes(previousState);
+                if (previousHashes != null && !hashes.containsAll(previousHashes)) {
+                    throw new ValidationException("found unexpectedly deleted entries");
+                }
+                previousHashes = hashes;
+            }
+        }
+
+        default void validateMoveOnceUndeletableEntries(Collection<D> previousStates) {
+            Set<String> previousMovedHashes = null;
+            Set<String> previousHashes = null;
+            for (D previousState : previousStates) {
+                Set<String> movedHashes = getSecondHashes(previousState);
+                if (previousMovedHashes != null && !movedHashes.containsAll(previousMovedHashes)) {
+                    throw new ValidationException("found unexpectedly deleted moved entries");
+                }
+                Set<String> hashes = getHashes(previousState);
+                if (previousHashes != null && !hashes.containsAll(previousHashes)) {
+                    throw new ValidationException("found unexpectedly deleted entries");
+                }
+                previousMovedHashes = movedHashes;
+                previousHashes = hashes;
+            }
+        }
+
+    }
+
+    public static class SplitSourceKeyCollector<D1 extends IPLDSerializable, D2 extends IPLDSerializable> {
+
+        private KeyCollector<D1> firstKeyCollector;
+        private KeyCollector<D2> secondKeyCollector;
+
+        public SplitSourceKeyCollector(KeyCollector<D1> firstKeyCollector, KeyCollector<D2> secondKeyCollector) {
+            this.firstKeyCollector = firstKeyCollector;
+            this.secondKeyCollector = secondKeyCollector;
+        }
+
+        public void validateUndeletableEntries(Collection<D1> firstPreviousStates,
+                Collection<D2> secondPreviousStates) {
+            if (firstPreviousStates.isEmpty()) {
+                return;
+            }
+            Set<String> previousHashes = null;
+            Iterator<D2> secondPreviousStatesIterator = secondPreviousStates.iterator();
+            D2 secondPreviousState = secondPreviousStatesIterator.next();
+            for (D1 previousState : firstPreviousStates) {
+                Set<String> hashes = new HashSet<>();
+                Set<String> sourceHashes = firstKeyCollector.getHashes(previousState);
+                if (sourceHashes != null) {
+                    hashes.addAll(sourceHashes);
+                }
+                Set<String> movedHashes = secondKeyCollector.getHashes(secondPreviousState);
+                if (movedHashes != null) {
+                    hashes.addAll(movedHashes);
+                }
+                if (previousHashes != null) {
+                    while (!hashes.containsAll(previousHashes)) {
+                        if (secondPreviousStatesIterator.hasNext()) {
+                            secondPreviousState = secondPreviousStatesIterator.next();
+                            movedHashes = secondKeyCollector.getHashes(secondPreviousState);
+                            if (movedHashes != null) {
+                                hashes.addAll(movedHashes);
+                            }
+                        }
+                        else {
+                            throw new ValidationException("found unexpectedly deleted entries");
+                        }
+                    }
+                }
+                previousHashes = hashes;
+            }
+        }
+
+    }
 
     /**
      * The meta version of a stored instance is stored with it in the metadata object. This enables code changes in data

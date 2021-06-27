@@ -62,6 +62,15 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
         }
     };
 
+    public static final KeyCollector<Voting> VOTE_KEY_COLLECTOR = new KeyCollector<>() {
+
+        @Override
+        public Set<String> getHashes(Voting instance) {
+            return instance.votes == null ? null : instance.votes.keySet();
+        }
+
+    };
+
     private int seed;
     private int obfuscationVersion;
     private IPLDObject<Votable> subject;

@@ -69,39 +69,121 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
     private static final KeyProvider<Review> REVIEW_KEY_PROVIDER = new KeyProvider<>() {
     };
     private static final KeyProvider<DocumentRemoval> DOCUMENT_REMOVAL_KEY_PROVIDER = new KeyProvider<>() {
+
+        @Override
         public String getKey(IPLDObject<DocumentRemoval> object) {
             return object.getMapped().getDocument().getMultihash();
         }
+
     };
     static final KeyProvider<SettlementRequest> SETTLEMENT_REQUEST_KEY_PROVIDER = new KeyProvider<>() {
+
         @Override
         public String getKey(IPLDObject<SettlementRequest> object) {
             return object.getMapped().getDocument().getMultihash();
         }
+
     };
     private static final KeyProvider<OwnershipRequest> OWNERSHIP_REQUEST_KEY_PROVIDER = new KeyProvider<>() {
+
         @Override
         public String getKey(IPLDObject<OwnershipRequest> object) {
             return object.getMapped().getDocument().getMultihash();
         }
+
     };
     private static final KeyProvider<UnbanRequest> UNBAN_REQUEST_KEY_PROVIDER = new KeyProvider<>() {
+
         @Override
         public String getKey(IPLDObject<UnbanRequest> object) {
             return object.getMapped().getDocument().getMultihash();
         }
+
     };
     private static final KeyProvider<GrantedOwnership> GRANTED_OWNERSHIP_KEY_PROVIDER = new KeyProvider<>() {
+
         @Override
         public String getKey(IPLDObject<GrantedOwnership> object) {
             return object.getMapped().getDocument().getMapped().getPreviousVersionHash();
         }
+
     };
     private static final KeyProvider<GrantedUnban> GRANTED_UNBAN_KEY_PROVIDER = new KeyProvider<>() {
+
         @Override
         public String getKey(IPLDObject<GrantedUnban> object) {
             return object.getMapped().getUnbanRequest().getMapped().getDocument().getMultihash();
         }
+
+    };
+
+    public static final KeyCollector<UserState> DOCUMENT_KEY_COLLECTOR = new KeyCollector<>() {
+
+        @Override
+        public Set<String> getHashes(UserState instance) {
+            return getSplitHashes(instance);
+        }
+
+        @Override
+        public Set<String> getFirstHashes(UserState instance) {
+            return instance.documents == null ? null : instance.documents.keySet();
+        }
+
+        @Override
+        public Set<String> getSecondHashes(UserState instance) {
+            return instance.removedDocuments == null ? null : instance.removedDocuments.keySet();
+        }
+
+    };
+
+    private static final KeyCollector<UserState> SETTLEMENT_REQUEST_KEY_COLLECTOR = new KeyCollector<>() {
+
+        @Override
+        public Set<String> getHashes(UserState instance) {
+            return instance.settlementRequests == null ? null : instance.settlementRequests.keySet();
+        }
+
+    };
+
+    public static final SplitSourceKeyCollector<UserState, ModelState> SETTLEMENT_KEY_COLLECTOR = new SplitSourceKeyCollector<>(
+            SETTLEMENT_REQUEST_KEY_COLLECTOR, ModelState.SEALED_DOCUMENT_KEY_COLLECTOR);
+
+    public static final KeyCollector<UserState> OWNERSHIP_KEY_COLLECTOR = new KeyCollector<>() {
+
+        @Override
+        public Set<String> getHashes(UserState instance) {
+            return getSplitHashes(instance);
+        }
+
+        @Override
+        public Set<String> getFirstHashes(UserState instance) {
+            return instance.ownershipRequests == null ? null : instance.ownershipRequests.keySet();
+        }
+
+        @Override
+        public Set<String> getSecondHashes(UserState instance) {
+            return instance.grantedOwnerships == null ? null : instance.grantedOwnerships.keySet();
+        };
+
+    };
+
+    public static final KeyCollector<UserState> UNBAN_KEY_COLLECTOR = new KeyCollector<>() {
+
+        @Override
+        public Set<String> getHashes(UserState instance) {
+            return getSplitHashes(instance);
+        }
+
+        @Override
+        public Set<String> getFirstHashes(UserState instance) {
+            return instance.unbanRequests == null ? null : instance.unbanRequests.keySet();
+        }
+
+        @Override
+        public Set<String> getSecondHashes(UserState instance) {
+            return instance.grantedUnbans == null ? null : instance.grantedUnbans.keySet();
+        }
+
     };
 
     private long version;
@@ -369,19 +451,6 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         if (transferredOwnershipHashes != null && transferredOwnershipHashes.size() > 0) {
             for (String hash : transferredOwnershipHashes) {
                 updated.documents.remove(hash);
-                if (updated.grantedOwnerships != null && updated.grantedOwnerships.size() > 0) {
-                    String toRemove = null;
-                    for (Entry<String, IPLDObject<GrantedOwnership>> entry : updated.grantedOwnerships.entrySet()) {
-                        IPLDObject<Document> document = entry.getValue().getMapped().getDocument();
-                        if (document.getMultihash().equals(hash)) {
-                            toRemove = entry.getKey();
-                            break;
-                        }
-                    }
-                    if (toRemove != null) {
-                        updated.grantedOwnerships.remove(toRemove);
-                    }
-                }
             }
         }
         if (requests != null && requests.size() > 0) {
@@ -398,8 +467,11 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
                 updated.grantedOwnerships = new LinkedHashMap<>();
             }
             for (IPLDObject<GrantedOwnership> grantedOwnership : granted) {
-                updated.grantedOwnerships.put(GRANTED_OWNERSHIP_KEY_PROVIDER.getKey(grantedOwnership),
-                        grantedOwnership);
+                String key = GRANTED_OWNERSHIP_KEY_PROVIDER.getKey(grantedOwnership);
+                updated.grantedOwnerships.put(key, grantedOwnership);
+                if (updated.ownershipRequests != null) { // might be OP reclaim
+                    updated.ownershipRequests.remove(key);
+                }
             }
         }
         if (docs != null && docs.size() > 0) {
@@ -631,7 +703,9 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             Collection<IPLDObject<GrantedOwnership>> newGrantedOwnerships = other.newGrantedOwnerships;
             if (newGrantedOwnerships != null) {
                 for (IPLDObject<GrantedOwnership> granted : newGrantedOwnerships) {
-                    res.grantedOwnerships.put(GRANTED_OWNERSHIP_KEY_PROVIDER.getKey(granted), granted);
+                    String key = GRANTED_OWNERSHIP_KEY_PROVIDER.getKey(granted);
+                    res.grantedOwnerships.put(key, granted);
+                    res.ownershipRequests.remove(key);
                 }
             }
         }
@@ -643,7 +717,9 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             Collection<IPLDObject<GrantedUnban>> newGrantedUnbans = other.newGrantedUnbans;
             if (newGrantedUnbans != null) {
                 for (IPLDObject<GrantedUnban> granted : newGrantedUnbans) {
-                    res.grantedUnbans.put(GRANTED_UNBAN_KEY_PROVIDER.getKey(granted), granted);
+                    String key = GRANTED_UNBAN_KEY_PROVIDER.getKey(granted);
+                    res.grantedUnbans.put(key, granted);
+                    res.unbanRequests.remove(key);
                 }
             }
         }

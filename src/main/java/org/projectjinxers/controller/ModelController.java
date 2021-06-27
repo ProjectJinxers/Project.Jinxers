@@ -20,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -28,7 +29,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Queue;
 import java.util.Set;
-import java.util.Stack;
 
 import org.ethereum.crypto.ECKey.ECDSASignature;
 import org.projectjinxers.account.Signer;
@@ -74,8 +74,8 @@ public class ModelController {
     private ValidationContext currentValidationContext;
 
     private boolean validatingModelState;
-    private Stack<PendingSubMessage> pendingModelStates;
-    private Stack<PendingSubMessage> pendingOwnershipRequests;
+    private Deque<PendingSubMessage> pendingModelStates;
+    private Deque<PendingSubMessage> pendingOwnershipRequests;
 
     private Map<String, IPLDObject<UserState>> pendingUserStates;
     private Map<String, Queue<IPLDObject<Document>>> queuedDocuments;
@@ -632,7 +632,7 @@ public class ModelController {
 
     private void storePotentialModelStateHash(String pubSubData, long timestamp) {
         if (pendingModelStates == null) {
-            pendingModelStates = new Stack<>();
+            pendingModelStates = new ArrayDeque<>();
         }
         synchronized (pendingModelStates) {
             pendingModelStates.push(new PendingSubMessage(pubSubData, timestamp));
@@ -641,7 +641,7 @@ public class ModelController {
 
     private void storePotentialOwnershipRequestHash(String pubSubData, long timestamp) {
         if (pendingOwnershipRequests == null) {
-            pendingOwnershipRequests = new Stack<>();
+            pendingOwnershipRequests = new ArrayDeque<>();
         }
         synchronized (pendingOwnershipRequests) {
             pendingOwnershipRequests.push(new PendingSubMessage(pubSubData, timestamp));

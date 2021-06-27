@@ -98,7 +98,7 @@ public class OwnershipTransferController {
         this.signature = signature;
         this.timestamp = timestamp;
     }
-    
+
     public OwnershipTransferController(IPLDObject<OwnershipRequest> ownershipRequest, IPLDObject<ModelState> modelState,
             IPLDContext context) {
         OwnershipRequest req = ownershipRequest.getMapped();

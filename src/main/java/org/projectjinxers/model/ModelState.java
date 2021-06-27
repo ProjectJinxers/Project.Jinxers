@@ -52,30 +52,85 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
     private static final String KEY_OWNERSHIP_REQUESTS = "o";
 
     private static final KeyProvider<UserState> USER_STATE_KEY_PROVIDER = new KeyProvider<>() {
+
         @Override
         public String getKey(IPLDObject<UserState> object) {
             return object.getMapped().getUser().getMultihash();
         }
+
     };
 
     private static final KeyProvider<Voting> VOTING_KEY_PROVIDER = new KeyProvider<>() {
+
         @Override
         public String getKey(IPLDObject<Voting> object) {
             return object.getMapped().getSubject().getMultihash();
         }
+
     };
 
     private static final KeyProvider<SealedDocument> SEALED_DOCUMENT_KEY_PROVIDER = new KeyProvider<>() {
+
+        @Override
         public String getKey(IPLDObject<SealedDocument> object) {
             return object.getMapped().getDocument().getMultihash();
         }
+
     };
 
     private static final KeyProvider<OwnershipRequest> OWNERSHIP_REQUESTS_KEY_PROVIDER = new KeyProvider<>() {
+
         @Override
         public String getKey(IPLDObject<OwnershipRequest> object) {
             return object.getMapped().getDocument().getMultihash();
         }
+
+    };
+
+    public static final KeyCollector<ModelState> USER_STATE_KEY_COLLECTOR = new KeyCollector<>() {
+
+        @Override
+        public java.util.Set<String> getHashes(ModelState instance) {
+            return instance.userStates == null ? null : instance.userStates.keySet();
+        }
+
+    };
+
+    public static final KeyCollector<ModelState> VOTING_KEY_COLLECTOR = new KeyCollector<>() {
+
+        @Override
+        public Set<String> getHashes(ModelState instance) {
+            return instance.votings == null ? null : instance.votings.keySet();
+        };
+
+    };
+
+    static final KeyCollector<ModelState> SEALED_DOCUMENT_KEY_COLLECTOR = new KeyCollector<>() {
+
+        @Override
+        public Set<String> getHashes(ModelState instance) {
+            return instance.sealedDocuments == null ? null : instance.sealedDocuments.keySet();
+        }
+
+    };
+
+    public static final KeyCollector<ModelState> SETTLEMENT_KEY_COLLECTOR = new KeyCollector<>() {
+
+        @Override
+        public Set<String> getHashes(ModelState instance) {
+            return getSplitHashes(instance);
+        }
+
+        @Override
+        public Set<String> getFirstHashes(ModelState instance) {
+            return instance.settlementRequests == null ? null : instance.settlementRequests.keySet();
+        }
+
+        @Override
+        public Set<String> getSecondHashes(ModelState instance) {
+            return SEALED_DOCUMENT_KEY_COLLECTOR.getHashes(instance);
+        }
+
     };
 
     private long version;
@@ -490,7 +545,16 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
                 res.votings.putAll(newVotings);
             }
         }
-
+        if (this.settlementRequests == null) {
+            res.settlementRequests = other.settlementRequests;
+        }
+        else {
+            res.settlementRequests = new LinkedHashMap<>(settlementRequests);
+            Map<String, IPLDObject<SettlementRequest>> newSettlementRequests = other.newSettlementRequests;
+            if (newSettlementRequests != null) {
+                res.settlementRequests.putAll(newSettlementRequests);
+            }
+        }
         if (this.sealedDocuments == null) {
             res.sealedDocuments = other.sealedDocuments;
         }
@@ -498,7 +562,11 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
             res.sealedDocuments = new LinkedHashMap<>(sealedDocuments);
             Map<String, IPLDObject<SealedDocument>> newSealedDocuments = other.newSealedDocuments;
             if (newSealedDocuments != null) {
-                res.sealedDocuments.putAll(newSealedDocuments);
+                for (Entry<String, IPLDObject<SealedDocument>> entry : newSealedDocuments.entrySet()) {
+                    String key = entry.getKey();
+                    res.sealedDocuments.put(key, entry.getValue());
+                    res.settlementRequests.remove(key);
+                }
             }
         }
 
