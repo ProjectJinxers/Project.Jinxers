@@ -23,6 +23,7 @@ import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.ValidationContext;
+import org.projectjinxers.controller.ValidationException;
 
 /**
  * Review instances represent users' reviews of a document. There are also special reviews, which can invert the truth
@@ -68,9 +69,11 @@ public class Review extends Document implements DocumentAction, Loader<Review> {
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {
+        this.approve = reader.readBoolean(KEY_APPROVE); // need this value before calling super (if the reader needs to
+                                                        // be accessed in a specific order, set a flag and handle
+                                                        // missing contents later)
         super.read(reader, context, validationContext, eager, metadata);
         this.invertTruth = Boolean.TRUE.equals(reader.readBoolean(KEY_INVERT_TRUTH));
-        this.approve = reader.readBoolean(KEY_APPROVE);
         this.document = reader.readLinkObject(KEY_DOCUMENT, context, validationContext, LoaderFactory.DOCUMENT, eager);
         this.invertTruthLinks = reader.readLinkObjects(KEY_INVERT_TRUTH_LINKS, context, validationContext,
                 LoaderFactory.DOCUMENT, eager, Document.LINK_KEY_PROVIDER);
@@ -83,6 +86,13 @@ public class Review extends Document implements DocumentAction, Loader<Review> {
         writer.writeBoolean(KEY_APPROVE, approve);
         writer.writeLink(KEY_DOCUMENT, document, signer, null);
         writer.writeLinkObjects(KEY_INVERT_TRUTH_LINKS, invertTruthLinks, signer, null);
+    }
+
+    @Override
+    protected void handleMissingContents() {
+        if (Boolean.FALSE.equals(approve)) {
+            throw new ValidationException("declining review without contents");
+        }
     }
 
     /**

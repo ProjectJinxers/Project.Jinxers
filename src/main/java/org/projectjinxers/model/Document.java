@@ -27,6 +27,7 @@ import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDReader.KeyProvider;
 import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.ValidationContext;
+import org.projectjinxers.controller.ValidationException;
 
 /**
  * Documents are one of the central parts of the system. Users can create, review, update and delete documents. If an
@@ -54,13 +55,19 @@ public class Document implements IPLDSerializable {
     private static final String KEY_TAGS = "g";
     private static final String KEY_DATE = "d";
     private static final String KEY_SOURCE = "s";
-    private static final String KEY_CONTENTS = "C";
+    private static final String KEY_CONTENTS = "c";
     private static final String KEY_USER_STATE = "u";
     private static final String KEY_PREVIOUS_VERSION = "p";
+    private static final String KEY_FIRST_VERSION = "f";
     private static final String KEY_LINKS = "l";
 
     static final KeyProvider<Document> LINK_KEY_PROVIDER = new KeyProvider<Document>() {
     };
+
+    private static IPLDObject<Document> getFirstVersionForSuccessor(IPLDObject<Document> document) {
+        IPLDObject<Document> firstVersion = document.getMapped().firstVersion;
+        return firstVersion == null ? document : firstVersion;
+    }
 
     private String title;
     private String subtitle;
@@ -71,6 +78,7 @@ public class Document implements IPLDSerializable {
     private IPLDObject<DocumentContents> contents;
     private IPLDObject<UserState> userState;
     private IPLDObject<Document> previousVersion;
+    private IPLDObject<Document> firstVersion;
     private Map<String, IPLDObject<Document>> links;
 
     Document() {
@@ -118,6 +126,7 @@ public class Document implements IPLDSerializable {
         this.source = doc.source;
         this.userState = userState;
         this.previousVersion = previousVersion;
+        this.firstVersion = getFirstVersionForSuccessor(previousVersion);
     }
 
     @Override
@@ -131,10 +140,15 @@ public class Document implements IPLDSerializable {
         this.source = reader.readString(KEY_SOURCE);
         this.contents = reader.readLinkObject(KEY_CONTENTS, context, validationContext, LoaderFactory.DOCUMENT_CONTENTS,
                 eager);
+        if (validationContext != null && contents == null) {
+            handleMissingContents();
+        }
         this.userState = reader.readLinkObject(KEY_USER_STATE, context, validationContext, LoaderFactory.USER_STATE,
                 eager);
         this.previousVersion = reader.readLinkObject(KEY_PREVIOUS_VERSION, context, validationContext,
                 LoaderFactory.DOCUMENT, eager);
+        this.firstVersion = reader.readLinkObject(KEY_FIRST_VERSION, context, validationContext, LoaderFactory.DOCUMENT,
+                eager);
         this.links = reader.readLinkObjects(KEY_LINKS, context, validationContext, LoaderFactory.DOCUMENT, false,
                 LINK_KEY_PROVIDER);
         if (validationContext != null) {
@@ -153,7 +167,12 @@ public class Document implements IPLDSerializable {
         writer.writeLink(KEY_CONTENTS, contents, signer, context);
         writer.writeLink(KEY_USER_STATE, userState, signer, null);
         writer.writeLink(KEY_PREVIOUS_VERSION, previousVersion, signer, null);
+        writer.writeLink(KEY_FIRST_VERSION, firstVersion, signer, null);
         writer.writeLinkObjects(KEY_LINKS, links, signer, context);
+    }
+
+    protected void handleMissingContents() {
+        throw new ValidationException("document without contents");
     }
 
     /**
@@ -161,6 +180,14 @@ public class Document implements IPLDSerializable {
      */
     public String getTitle() {
         return title;
+    }
+
+    public String getVersion() {
+        return version;
+    }
+
+    public String getTags() {
+        return tags;
     }
 
     /**
@@ -197,6 +224,7 @@ public class Document implements IPLDSerializable {
         Document copy = copy();
         copy.userState = newOwner;
         copy.previousVersion = currentWrapper;
+        copy.firstVersion = getFirstVersionForSuccessor(currentWrapper);
         IPLDObject<Document> res = new IPLDObject<Document>(copy, foreignSignature);
         return res;
     }
@@ -215,19 +243,27 @@ public class Document implements IPLDSerializable {
         return previousVersion == null ? null : previousVersion.getMapped();
     }
 
+    public IPLDObject<Document> getPreviousVersionObject() {
+        return previousVersion;
+    }
+
+    /**
+     * @return the hash of the first version (null-safe)
+     */
+    public String getFirstVersionHash() {
+        return firstVersion == null ? null : firstVersion.getMultihash();
+    }
+
     /**
      * @return the first version (null-safe)
      */
     public Document getFirstVersion() {
-        Document doc = this;
-        do {
-            Document previous = doc.getPreviousVersion();
-            if (previous == null) {
-                return doc;
-            }
-            doc = previous;
-        }
-        while (true);
+        return firstVersion == null ? this : firstVersion.getMapped();
+    }
+
+    public Document update(String version, String tags, IPLDObject<DocumentContents> contents,
+            IPLDObject<Document> current) {
+        return update(title, subtitle, version, tags, source, contents, current);
     }
 
     /**
@@ -258,6 +294,7 @@ public class Document implements IPLDSerializable {
         updated.contents = contents;
         if (current != null) {
             updated.previousVersion = current;
+            updated.firstVersion = getFirstVersionForSuccessor(current);
             updated.links = links == null ? null : new LinkedHashMap<>(links);
         }
         return updated;
@@ -291,6 +328,7 @@ public class Document implements IPLDSerializable {
         res.links = links;
         res.userState = userState;
         res.previousVersion = previousVersion;
+        res.firstVersion = firstVersion;
         return res;
     }
 

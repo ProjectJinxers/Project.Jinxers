@@ -14,9 +14,12 @@
 package org.projectjinxers.model;
 
 import java.io.IOException;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
+import java.util.Deque;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -65,14 +68,30 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
     private static final String KEY_GRANTED_UNBANS = "b";
 
     private static final KeyProvider<Document> DOCUMENT_KEY_PROVIDER = new KeyProvider<>() {
+
+        @Override
+        public String getKey(IPLDObject<Document> object) {
+            String firstVersionHash = object.getMapped().getFirstVersionHash();
+            return firstVersionHash == null ? object.getMultihash() : firstVersionHash;
+        }
+
     };
     private static final KeyProvider<Review> REVIEW_KEY_PROVIDER = new KeyProvider<>() {
+
+        @Override
+        public String getKey(IPLDObject<Review> object) {
+            String firstVersionHash = object.getMapped().getFirstVersionHash();
+            return firstVersionHash == null ? object.getMultihash() : firstVersionHash;
+        }
+
     };
     private static final KeyProvider<DocumentRemoval> DOCUMENT_REMOVAL_KEY_PROVIDER = new KeyProvider<>() {
 
         @Override
         public String getKey(IPLDObject<DocumentRemoval> object) {
-            return object.getMapped().getDocument().getMultihash();
+            IPLDObject<Document> document = object.getMapped().getDocument();
+            String firstVersionHash = document.getMapped().getFirstVersionHash();
+            return firstVersionHash == null ? document.getMultihash() : firstVersionHash;
         }
 
     };
@@ -372,7 +391,17 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         Set<String> unrelatedHashes = new HashSet<>();
         relatedHashes.add(documentHash);
         Document lastActivity = null;
-        main: for (IPLDObject<Document> document : documents.values()) {
+        Collection<IPLDObject<Document>> allDocuments = new ArrayList<>();
+        for (IPLDObject<Document> document : documents.values()) {
+            Deque<IPLDObject<Document>> versions = new ArrayDeque<>();
+            do {
+                versions.push(document);
+                document = document.getMapped().getPreviousVersionObject();
+            }
+            while (document != null);
+            allDocuments.addAll(versions);
+        }
+        main: for (IPLDObject<Document> document : allDocuments) {
             String docHash = document.getMultihash();
             Document doc = document.getMapped();
             String hash = doc.getPreviousVersionHash();

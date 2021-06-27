@@ -18,14 +18,14 @@ import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.projectjinxers.controller.TestIPFSAccessUtil.DEFAULT_SIGNER;
+import static org.projectjinxers.controller.TestIPFSAccessUtil.NEW_OWNER_SIGNER;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.projectjinxers.account.ECCSigner;
-import org.projectjinxers.account.Signer;
 import org.projectjinxers.config.Config;
 import org.projectjinxers.model.Document;
 import org.projectjinxers.model.GrantedOwnership;
@@ -38,9 +38,6 @@ import org.spongycastle.util.encoders.Base64;
  *
  */
 class ModelControllerTest {
-
-    private static final Signer DEFAULT_SIGNER = new ECCSigner("user", "pass");
-    private static final Signer NEW_OWNER_SIGNER = new ECCSigner("newOwner", "newpass");
 
     private TestIPFSAccess access;
 
@@ -221,9 +218,9 @@ class ModelControllerTest {
     @Test
     void testTransferOwnershipReclaim() throws Exception {
         String[] hashes = access.readObjects("model/modelController/transferOwnership/reclaim.json");
-        final String modelStateHash = hashes[1];
-        final String userHash = hashes[0];
-        final String documentHash = hashes[5];
+        final String modelStateHash = hashes[0];
+        final String userHash = hashes[1];
+        final String documentHash = hashes[6];
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
         ModelController controller = new ModelController(access, null, 0);
@@ -239,9 +236,9 @@ class ModelControllerTest {
     @Test
     void testTransferOwnershipReclaimDeferredBySaveFailure() throws Exception {
         String[] hashes = access.readObjects("model/modelController/transferOwnership/reclaim.json");
-        final String modelStateHash = hashes[1];
-        final String userHash = hashes[0];
-        final String documentHash = hashes[5];
+        final String modelStateHash = hashes[0];
+        final String userHash = hashes[1];
+        final String documentHash = hashes[6];
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
         ModelController controller = new ModelController(access, null, 0);
@@ -263,9 +260,9 @@ class ModelControllerTest {
     @Test
     void testTransferOwnershipReclaimDeferredTwiceBySaveFailure() throws Exception {
         String[] hashes = access.readObjects("model/modelController/transferOwnership/reclaim.json");
-        final String modelStateHash = hashes[1];
-        final String userHash = hashes[0];
-        final String documentHash = hashes[5];
+        final String modelStateHash = hashes[0];
+        final String userHash = hashes[1];
+        final String documentHash = hashes[6];
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
         ModelController controller = new ModelController(access, null, 0);
@@ -351,9 +348,9 @@ class ModelControllerTest {
     @Test
     void testSimpleOwnershipRequest() throws Exception {
         String[] hashes = access.readObjects("model/modelController/transferOwnership/simpleRequest.json");
-        String modelStateHash = hashes[1];
-        String reviewerHash = hashes[7];
-        String documentHash = hashes[5];
+        String modelStateHash = hashes[8];
+        String reviewerHash = hashes[6];
+        String documentHash = hashes[0];
 
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
@@ -376,9 +373,9 @@ class ModelControllerTest {
     @Test
     void testSimpleOwnershipRequestDeferredBySaveFailure() throws Exception {
         String[] hashes = access.readObjects("model/modelController/transferOwnership/simpleRequest.json");
-        String modelStateHash = hashes[1];
-        String reviewerHash = hashes[7];
-        String documentHash = hashes[5];
+        String modelStateHash = hashes[8];
+        String reviewerHash = hashes[6];
+        String documentHash = hashes[0];
 
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
@@ -409,9 +406,9 @@ class ModelControllerTest {
     @Test
     void testSimpleOwnershipRequestDeferredTwiceBySaveFailure() throws Exception {
         String[] hashes = access.readObjects("model/modelController/transferOwnership/simpleRequest.json");
-        String modelStateHash = hashes[1];
-        String reviewerHash = hashes[7];
-        String documentHash = hashes[5];
+        String modelStateHash = hashes[8];
+        String reviewerHash = hashes[6];
+        String documentHash = hashes[0];
 
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAMainAddress(), modelStateHash);
@@ -494,7 +491,8 @@ class ModelControllerTest {
         assertNull(previousOwnerState.getMapped().getDocument(documentHash));
         IPLDObject<UserState> userState = newLocal.expectUserState(userHash);
         IPLDObject<GrantedOwnership> grantedOwnership = userState.getMapped().getGrantedOwnership(documentHash);
-        assertNotNull(userState.getMapped().expectDocument(grantedOwnership.getMapped().getDocument().getMultihash()));
+        assertNotNull(userState.getMapped()
+                .expectDocument(grantedOwnership.getMapped().getDocument().getMapped().getFirstVersionHash()));
     }
 
     @Test
@@ -529,7 +527,8 @@ class ModelControllerTest {
         assertNull(previousOwnerState.getMapped().getDocument(documentHash));
         IPLDObject<UserState> userState = newLocal.expectUserState(userHash);
         IPLDObject<GrantedOwnership> grantedOwnership = userState.getMapped().getGrantedOwnership(documentHash);
-        assertNotNull(userState.getMapped().expectDocument(grantedOwnership.getMapped().getDocument().getMultihash()));
+        assertNotNull(userState.getMapped()
+                .expectDocument(grantedOwnership.getMapped().getDocument().getMapped().getFirstVersionHash()));
     }
 
     @Test
@@ -570,7 +569,8 @@ class ModelControllerTest {
         assertNull(previousOwnerState.getMapped().getDocument(documentHash));
         IPLDObject<UserState> userState = newLocal.expectUserState(userHash);
         IPLDObject<GrantedOwnership> grantedOwnership = userState.getMapped().getGrantedOwnership(documentHash);
-        assertNotNull(userState.getMapped().expectDocument(grantedOwnership.getMapped().getDocument().getMultihash()));
+        assertNotNull(userState.getMapped()
+                .expectDocument(grantedOwnership.getMapped().getDocument().getMapped().getFirstVersionHash()));
     }
 
     /**
