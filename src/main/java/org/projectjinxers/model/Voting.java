@@ -199,12 +199,15 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
             Map<String, User> allUsers = new HashMap<>();
             for (IPLDObject<UserState> userState : allUserStates) {
                 IPLDObject<User> userObject = userState.getMapped().getUser();
-                allUsers.put(userObject.getMultihash(), userObject.getMapped());
+                String userHash = userObject.getMultihash();
+                if (currentState.expectUserState(userHash).getMapped().checkRequiredRating()) {
+                    allUsers.put(userHash, userObject.getMapped());
+                }
             }
             Set<Entry<String, User>> entrySet = allUsers.entrySet();
             IPLDContext context = validationContext.getContext();
             if (subject.isAnonymous()) {
-                for (Entry<String, IPLDObject<Vote>> entry : newVotes.entrySet()) {
+                outer: for (Entry<String, IPLDObject<Vote>> entry : newVotes.entrySet()) {
                     String key = entry.getKey();
                     IPLDObject<Vote> value = entry.getValue();
                     String multihash = value.getMultihash();
@@ -216,9 +219,10 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
                             String invitationKey = getInvitationKey(userHash);
                             if (key.equals(invitationKey)) {
                                 context.verifySignature(value, Signer.VERIFIER, userEntry.getValue());
-                                break;
+                                continue outer;
                             }
                         }
+                        throw new ValidationException("found unexpected voter - might be banned");
                     }
                 }
             }
@@ -277,7 +281,7 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
             }
         }
         if (!Arrays.equals(expectedCounts, counts)) {
-            throw new ValidationException("Unexpected tally counts");
+            throw new ValidationException("unexpected tally counts");
         }
     }
 

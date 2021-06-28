@@ -182,6 +182,7 @@ public class OwnershipSelection implements Votable {
         if (((Integer) value).intValue() != maxIndex) {
             throw new ValidationException("Expected count for " + value + " to be the max");
         }
+        // TODO: tie-breaker
     }
 
     @Override
@@ -192,7 +193,7 @@ public class OwnershipSelection implements Votable {
         Voting reconstructedVoting = checkController.getVoting().getMapped();
         OwnershipSelection reconstructed = (OwnershipSelection) reconstructedVoting.getSubject().getMapped();
         if (selection.size() != reconstructed.selection.size()) {
-            throw new ValidationException("Expected same selection size");
+            throw new ValidationException("expected same selection size");
         }
         Set<String> reconstructedHashes = new HashSet<>();
         for (IPLDObject<OwnershipRequest> request : reconstructed.selection.values()) {
@@ -200,7 +201,7 @@ public class OwnershipSelection implements Votable {
         }
         for (IPLDObject<OwnershipRequest> request : selection.values()) {
             if (!reconstructedHashes.contains(request.getMultihash())) {
-                throw new ValidationException("Expected same ownership requests");
+                throw new ValidationException("expected same ownership requests");
             }
         }
     }

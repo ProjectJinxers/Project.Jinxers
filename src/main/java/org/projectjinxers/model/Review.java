@@ -15,6 +15,7 @@ package org.projectjinxers.model;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.projectjinxers.account.Signer;
@@ -144,8 +145,10 @@ public class Review extends Document implements DocumentAction, Loader<Review> {
     @Override
     protected Document createCopyInstance() {
         Review res = new Review();
+        res.invertTruth = invertTruth;
         res.approve = approve;
         res.document = document;
+        res.invertTruthLinks = invertTruthLinks == null ? null : new LinkedHashMap<>(invertTruthLinks);
         return res;
     }
 

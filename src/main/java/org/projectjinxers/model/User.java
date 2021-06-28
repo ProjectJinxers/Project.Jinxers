@@ -77,10 +77,9 @@ public class User implements IPLDSerializable, Loader<User> {
      * @param signature the signature
      * @param hashBase  the bytes that had been hashed and signed to create the signature
      * @param signer    the signer used as a verifier
-     * @return true iff the signature has been verified
      */
-    public boolean verifySignature(ECDSASignature signature, byte[] hashBase, Signer signer) {
-        return signer.verifySignature(signature, hashBase, publicKey);
+    public void verifySignature(ECDSASignature signature, byte[] hashBase, Signer signer) {
+        signer.verifySignature(signature, hashBase, publicKey);
     }
 
     @Override

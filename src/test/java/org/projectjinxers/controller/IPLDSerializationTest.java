@@ -14,7 +14,6 @@
 package org.projectjinxers.controller;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.projectjinxers.util.TestSerializationUtil.jsonString;
 
 import java.io.IOException;
@@ -290,7 +289,7 @@ class IPLDSerializationTest {
                 new BigInteger("23462658328756911968606588084224614208373614148725659541764927042184603482760"));
         expectedSignature.v = 28;
         assertEquals(jsonString(expectedSignature, "{\"value\":41}"), json);
-        assertTrue(context.verifySignature(object, signer, Users.createAccount("user", "pass").getPubKey()));
+        context.verifySignature(object, signer, Users.createAccount("user", "pass").getPubKey());
     }
 
 }

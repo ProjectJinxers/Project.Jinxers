@@ -14,12 +14,14 @@
 package org.projectjinxers.model;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDWriter;
+import org.projectjinxers.controller.OwnershipTransferController;
 import org.projectjinxers.controller.ValidationContext;
 
 /**
@@ -103,6 +105,13 @@ public class OwnershipRequest extends ToggleRequest implements DocumentAction, L
         res.timestamp = timestamp;
         res.document = document;
         return res;
+    }
+
+    @Override
+    public byte[] hashBase(IPLDWriter writer, IPLDContext context) throws IOException {
+        String hashBase = OwnershipTransferController.composePubMessageRequest(anonymousVoting, expectUserHash(),
+                document.getMultihash());
+        return hashBase.getBytes(StandardCharsets.UTF_8);
     }
 
     @Override

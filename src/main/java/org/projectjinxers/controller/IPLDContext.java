@@ -142,18 +142,19 @@ public class IPLDContext {
      * @param object   the object
      * @param verifier recreates the hash that had been signed and verifies the signature
      * @param user     the user
-     * @return true iff the signature has been verified successfully
      */
-    public boolean verifySignature(IPLDObject<?> object, Signer verifier, User user) {
+    public void verifySignature(IPLDObject<?> object, Signer verifier, User user) {
         IPLDWriter writer = in.createWriter();
         try {
             byte[] hashBase = object.getMapped().hashBase(writer, this);
             ECDSASignature signature = object.getMetadata().getSignature();
-            return signature != null && user.verifySignature(signature, hashBase, verifier);
+            if (signature == null) {
+                throw new ValidationException("expected signature");
+            }
+            user.verifySignature(signature, hashBase, verifier);
         }
         catch (IOException e) {
-            e.printStackTrace();
-            return false;
+            throw new ValidationException("Failed to verify signature", e);
         }
     }
 
@@ -163,18 +164,19 @@ public class IPLDContext {
      * @param object    the object
      * @param verifier  recreates the hash that had been signed and verifies the signature
      * @param publicKey the public key
-     * @return true iff the signature has been verified successfully
      */
-    public boolean verifySignature(IPLDObject<?> object, Signer verifier, byte[] publicKey) {
+    public void verifySignature(IPLDObject<?> object, Signer verifier, byte[] publicKey) {
         IPLDWriter writer = in.createWriter();
         try {
             byte[] hashBase = object.getMapped().hashBase(writer, this);
             ECDSASignature signature = object.getMetadata().getSignature();
-            return signature != null && verifier.verifySignature(signature, hashBase, publicKey);
+            if (signature == null) {
+                throw new ValidationException("expected signature");
+            }
+            verifier.verifySignature(signature, hashBase, publicKey);
         }
         catch (IOException e) {
-            e.printStackTrace();
-            return false;
+            throw new ValidationException("Failed to verify signature", e);
         }
     }
 

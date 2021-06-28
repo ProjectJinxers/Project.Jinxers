@@ -159,7 +159,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         this.previousVersion = reader.readLinkObject(KEY_PREVIOUS_VERSION, context, null, LoaderFactory.MODEL_STATE,
                 false); // we don't want to load the entire tree, do we?
         if (validationContext != null && previousVersion != null && previousVersion.getMapped().version >= version) {
-            throw new ValidationException("Version must be increased");
+            throw new ValidationException("version must be increased");
         }
         this.userStates = reader.readLinkObjects(KEY_USER_STATES, context, validationContext, LoaderFactory.USER_STATE,
                 eager, USER_STATE_KEY_PROVIDER);
@@ -459,7 +459,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
             if (voting.hasVotes()) {
                 IPLDObject<Vote> check = voting.getVote(votingKey);
                 if (check != null && !check.getMultihash().equals(multihash)) {
-                    throw new ValidationException("Found changed vote");
+                    throw new ValidationException("found changed vote");
                 }
                 res = modelState.version;
                 modelState = modelState.previousVersion == null ? null : modelState.previousVersion.getMapped();

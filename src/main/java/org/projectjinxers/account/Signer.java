@@ -15,6 +15,7 @@ package org.projectjinxers.account;
 
 import org.ethereum.crypto.ECKey;
 import org.ethereum.crypto.ECKey.ECDSASignature;
+import org.projectjinxers.controller.ValidationException;
 import org.projectjinxers.model.Hasher;
 
 /**
@@ -59,11 +60,12 @@ public interface Signer extends Hasher {
      * @param signature the signature
      * @param hashBase  the bytes to verify the signature against after hashing
      * @param publicKey the public key, which is the counterpart to the private key, that had been used to sign the hash
-     * @return true iff the signature is valid
      */
-    default boolean verifySignature(ECDSASignature signature, byte[] hashBase, byte[] publicKey) {
+    default void verifySignature(ECDSASignature signature, byte[] hashBase, byte[] publicKey) {
         byte[] hash = hash(hashBase);
-        return ECKey.verify(hash, signature, publicKey);
+        if (!ECKey.verify(hash, signature, publicKey)) {
+            throw new ValidationException("invalid signature");
+        }
     }
 
 }

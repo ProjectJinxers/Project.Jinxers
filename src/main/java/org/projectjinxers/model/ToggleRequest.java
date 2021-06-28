@@ -21,6 +21,7 @@ import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.ValidationContext;
+import org.projectjinxers.controller.ValidationException;
 
 /**
  * Base class for user requests, where the active state can be toggled. In order to prevent other users from re-posting
@@ -118,5 +119,11 @@ public abstract class ToggleRequest implements IPLDSerializable {
      * @return a new instance of this class, where all necessary properties defined in the subclasses have been set.
      */
     protected abstract ToggleRequest createCopyInstance();
+
+    public void validate(ToggleRequest previous) {
+        if (this != previous && this.active != previous.active && this.payload <= previous.payload) {
+            throw new ValidationException("payload not increased");
+        }
+    }
 
 }

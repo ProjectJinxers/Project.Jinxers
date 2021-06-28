@@ -66,7 +66,17 @@ public class SettlementController {
             Review review = reviewObject.getMapped();
             UserState reviewer = review.expectUserState();
             String reviewerHash = reviewer.getUser().getMultihash();
-            reviews.put(reviewerHash, reviewObject);
+            IPLDObject<Review> replaced = reviews.put(reviewerHash, reviewObject);
+            if (replaced != null) {
+                String firstVersionHash = reviewObject.getMapped().getFirstVersionHash();
+                String fvh = replaced.getMapped().getFirstVersionHash();
+                if (fvh == null) {
+                    fvh = replaced.getMultihash();
+                }
+                if (!firstVersionHash.equals(fvh)) {
+                    throw new ValidationException("multiple unrelated reviews by same user");
+                }
+            }
         }
 
         void removeReview(String reviewerHash) {

@@ -26,6 +26,7 @@ import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDReader.KeyProvider;
 import org.projectjinxers.controller.IPLDWriter;
+import org.projectjinxers.controller.OwnershipTransferController;
 import org.projectjinxers.controller.ValidationContext;
 import org.projectjinxers.controller.ValidationException;
 
@@ -136,7 +137,11 @@ public class Document implements IPLDSerializable {
         this.subtitle = reader.readString(KEY_SUBTITLE);
         this.version = reader.readString(KEY_VERSION);
         this.tags = reader.readString(KEY_TAGS);
-        this.date = new Date(reader.readNumber(KEY_DATE).longValue());
+        long time = reader.readNumber(KEY_DATE).longValue();
+        if (validationContext != null) {
+            validationContext.validateTimestamp(time);
+        }
+        this.date = new Date(time);
         this.source = reader.readString(KEY_SOURCE);
         this.contents = reader.readLinkObject(KEY_CONTENTS, context, validationContext, LoaderFactory.DOCUMENT_CONTENTS,
                 eager);
@@ -310,7 +315,13 @@ public class Document implements IPLDSerializable {
         if (previousVersion != null) {
             String currentOwnerHash = userState.getMapped().getUser().getMultihash();
             if (!currentOwnerHash.equals(previousVersion.getMapped().expectUserState().getUser().getMultihash())) {
-                return (currentOwnerHash + "." + previousVersion.getMultihash()).getBytes(StandardCharsets.UTF_8);
+                String previousHash = previousVersion.getMultihash();
+                IPLDObject<OwnershipRequest> ownershipRequest = userState.getMapped().getOwnershipRequest(previousHash);
+                boolean anonymousVoting = ownershipRequest == null ? false
+                        : ownershipRequest.getMapped().isAnonymousVoting();
+                String hashBase = OwnershipTransferController.composePubMessageRequest(anonymousVoting,
+                        currentOwnerHash, previousHash);
+                return hashBase.getBytes(StandardCharsets.UTF_8);
             }
         }
         return IPLDSerializable.super.hashBase(writer, context);

@@ -384,7 +384,11 @@ public class ModelController {
                             transferredDocHashes = new ArrayDeque<>();
                             transferredDocumentHashes.put(key, transferredDocHashes);
                         }
-                        transferredDocHashes.add(transferredDocument.getMultihash());
+                        String firstVersionHash = transferredDocument.getMapped().getFirstVersionHash();
+                        if (firstVersionHash == null) {
+                            firstVersionHash = transferredDocument.getMultihash();
+                        }
+                        transferredDocHashes.add(firstVersionHash);
                         userHashes.add(key);
                         IPLDObject<UserState> newOwner = controller.getNewOwner();
                         key = newOwner.getMapped().getUser().getMultihash();

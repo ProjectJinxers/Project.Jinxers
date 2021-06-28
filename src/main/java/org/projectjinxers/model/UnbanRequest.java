@@ -161,7 +161,7 @@ public class UnbanRequest extends ToggleRequest implements DocumentAction, Votab
             unbanRequest = userState.getMapped().expectUnbanRequest(document.getMultihash()).getMapped();
         }
         if (!unbanRequest.isActive()) {
-            throw new ValidationException("Created voting from inactive unban request");
+            throw new ValidationException("created voting from inactive unban request");
         }
     }
 

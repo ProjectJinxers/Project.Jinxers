@@ -26,6 +26,7 @@ import java.util.Set;
 
 import org.projectjinxers.config.SecretConfig;
 import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.controller.ValidationException;
 import org.projectjinxers.model.IPLDSerializable;
 
 /**
@@ -40,6 +41,28 @@ public class ModelUtility {
 
     static {
         secretObfuscationParameter = SecretConfig.getSharedInstance().getObfuscationParam();
+    }
+
+    public static <D extends IPLDSerializable> boolean isEqual(IPLDObject<D> o1, IPLDObject<D> o2) {
+        if (o1 == o2) {
+            return true;
+        }
+        D mapped1 = o1.getMapped();
+        D mapped2 = o2.getMapped();
+        if (mapped1 == mapped2) {
+            return true;
+        }
+        return o1.getMultihash().equals(o2.getMultihash());
+    }
+
+    public static <D extends IPLDSerializable> void expectEqual(IPLDObject<D> o1, IPLDObject<D> o2) {
+        expectEqual(o1, o2, "expected equal objects");
+    }
+
+    public static <D extends IPLDSerializable> void expectEqual(IPLDObject<D> o1, IPLDObject<D> o2, String message) {
+        if (!isEqual(o1, o2)) {
+            throw new ValidationException(message);
+        }
     }
 
     public static <D extends IPLDSerializable> Collection<IPLDObject<D>> getNewLinks(Map<String, IPLDObject<D>> now,
