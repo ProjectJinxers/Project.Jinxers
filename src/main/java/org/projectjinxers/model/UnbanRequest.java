@@ -115,9 +115,9 @@ public class UnbanRequest extends ToggleRequest implements DocumentAction, Votab
     }
 
     @Override
-    public void expectWinner(Object value, int[] counts) {
+    public void expectWinner(Object value, int[] counts, long seed) {
         if (counts[0] <= counts[1]) {
-            throw new ValidationException("Expected yes count to be greater than no count");
+            throw new ValidationException("expected yes count to be greater than no count");
         }
     }
 

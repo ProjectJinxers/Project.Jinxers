@@ -71,7 +71,7 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
 
     };
 
-    private int seed;
+    private long seed;
     private int obfuscationVersion;
     private IPLDObject<Votable> subject;
     private IPLDObject<ModelState> initialModelState;
@@ -91,7 +91,7 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
      */
     public Voting(IPLDObject<Votable> subject, IPLDObject<ModelState> initialModelState, int obfuscationVersion) {
         do {
-            this.seed = (int) (Math.random() * Integer.MAX_VALUE);
+            this.seed = (long) (Math.random() * Long.MAX_VALUE);
         }
         while (seed == 0);
         this.obfuscationVersion = obfuscationVersion;
@@ -102,7 +102,7 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {
-        this.seed = reader.readNumber(KEY_SEED).intValue();
+        this.seed = reader.readNumber(KEY_SEED).longValue();
         this.obfuscationVersion = reader.readNumber(KEY_OBFUSCATION_VERSION).intValue();
         this.subject = reader.readLinkObject(KEY_OBFUSCATION_VERSION, context, validationContext, LoaderFactory.VOTABLE,
                 eager);
@@ -184,7 +184,7 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
 
     public void expectWinner(Object value) {
         int[] counts = tally.getMapped().getCounts();
-        subject.getMapped().expectWinner(value, counts);
+        subject.getMapped().expectWinner(value, counts, seed);
     }
 
     public boolean validateNewVotes(ModelState since, ModelState currentState, ValidationContext validationContext) {

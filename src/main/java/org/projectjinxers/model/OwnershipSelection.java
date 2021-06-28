@@ -15,11 +15,14 @@ package org.projectjinxers.model;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 
 import org.projectjinxers.account.Signer;
@@ -168,21 +171,38 @@ public class OwnershipSelection implements Votable {
     }
 
     @Override
-    public void expectWinner(Object value, int[] counts) {
+    public void expectWinner(Object value, int[] counts, long seed) {
         int max = 0;
         int maxIndex = -1;
+        List<Integer> sameCount = null;
         int i = 0;
         for (int count : counts) {
-            if (count > max) {
-                max = count;
-                maxIndex = i;
+            if (count > 0) {
+                if (count > max) {
+                    max = count;
+                    maxIndex = i;
+                    if (sameCount != null) {
+                        sameCount.clear();
+                    }
+                }
+                else if (count == max) {
+                    if (sameCount == null) {
+                        sameCount = new ArrayList<>();
+                        sameCount.add(maxIndex);
+                    }
+                    sameCount.add(i);
+                }
             }
             i++;
         }
-        if (((Integer) value).intValue() != maxIndex) {
-            throw new ValidationException("Expected count for " + value + " to be the max");
+        if (sameCount != null && sameCount.size() > 0) {
+            Random rnd = new Random(seed);
+            int randomIndex = rnd.nextInt(sameCount.size());
+            maxIndex = sameCount.get(randomIndex);
         }
-        // TODO: tie-breaker
+        if (((Integer) value).intValue() != maxIndex) {
+            throw new ValidationException("expected count for " + value + " to be the max");
+        }
     }
 
     @Override

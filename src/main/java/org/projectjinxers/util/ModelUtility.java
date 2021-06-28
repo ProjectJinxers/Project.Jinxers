@@ -214,16 +214,16 @@ public class ModelUtility {
         return res.size() == 0 ? null : res;
     }
 
-    public static byte[] obfuscateHash(byte[] toHash, int seed, int obfuscationVersion, int valueHashObfuscation) {
+    public static byte[] obfuscateHash(byte[] toHash, long seed, int obfuscationVersion, int valueHashObfuscation) {
         // just some random stuff, definitely not ideal, maybe even easily crackable, but that's what the version
         // parameter is for: room for improvement without breaking validation
-        int hashCount = (seed + valueHashObfuscation) * secretObfuscationParameter % 31;
+        int hashCount = (int) (((seed + valueHashObfuscation) * secretObfuscationParameter) % 31);
         byte[] res = toHash;
         for (int i = 0; i < hashCount; i++) {
             res = sha3(res);
         }
         int i = 0;
-        int obfuscation = secretObfuscationParameter;
+        long obfuscation = secretObfuscationParameter;
         for (byte b : res) {
             res[i++] = (byte) (b * obfuscation);
             if (++obfuscation == 0) {

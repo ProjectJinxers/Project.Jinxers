@@ -63,7 +63,7 @@ public interface Votable extends IPLDSerializable {
      * @param value  the expected winner
      * @param counts the actual counts (after tally)
      */
-    void expectWinner(Object value, int[] counts);
+    void expectWinner(Object value, int[] counts, long seed);
 
     void validate(Voting voting, ValidationContext validationContext);
 
