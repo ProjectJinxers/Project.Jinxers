@@ -46,7 +46,7 @@ class UserStateTest {
                 new TestIPLDObject<Document>("hash", new Document()), false, null, null);
         UserState userState = new UserState();
         UserState updated = userState.updateLinks(Arrays.asList(new TestIPLDObject<>("review", review)), null, null,
-                null, null);
+                null, null, null, null);
         assertTrue(updated.checkNonNegativeReview("hash"));
         assertTrue(updated.checkNonPositiveReview("hash"));
     }
@@ -59,7 +59,7 @@ class UserStateTest {
         UserState userState = new UserState();
         userState.updateLinks(
                 Arrays.asList(new TestIPLDObject<>("review", review), new TestIPLDObject<>("negative", negative)), null,
-                null, null, null);
+                null, null, null, null, null);
         assertFalse(userState.checkNonNegativeReview("hash"));
     }
 
@@ -71,7 +71,7 @@ class UserStateTest {
         UserState userState = new UserState();
         userState.updateLinks(
                 Arrays.asList(new TestIPLDObject<>("review", review), new TestIPLDObject<>("positive", positive)), null,
-                null, null, null);
+                null, null, null, null, null);
         assertFalse(userState.checkNonPositiveReview("hash"));
     }
 
@@ -84,7 +84,7 @@ class UserStateTest {
         UserState userState = new UserState();
         UserState updated = userState.updateLinks(Arrays.asList(new TestIPLDObject<>("review", review),
                 new TestIPLDObject<>("negative", negative), new TestIPLDObject<>("restoring", restoring)), null, null,
-                null, null);
+                null, null, null, null);
         assertTrue(updated.checkNonNegativeReview("hash"));
     }
 
@@ -97,7 +97,7 @@ class UserStateTest {
         UserState userState = new UserState();
         UserState updated = userState.updateLinks(Arrays.asList(new TestIPLDObject<>("review", review),
                 new TestIPLDObject<>("positive", positive), new TestIPLDObject<>("restoring", restoring)), null, null,
-                null, null);
+                null, null, null, null);
         assertTrue(updated.checkNonPositiveReview("hash"));
     }
 
@@ -105,7 +105,7 @@ class UserStateTest {
     void tesNoLastActivity() {
         UserState userState = new UserState();
         UserState updated = userState.updateLinks(Arrays.asList(new TestIPLDObject<>(new Document())), null, null, null,
-                null);
+                null, null, null);
         assertNull(updated.getLastActivityDate(""));
     }
 
@@ -113,7 +113,7 @@ class UserStateTest {
     void testLastActivityNoDependencies() {
         UserState userState = new UserState();
         UserState updated = userState.updateLinks(Arrays.asList(new TestIPLDObject<>("hash", new Document())), null,
-                null, null, null);
+                null, null, null, null, null);
         assertNull(updated.getLastActivityDate("hash"));
     }
 
@@ -129,7 +129,7 @@ class UserStateTest {
         assertNotEquals(previousVersionDate, updatedDate);
         UserState userState = new UserState();
         UserState updated = userState.updateLinks(Arrays.asList(prev, new TestIPLDObject<>("updated", document)), null,
-                null, null, null);
+                null, null, null, null, null);
         assertEquals(updatedDate, updated.getLastActivityDate("hash"));
     }
 
@@ -151,7 +151,8 @@ class UserStateTest {
         assertNotEquals(updatedDate, secondUpdatedDate);
         UserState userState = new UserState();
         UserState updated = userState.updateLinks(
-                Arrays.asList(prev, first, new TestIPLDObject<>("updated", secondUpdate)), null, null, null, null);
+                Arrays.asList(prev, first, new TestIPLDObject<>("updated", secondUpdate)), null, null, null, null, null,
+                null);
         assertEquals(secondUpdatedDate, updated.getLastActivityDate("hash"));
     }
 
@@ -178,8 +179,10 @@ class UserStateTest {
         waitFor(1);
         Document unrelatedUpdate = unrelatedPrev.update(null, null, null, null, null, null, unrelated);
         UserState updated = userState
-                .updateLinks(Arrays.asList(unrelated, prev, first, new TestIPLDObject<>("updated", secondUpdate),
-                        new TestIPLDObject<>("unrelatedUpdate", unrelatedUpdate)), null, null, null, null);
+                .updateLinks(
+                        Arrays.asList(unrelated, prev, first, new TestIPLDObject<>("updated", secondUpdate),
+                                new TestIPLDObject<>("unrelatedUpdate", unrelatedUpdate)),
+                        null, null, null, null, null, null);
         assertEquals(secondUpdatedDate, updated.getLastActivityDate("hash"));
     }
 
@@ -196,8 +199,8 @@ class UserStateTest {
         Date expected = ofReview.getDate();
         waitFor(1);
         UserState userState = new UserState();
-        UserState updated = userState.updateLinks(Arrays.asList(reviewedObject, reviewOfReview), null, null, null,
-                null);
+        UserState updated = userState.updateLinks(Arrays.asList(reviewedObject, reviewOfReview), null, null, null, null,
+                null, null);
         assertEquals(expected, updated.getLastActivityDate("reviewed"));
     }
 
@@ -253,7 +256,7 @@ class UserStateTest {
                 new TestIPLDObject<>("updated", secondUpdate), reviewOfReview,
                 new TestIPLDObject<>("unrelatedUpdate", unrelatedUpdate), updatedUnrelatedReviewObject,
                 new TestIPLDObject<>("hundo", updatedUnrelatedReviewUpdate), new TestIPLDObject<>("done", hundo)), null,
-                null, null, null);
+                null, null, null, null, null);
         assertEquals(expected, updated.getLastActivityDate("hash"));
     }
 

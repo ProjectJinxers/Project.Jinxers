@@ -190,7 +190,7 @@ class TestIPFSAccessUtil {
         UserState userState = new UserState(userObject);
         IPLDObject<UserState> userStateObject = new IPLDObject<>(userState);
         IPLDObject<ModelState> modelStateObject = new IPLDObject<>(modelState);
-        modelState.updateUserState(userStateObject, null, null, null);
+        modelState.updateUserState(userStateObject, null, null, null, null, null, 0);
         Signer signer = new ECCSigner("user", "pass");
         modelStateObject.save(context, signer);
         byte[][] allObjects = access.getAllObjects();

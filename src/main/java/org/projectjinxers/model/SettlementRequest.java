@@ -29,18 +29,15 @@ import org.projectjinxers.controller.ValidationContext;
  */
 public class SettlementRequest implements DocumentAction, Loader<SettlementRequest> {
 
-    private static final String KEY_TIMESTAMP = "t";
     private static final String KEY_DOCUMENT = "d";
     private static final String KEY_USER_STATE = "u";
 
-    private long timestamp;
     private IPLDObject<Document> document;
     private IPLDObject<UserState> userState;
 
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {
-        this.timestamp = reader.readNumber(KEY_TIMESTAMP).longValue();
         this.document = reader.readLinkObject(KEY_DOCUMENT, context, validationContext, LoaderFactory.DOCUMENT, eager);
         this.userState = reader.readLinkObject(KEY_USER_STATE, context, validationContext, LoaderFactory.USER_STATE,
                 eager);
@@ -51,7 +48,6 @@ public class SettlementRequest implements DocumentAction, Loader<SettlementReque
 
     @Override
     public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
-        writer.writeNumber(KEY_TIMESTAMP, timestamp);
         writer.writeLink(KEY_DOCUMENT, document, signer, null);
         writer.writeLink(KEY_USER_STATE, userState, signer, context);
     }

@@ -199,4 +199,26 @@ public class IPLDObject<D extends IPLDSerializable> {
         return res;
     }
 
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj instanceof IPLDObject<?>) {
+            if (multihash != null) {
+                return multihash.equals(((IPLDObject<?>) obj).multihash);
+            }
+            return super.equals(obj);
+        }
+        return false;
+    }
+
+    @Override
+    public int hashCode() {
+        if (multihash == null) {
+            return super.hashCode();
+        }
+        return multihash.hashCode();
+    }
+
 }

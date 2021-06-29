@@ -27,7 +27,6 @@ import org.projectjinxers.model.GrantedUnban;
 import org.projectjinxers.model.ModelState;
 import org.projectjinxers.model.Review;
 import org.projectjinxers.model.SealedDocument;
-import org.projectjinxers.model.SettlementRequest;
 import org.projectjinxers.model.User;
 import org.projectjinxers.model.UserState;
 
@@ -47,26 +46,26 @@ public class SettlementController {
         private String documentOwner;
         private IPLDObject<Document> document;
         private IPLDObject<Document> invertTruth;
-        private Map<String, IPLDObject<Review>> reviews = new HashMap<>();
+        private Map<IPLDObject<User>, IPLDObject<Review>> reviews = new HashMap<>();
+        private Map<String, IPLDObject<Review>> reviewsByDocumentHash = new HashMap<>();
 
         private int approveCount;
         private int declineCount;
         private int neutralCount;
 
-        private String falseClaim;
-        private Map<String, IPLDObject<Review>> falseApprovals;
-        private Map<String, IPLDObject<Review>> falseDeclinations;
-        private String trueClaim;
-        private Set<String> trueApprovals;
-        private Set<String> trueDeclinations;
+        private IPLDObject<User> falseClaim;
+        private Map<IPLDObject<User>, IPLDObject<Review>> falseApprovals;
+        private Map<IPLDObject<User>, IPLDObject<Review>> falseDeclinations;
+        private IPLDObject<User> trueClaim;
+        private Set<IPLDObject<User>> trueApprovals;
+        private Set<IPLDObject<User>> trueDeclinations;
 
         private SealedDocument sealedDocument;
 
         void addReview(IPLDObject<Review> reviewObject) {
             Review review = reviewObject.getMapped();
             UserState reviewer = review.expectUserState();
-            String reviewerHash = reviewer.getUser().getMultihash();
-            IPLDObject<Review> replaced = reviews.put(reviewerHash, reviewObject);
+            IPLDObject<Review> replaced = reviews.put(reviewer.getUser(), reviewObject);
             if (replaced != null) {
                 String firstVersionHash = reviewObject.getMapped().getFirstVersionHash();
                 String fvh = replaced.getMapped().getFirstVersionHash();
@@ -77,10 +76,14 @@ public class SettlementController {
                     throw new ValidationException("multiple unrelated reviews by same user");
                 }
             }
+            reviewsByDocumentHash.put(reviewObject.getMultihash(), reviewObject);
         }
 
-        void removeReview(String reviewerHash) {
-            reviews.remove(reviewerHash);
+        void removeReview(IPLDObject<User> reviewer) {
+            IPLDObject<Review> removed = reviews.remove(reviewer);
+            if (removed != null) {
+                reviewsByDocumentHash.remove(removed.getMultihash());
+            }
         }
 
         boolean count() {
@@ -136,34 +139,45 @@ public class SettlementController {
             return sealedDocument;
         }
 
-        boolean isAffected(String userHash) {
-            return userHash.equals(falseClaim) || falseApprovals != null && falseApprovals.containsKey(userHash)
-                    || falseDeclinations != null && falseDeclinations.containsKey(userHash);
+        boolean isAffected(IPLDObject<User> user) {
+            return user.equals(falseClaim) || falseApprovals != null && falseApprovals.containsKey(user)
+                    || falseDeclinations != null && falseDeclinations.containsKey(user);
         }
 
         void update(Map<String, UserState> userStates) {
             if (falseClaim != null) {
-                userStates.get(falseClaim).addFalseClaim(document);
-                for (Entry<String, IPLDObject<Review>> entry : falseApprovals.entrySet()) {
-                    userStates.get(entry.getKey()).addFalseApproval(entry.getValue());
+                ensureUserState(userStates, falseClaim).addFalseClaim(document);
+                for (Entry<IPLDObject<User>, IPLDObject<Review>> entry : falseApprovals.entrySet()) {
+                    ensureUserState(userStates, entry.getKey()).addFalseApproval(entry.getValue());
                 }
                 if (trueDeclinations != null) {
-                    for (String user : trueDeclinations) {
-                        userStates.get(user).handleTrueDeclination();
+                    for (IPLDObject<User> user : trueDeclinations) {
+                        ensureUserState(userStates, user).handleTrueDeclination();
                     }
                 }
             }
             else if (falseDeclinations != null) {
                 if (trueClaim != null) {
-                    userStates.get(trueClaim).handleTrueClaim();
-                    for (String user : trueApprovals) {
-                        userStates.get(user).handleTrueApproval();
+                    ensureUserState(userStates, trueClaim).handleTrueClaim();
+                    for (IPLDObject<User> user : trueApprovals) {
+                        ensureUserState(userStates, user).handleTrueApproval();
                     }
                 }
-                for (Entry<String, IPLDObject<Review>> entry : falseDeclinations.entrySet()) {
-                    userStates.get(entry.getKey()).addFalseDeclination(entry.getValue());
+                for (Entry<IPLDObject<User>, IPLDObject<Review>> entry : falseDeclinations.entrySet()) {
+                    ensureUserState(userStates, entry.getKey()).addFalseDeclination(entry.getValue());
                 }
             }
+        }
+
+        SettlementData createPreEvaluationSnapshot() {
+            SettlementData res = new SettlementData();
+            res.requested = requested;
+            res.forMainValidation = forMainValidation;
+            res.documentOwner = documentOwner;
+            res.document = document;
+            res.invertTruth = invertTruth;
+            res.reviews.putAll(reviews);
+            return res;
         }
 
         void reset() {
@@ -190,10 +204,10 @@ public class SettlementController {
             falseDeclinations = new HashMap<>();
             if (invertTruth == null) {
                 if (noNeutralReview) {
-                    trueClaim = document.getMapped().expectUserState().getUser().getMultihash();
+                    trueClaim = document.getMapped().expectUserState().getUser();
                 }
                 trueApprovals = new HashSet<>();
-                for (Entry<String, IPLDObject<Review>> entry : reviews.entrySet()) {
+                for (Entry<IPLDObject<User>, IPLDObject<Review>> entry : reviews.entrySet()) {
                     IPLDObject<Review> value = entry.getValue();
                     Boolean approve = value.getMapped().getApprove();
                     if (approve != null) {
@@ -207,7 +221,7 @@ public class SettlementController {
                 }
             }
             else {
-                for (Entry<String, IPLDObject<Review>> entry : reviews.entrySet()) {
+                for (Entry<IPLDObject<User>, IPLDObject<Review>> entry : reviews.entrySet()) {
                     IPLDObject<Review> value = entry.getValue();
                     if (Boolean.FALSE.equals(value.getMapped().getApprove())) {
                         falseDeclinations.put(entry.getKey(), value);
@@ -231,12 +245,12 @@ public class SettlementController {
          */
         private SealedDocument declinersWon(boolean noNeutralReview) {
             if (noNeutralReview) {
-                falseClaim = document.getMapped().expectUserState().getUser().getMultihash();
+                falseClaim = document.getMapped().expectUserState().getUser();
             }
             falseApprovals = new HashMap<>();
             if (invertTruth == null) {
                 trueDeclinations = new HashSet<>();
-                for (Entry<String, IPLDObject<Review>> entry : reviews.entrySet()) {
+                for (Entry<IPLDObject<User>, IPLDObject<Review>> entry : reviews.entrySet()) {
                     IPLDObject<Review> value = entry.getValue();
                     Boolean approve = value.getMapped().getApprove();
                     if (approve != null) {
@@ -250,7 +264,7 @@ public class SettlementController {
                 }
             }
             else {
-                for (Entry<String, IPLDObject<Review>> entry : reviews.entrySet()) {
+                for (Entry<IPLDObject<User>, IPLDObject<Review>> entry : reviews.entrySet()) {
                     IPLDObject<Review> value = entry.getValue();
                     if (Boolean.TRUE.equals(value.getMapped().getApprove())) {
                         falseApprovals.put(entry.getKey(), value);
@@ -304,11 +318,7 @@ public class SettlementController {
             boolean noNeutralReview = review == null || review.getApprove() != null;
             IPLDObject<User> user = doc.expectUserState().getUser();
             String userHash = user.getMultihash();
-            UserState userState = userStates.get(userHash);
-            if (userState == null) {
-                userState = new UserState(user);
-                userStates.put(userHash, userState);
-            }
+            UserState userState = ensureUserState(userStates, user);
             Map<String, UserState> approvers = new HashMap<>();
             Map<String, UserState> decliners = new HashMap<>();
             Map<String, IPLDObject<Review>> reviews = new HashMap<>();
@@ -318,11 +328,7 @@ public class SettlementController {
                 if (approve != null) {
                     user = child.review.expectUserState().getUser();
                     userHash = user.getMultihash();
-                    UserState reviewerState = userStates.get(userHash);
-                    if (reviewerState == null) {
-                        reviewerState = new UserState(user);
-                        userStates.put(userHash, reviewerState);
-                    }
+                    UserState reviewerState = ensureUserState(userStates, user);
                     if (approve) {
                         approvers.put(userHash, reviewerState);
                     }
@@ -379,7 +385,7 @@ public class SettlementController {
         private void invertApproversWon(UserState ownerState, Map<String, UserState> approvers,
                 Map<String, UserState> decliners, Map<String, IPLDObject<Review>> reviews, boolean noNeutralReview) {
             for (Entry<String, UserState> entry : decliners.entrySet()) {
-                entry.getValue().removeFalseDeclination(reviews.get(entry.getKey()).getMultihash());
+                entry.getValue().removeFalseDeclination(reviews.get(entry.getKey()));
             }
             if (review == null || !review.isInvertTruth()) {
                 if (noNeutralReview) {
@@ -398,10 +404,10 @@ public class SettlementController {
             }
             if (review == null || !review.isInvertTruth()) {
                 if (noNeutralReview) {
-                    ownerState.removeFalseClaim(document.getMultihash());
+                    ownerState.removeFalseClaim(document);
                 }
                 for (Entry<String, UserState> entry : approvers.entrySet()) {
-                    entry.getValue().removeFalseApproval(reviews.get(entry.getKey()).getMultihash());
+                    entry.getValue().removeFalseApproval(reviews.get(entry.getKey()));
                 }
             }
         }
@@ -409,11 +415,11 @@ public class SettlementController {
         private void invertDeclinersWon(UserState ownerState, Map<String, UserState> approvers,
                 Map<String, UserState> decliners, Map<String, IPLDObject<Review>> reviews, boolean noNeutralReview) {
             for (Entry<String, UserState> entry : approvers.entrySet()) {
-                entry.getValue().removeFalseApproval(reviews.get(entry.getKey()).getMultihash());
+                entry.getValue().removeFalseApproval(reviews.get(entry.getKey()));
             }
             if (review == null || !review.isInvertTruth()) {
                 if (noNeutralReview) {
-                    ownerState.removeFalseClaim(document.getMultihash());
+                    ownerState.removeFalseClaim(document);
                 }
                 for (Entry<String, UserState> entry : decliners.entrySet()) {
                     entry.getValue().removeTrueDeclination(reviews.get(entry.getKey()));
@@ -431,7 +437,7 @@ public class SettlementController {
                     ownerState.removeTrueClaim(document);
                 }
                 for (Entry<String, UserState> entry : decliners.entrySet()) {
-                    entry.getValue().removeFalseDeclination(reviews.get(entry.getKey()).getMultihash());
+                    entry.getValue().removeFalseDeclination(reviews.get(entry.getKey()));
                 }
             }
         }
@@ -602,7 +608,18 @@ public class SettlementController {
 
     }
 
+    private static final Long REQUEST_THRESHOLD = 1000L * 60 * 60 * 24 * 4;
     private static final Long SETTLEMENT_THRESHOLD = 1000L * 60 * 60 * 24 * 4;
+
+    private static UserState ensureUserState(Map<String, UserState> userStates, IPLDObject<User> user) {
+        String key = user.getMultihash();
+        UserState res = userStates.get(key);
+        if (res == null) {
+            res = new UserState(user);
+            userStates.put(key, res);
+        }
+        return res;
+    }
 
     private boolean main;
     private long timestamp;
@@ -615,11 +632,12 @@ public class SettlementController {
     private Set<String> invalidRequests = new TreeSet<>();
     private Map<String, SettlementData> eligibleSettlements = new HashMap<>();
     private Set<String> unbanned;
-    private Map<String, String> grantedClaimUnbans;
-    private Map<String, String> grantedApprovalUnbans;
-    private Map<String, String> grantedDeclinationUnbans;
+    private Map<String, IPLDObject<User>> grantedClaimUnbans;
+    private Map<String, IPLDObject<User>> grantedApprovalUnbans;
+    private Map<String, IPLDObject<User>> grantedDeclinationUnbans;
 
     private Map<String, String> invalidByReview;
+    private Set<String> invalidByTimestamp;
     private Set<String> removedDocuments;
     private Set<String> documentOwnersMainValidation;
     private Map<String, SettlementData> eligibleMainValidation;
@@ -632,6 +650,7 @@ public class SettlementController {
         if (main) {
             this.forMainValidation = true;
             this.invalidByReview = new HashMap<>();
+            this.invalidByTimestamp = new TreeSet<>();
             this.removedDocuments = new TreeSet<>();
         }
     }
@@ -640,19 +659,32 @@ public class SettlementController {
         return timestamp;
     }
 
-    public boolean checkRequest(SettlementRequest request, boolean forMainValidation) {
+    public boolean checkRequest(IPLDObject<Document> document, boolean sealed, boolean forMainValidation) {
         if (main && forMainValidation != this.forMainValidation) {
             this.timestamp = System.currentTimeMillis();
             this.forMainValidation = forMainValidation;
         }
-        IPLDObject<Document> document = request.getDocument();
         String documentMultihash = document.getMultihash();
         if (invalidRequests.contains(documentMultihash)) {
+            if (validationMode) {
+                throw new ValidationException("settlement request on removed document");
+            }
             return false;
         }
         Document doc = document.getMapped();
         long time = doc.getDate().getTime();
-        if (timestamp - time < SETTLEMENT_THRESHOLD) {
+        long diff = timestamp - time;
+        if (invalidByTimestamp != null && invalidByTimestamp.contains(documentMultihash)) {
+            if (diff >= SETTLEMENT_THRESHOLD) {
+                invalidByTimestamp.remove(documentMultihash);
+                return true;
+            }
+            return false;
+        }
+        if (diff < REQUEST_THRESHOLD) {
+            if (validationMode) {
+                throw new ValidationException("settlement request too early");
+            }
             invalidRequests.add(documentMultihash);
             return false;
         }
@@ -662,6 +694,15 @@ public class SettlementController {
             data.forMainValidation = true;
         }
         eligibleSettlements.put(documentMultihash, data);
+        if (diff < SETTLEMENT_THRESHOLD) {
+            if (sealed && validationMode) {
+                throw new ValidationException("invalid sealing");
+            }
+            if (main) {
+                invalidByTimestamp.add(documentMultihash);
+            }
+            return false;
+        }
         return true;
     }
 
@@ -681,22 +722,28 @@ public class SettlementController {
             }
             if (Boolean.FALSE.equals(review.getApprove())) {
                 long time = review.getDate().getTime();
-                if (timestamp - time < SETTLEMENT_THRESHOLD) {
+                long diff = timestamp - time;
+                if (diff < REQUEST_THRESHOLD) {
+                    if (validationMode) {
+                        throw new ValidationException("settlement postponed by review");
+                    }
                     if (main) {
-                        if (validationMode) {
-                            invalidByReview.put(document.getMultihash(), documentMultihash);
-                        }
-                        else if (removedDocuments.contains(document.getMultihash())) {
+                        if (removedDocuments.contains(document.getMultihash())) {
                             return false;
                         }
-                        else {
-                            invalidRequests.add(documentMultihash);
-                            eligibleSettlements.remove(documentMultihash);
-                            return false;
-                        }
+                        invalidByReview.put(document.getMultihash(), documentMultihash);
                     }
                     else {
                         invalidRequests.add(documentMultihash);
+                        eligibleSettlements.remove(documentMultihash);
+                        return false;
+                    }
+                }
+                else if (diff < SETTLEMENT_THRESHOLD) {
+                    if (main) {
+                        invalidByReview.put(document.getMultihash(), documentMultihash);
+                    }
+                    else {
                         eligibleSettlements.remove(documentMultihash);
                         return false;
                     }
@@ -720,6 +767,10 @@ public class SettlementController {
         if (main) {
             removedDocuments.add(removedHash);
         }
+        if (current == null) {
+            invalidRequests.add(removedHash);
+            return false;
+        }
         if (!current.isSealedDocument(removedHash)) {
             if (invalidRequests.add(removedHash)) {
                 eligibleSettlements.remove(removedHash);
@@ -737,13 +788,13 @@ public class SettlementController {
             }
             SettlementData data = eligibleSettlements.get(reviewed.getMultihash());
             if (data != null) {
-                data.removeReview(document.expectUserState().getUser().getMultihash());
+                data.removeReview(document.expectUserState().getUser());
             }
         }
         return true;
     }
 
-    public void checkGrantedUnban(GrantedUnban unban, String userHash) {
+    public void checkGrantedUnban(GrantedUnban unban, IPLDObject<User> user) {
         IPLDObject<Document> document = unban.getUnbanRequest().getMapped().getDocument();
         String documentHash = document.getMultihash();
         Document doc = document.getMapped();
@@ -752,25 +803,25 @@ public class SettlementController {
                 if (grantedApprovalUnbans == null) {
                     grantedApprovalUnbans = new HashMap<>();
                 }
-                grantedApprovalUnbans.put(documentHash, userHash);
+                grantedApprovalUnbans.put(documentHash, user);
             }
             else {
                 if (grantedDeclinationUnbans == null) {
                     grantedDeclinationUnbans = new HashMap<>();
                 }
-                grantedDeclinationUnbans.put(documentHash, userHash);
+                grantedDeclinationUnbans.put(documentHash, user);
             }
         }
         else {
             if (grantedClaimUnbans == null) {
                 grantedClaimUnbans = new HashMap<>();
             }
-            grantedClaimUnbans.put(documentHash, userHash);
+            grantedClaimUnbans.put(documentHash, user);
         }
         if (unbanned == null) {
             unbanned = new HashSet<>();
         }
-        unbanned.add(userHash);
+        unbanned.add(user.getMultihash());
     }
 
     private SettlementData addEligibleSettlement(IPLDObject<Document> document, boolean needRequest) {
@@ -824,13 +875,22 @@ public class SettlementController {
             }
             res = false;
             Set<String> toRemove = new HashSet<>();
+            Set<String> invalid;
+            if (main) {
+                invalid = new TreeSet<>(invalidByReview.values());
+                invalid.addAll(invalidByTimestamp);
+            }
+            else {
+                invalid = null;
+            }
             for (Entry<String, SettlementData> entry : eligibleSettlements.entrySet()) {
+                String key = entry.getKey();
                 SettlementData data = entry.getValue();
-                if (data.requested && data.count()) {
+                if (data.requested && (invalid == null || !invalid.contains(key)) && data.count()) {
                     SealedDocument evaluated = data.evaluate(modelState);
                     if (evaluated != null) {
                         res = true;
-                        sealedDocuments.put(entry.getKey(), evaluated);
+                        sealedDocuments.put(key, evaluated);
                         if (data.falseClaim == null && data.invertTruth != null) {
                             if (truthInversionGraph == null) {
                                 truthInversionGraph = TruthInversionGraph.createGraph(data.invertTruth);
@@ -921,13 +981,13 @@ public class SettlementController {
         return unbanned != null || eligibleMainValidation.size() > 0;
     }
 
-    public boolean isAffected(String userHash) {
-        if (unbanned != null && unbanned.contains(userHash)) {
+    public boolean isAffected(IPLDObject<User> user) {
+        if (unbanned != null && unbanned.contains(user.getMultihash())) {
             return true;
         }
         Map<String, SettlementData> eligible = main && validationMode ? eligibleMainValidation : eligibleSettlements;
         for (SettlementData data : eligible.values()) {
-            if (data.isAffected(userHash)) {
+            if (data.isAffected(user)) {
                 return true;
             }
         }
@@ -945,18 +1005,18 @@ public class SettlementController {
         }
         if (unbanned != null) {
             if (grantedClaimUnbans != null) {
-                for (Entry<String, String> entry : grantedClaimUnbans.entrySet()) {
-                    userStates.get(entry.getValue()).removeFalseClaim(entry.getKey());
+                for (Entry<String, IPLDObject<User>> entry : grantedClaimUnbans.entrySet()) {
+                    ensureUserState(userStates, entry.getValue()).removeFalseClaim(entry.getKey());
                 }
             }
             if (grantedApprovalUnbans != null) {
-                for (Entry<String, String> entry : grantedApprovalUnbans.entrySet()) {
-                    userStates.get(entry.getValue()).removeFalseApproval(entry.getKey());
+                for (Entry<String, IPLDObject<User>> entry : grantedApprovalUnbans.entrySet()) {
+                    ensureUserState(userStates, entry.getValue()).removeFalseApproval(entry.getKey());
                 }
             }
             if (grantedDeclinationUnbans != null) {
-                for (Entry<String, String> entry : grantedDeclinationUnbans.entrySet()) {
-                    userStates.get(entry.getValue()).removeFalseDeclination(entry.getKey());
+                for (Entry<String, IPLDObject<User>> entry : grantedDeclinationUnbans.entrySet()) {
+                    ensureUserState(userStates, entry.getValue()).removeFalseDeclination(entry.getKey());
                 }
             }
         }
@@ -973,6 +1033,52 @@ public class SettlementController {
             return true;
         }
         return false;
+    }
+
+    public SettlementController createPreEvaluationSnapshot(long timestamp) {
+        SettlementController res = new SettlementController(true, timestamp <= 0 ? this.timestamp : timestamp);
+        res.documentOwners.addAll(documentOwners);
+        res.invalidRequests.addAll(invalidRequests);
+        for (Entry<String, SettlementData> entry : eligibleSettlements.entrySet()) {
+            res.eligibleSettlements.put(entry.getKey(), entry.getValue().createPreEvaluationSnapshot());
+        }
+        if (unbanned != null) {
+            res.unbanned = new HashSet<>(unbanned);
+        }
+        if (grantedClaimUnbans != null) {
+            res.grantedClaimUnbans = new HashMap<>(grantedClaimUnbans);
+        }
+        if (grantedApprovalUnbans != null) {
+            res.grantedApprovalUnbans = new HashMap<>(grantedApprovalUnbans);
+        }
+        if (grantedDeclinationUnbans != null) {
+            res.grantedDeclinationUnbans = new HashMap<>(grantedDeclinationUnbans);
+        }
+        if (invalidByReview != null) {
+            res.invalidByReview.putAll(invalidByReview);
+        }
+        if (invalidByTimestamp != null) {
+            res.invalidByTimestamp.addAll(invalidByTimestamp);
+        }
+        if (removedDocuments != null) {
+            res.removedDocuments = new HashSet<>(removedDocuments);
+        }
+        return res;
+    }
+
+    public boolean applyNewTimestamp() {
+        boolean res = false;
+        for (Entry<String, String> entry : invalidByReview.entrySet()) {
+            SettlementData settlementData = eligibleSettlements.get(entry.getValue());
+            res = checkRequest(settlementData.document, false, false) || res;
+            IPLDObject<Review> review = settlementData.reviewsByDocumentHash.get(entry.getKey());
+            @SuppressWarnings("rawtypes")
+            IPLDObject tmp = review;
+            @SuppressWarnings("unchecked")
+            IPLDObject<Document> document = tmp;
+            res = checkDocument(document, true) || res;
+        }
+        return res;
     }
 
 }

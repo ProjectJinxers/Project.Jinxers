@@ -178,6 +178,13 @@ public class ValidationContext {
                 newSettlementRequestsMap.put(multihash, settlementRequest);
             }
         }
+        Map<String, IPLDObject<SealedDocument>> newSealedDocuments = modelState.getNewSealedDocuments(commonState,
+                false);
+        if (newSealedDocuments != null) {
+            for (IPLDObject<SealedDocument> sealed : newSealedDocuments.values()) {
+                currentSettlementController.checkRequest(sealed.getMapped().getDocument(), true, true);
+            }
+        }
         Map<String, IPLDObject<OwnershipRequest>> newOwnershipRequestsMap;
         Map<String, IPLDObject<OwnershipRequest>[]> newOwnershipRequests = modelState
                 .getNewOwnershipRequests(commonState, false);
@@ -236,7 +243,14 @@ public class ValidationContext {
                     .getNewSettlementRequests(commonState, true);
             if (newSettlementReqs != null) {
                 for (IPLDObject<SettlementRequest> request : newSettlementReqs.values()) {
-                    mainSettlementController.checkRequest(request.getMapped(), false);
+                    mainSettlementController.checkRequest(request.getMapped().getDocument(), false, false);
+                }
+            }
+            Map<String, IPLDObject<SealedDocument>> newSealedDocs = currentValidLocalState.getMapped()
+                    .getNewSealedDocuments(commonState, true);
+            if (newSealedDocs != null) {
+                for (IPLDObject<SealedDocument> sealed : newSealedDocs.values()) {
+                    mainSettlementController.checkRequest(sealed.getMapped().getDocument(), true, false);
                 }
             }
         }
@@ -279,8 +293,7 @@ public class ValidationContext {
                 }
             }
         }
-        Map<String, IPLDObject<SealedDocument>> newSealedDocuments = modelState.getNewSealedDocuments(commonState,
-                false);
+
         if (newSealedDocuments != null) {
             for (Entry<String, IPLDObject<SealedDocument>> entry : newSealedDocuments.entrySet()) {
                 IPLDObject<SealedDocument> sealed = entry.getValue();
@@ -554,6 +567,7 @@ public class ValidationContext {
                 if (validated.add(removal.getMultihash())) {
                     validateDocumentRemoval(removal, userState, user);
                 }
+                currentSettlementController.checkRemovedDocument(removal.getMapped().getDocument(), null);
             }
         }
         Collection<IPLDObject<SettlementRequest>> newSettlementRequests = userState.getNewSettlementRequests(since,
@@ -563,7 +577,7 @@ public class ValidationContext {
                 String multihash = settlementRequest.getMultihash();
                 expectEqual(newSettlementRequestsMap.remove(multihash).getMapped().getUserState().getMapped().getUser(),
                         userObject, "settlement request inconsistency: expected same user");
-                currentSettlementController.checkRequest(settlementRequest.getMapped(), true);
+                currentSettlementController.checkRequest(settlementRequest.getMapped().getDocument(), false, true);
             }
         }
         Collection<IPLDObject<OwnershipRequest>> newOwnershipRequests = userState.getNewOwnershipRequests(since, false);
@@ -596,7 +610,7 @@ public class ValidationContext {
                 if (validated.add(grantedUnban.getMultihash())) {
                     validateGrantedUnban(grantedUnban.getMapped(), userState, modelState);
                 }
-                currentSettlementController.checkGrantedUnban(grantedUnban.getMapped(), userHash);
+                currentSettlementController.checkGrantedUnban(grantedUnban.getMapped(), userObject);
             }
         }
     }

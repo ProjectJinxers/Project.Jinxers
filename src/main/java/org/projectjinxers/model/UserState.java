@@ -20,6 +20,7 @@ import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Date;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -275,9 +276,9 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
     private Collection<IPLDObject<GrantedOwnership>> newGrantedOwnerships;
     private Collection<IPLDObject<GrantedUnban>> newGrantedUnbans;
 
-    private Set<String> invertedFalseClaims;
-    private Set<String> invertedFalseApprovals;
-    private Set<String> invertedFalseDeclinations;
+    private Map<String, IPLDObject<Document>> invertedFalseClaims;
+    private Map<String, IPLDObject<Review>> invertedFalseApprovals;
+    private Map<String, IPLDObject<Review>> invertedFalseDeclinations;
 
     UserState() {
 
@@ -527,14 +528,14 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
      * Creates a copy of this instance, updates and returns it. The given current version is set as its previousVersion.
      * 
      * @param docs                       the documents to add
-     * @param requests                   the ownership request to add
+     * @param oreqs                      the ownership request to add
      * @param granted                    the granted ownerships to add
      * @param transferredOwnershipHashes the hashes of documents that have been transferred to other users
      * @param current                    the current wrapper (should not be null)
      */
-    public UserState updateLinks(Collection<IPLDObject<Document>> docs,
-            Collection<IPLDObject<OwnershipRequest>> requests, Collection<IPLDObject<GrantedOwnership>> granted,
-            Collection<String> transferredOwnershipHashes, IPLDObject<UserState> current) {
+    public UserState updateLinks(Collection<IPLDObject<Document>> docs, Collection<IPLDObject<SettlementRequest>> sreqs,
+            Collection<IPLDObject<OwnershipRequest>> oreqs, Collection<IPLDObject<GrantedOwnership>> granted,
+            Collection<String> transferredOwnershipHashes, UserState settlementValues, IPLDObject<UserState> current) {
         UserState updated = copy();
         updated.version = this.version + 1;
         updated.previousVersion = current;
@@ -543,11 +544,20 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
                 updated.documents.remove(hash);
             }
         }
-        if (requests != null && requests.size() > 0) {
+        if (sreqs != null && sreqs.size() > 0) {
+            if (updated.settlementRequests == null) {
+                updated.settlementRequests = new LinkedHashMap<>();
+            }
+            for (IPLDObject<SettlementRequest> settlementRequest : sreqs) {
+                updated.settlementRequests.put(SETTLEMENT_REQUEST_KEY_PROVIDER.getKey(settlementRequest),
+                        settlementRequest);
+            }
+        }
+        if (oreqs != null && oreqs.size() > 0) {
             if (updated.ownershipRequests == null) {
                 updated.ownershipRequests = new LinkedHashMap<>();
             }
-            for (IPLDObject<OwnershipRequest> ownershipRequest : requests) {
+            for (IPLDObject<OwnershipRequest> ownershipRequest : oreqs) {
                 updated.ownershipRequests.put(OWNERSHIP_REQUEST_KEY_PROVIDER.getKey(ownershipRequest),
                         ownershipRequest);
             }
@@ -571,6 +581,9 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             for (IPLDObject<Document> document : docs) {
                 updated.documents.put(DOCUMENT_KEY_PROVIDER.getKey(document), document);
             }
+        }
+        if (settlementValues != null) {
+            updated.applySettlement(settlementValues);
         }
         return updated;
     }
@@ -629,18 +642,60 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         rating += TRUE_DECLINATION_REWARD;
     }
 
+    public void removeFalseClaim(IPLDObject<Document> document) {
+        rating += FALSE_CLAIM_PENALTY;
+        String documentHash = document.getMultihash();
+        falseClaims.remove(documentHash);
+        if (invertedFalseClaims == null) {
+            invertedFalseClaims = new HashMap<>();
+        }
+        invertedFalseClaims.put(documentHash, document);
+        rating += TRUE_CLAIM_REWARD;
+    }
+
+    public void removeFalseApproval(IPLDObject<Review> review) {
+        rating += FALSE_APPROVAL_PENALTY;
+        String documentHash = review.getMultihash();
+        falseApprovals.remove(documentHash);
+        if (invertedFalseApprovals == null) {
+            invertedFalseApprovals = new HashMap<>();
+        }
+        invertedFalseApprovals.put(documentHash, review);
+        rating += TRUE_APPROVAL_REWARD;
+    }
+
+    public void removeFalseDeclination(IPLDObject<Review> review) {
+        rating += FALSE_DECLINATION_PENALTY;
+        String documentHash = review.getMultihash();
+        falseDeclinations.remove(documentHash);
+        if (invertedFalseDeclinations == null) {
+            invertedFalseDeclinations = new HashMap<>();
+        }
+        invertedFalseDeclinations.put(documentHash, review);
+        rating += TRUE_DECLINATION_REWARD;
+    }
+
     public void removeTrueClaim(IPLDObject<Document> falseClaim) {
         rating -= TRUE_CLAIM_REWARD;
+        if (invertedFalseClaims != null) {
+            invertedFalseClaims.remove(falseClaim.getMultihash());
+        }
         addFalseClaim(falseClaim);
     }
 
     public void removeTrueApproval(IPLDObject<Review> falseApproval) {
         rating -= TRUE_APPROVAL_REWARD;
+        if (invertedFalseApprovals != null) {
+            invertedFalseApprovals.remove(falseApproval.getMultihash());
+        }
         addFalseApproval(falseApproval);
     }
 
     public void removeTrueDeclination(IPLDObject<Review> falseDeclination) {
         rating -= TRUE_DECLINATION_REWARD;
+        if (invertedFalseDeclinations != null) {
+            invertedFalseDeclinations.remove(falseDeclination.getMultihash());
+        }
         addFalseDeclination(falseDeclination);
     }
 
@@ -839,9 +894,8 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             Collection<IPLDObject<GrantedUnban>> newGrantedUnbans = getNewGrantedUnbans(previous, true);
             if (newGrantedUnbans != null) {
                 SettlementController mainSettlementController = validationContext.getMainSettlementController();
-                String userHash = user.getMultihash();
                 for (IPLDObject<GrantedUnban> request : newGrantedUnbans) {
-                    mainSettlementController.checkGrantedUnban(request.getMapped(), userHash);
+                    mainSettlementController.checkGrantedUnban(request.getMapped(), user);
                 }
             }
         }
@@ -928,7 +982,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
     public void applySettlement(UserState settlementValues) {
         this.rating += settlementValues.rating;
         if (settlementValues.invertedFalseClaims != null) {
-            for (String invertedFalseClaim : settlementValues.invertedFalseClaims) {
+            for (String invertedFalseClaim : settlementValues.invertedFalseClaims.keySet()) {
                 falseClaims.remove(invertedFalseClaim);
             }
         }
@@ -936,7 +990,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             falseClaims.putAll(settlementValues.falseClaims);
         }
         if (settlementValues.invertedFalseApprovals != null) {
-            for (String invertedFalseApproval : settlementValues.invertedFalseApprovals) {
+            for (String invertedFalseApproval : settlementValues.invertedFalseApprovals.keySet()) {
                 falseApprovals.remove(invertedFalseApproval);
             }
         }
@@ -944,12 +998,40 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             falseApprovals.putAll(settlementValues.falseApprovals);
         }
         if (settlementValues.invertedFalseDeclinations != null) {
-            for (String invertedFalseDeclination : settlementValues.invertedFalseDeclinations) {
+            for (String invertedFalseDeclination : settlementValues.invertedFalseDeclinations.keySet()) {
                 falseDeclinations.remove(invertedFalseDeclination);
             }
         }
         if (settlementValues.falseDeclinations != null) {
             falseDeclinations.putAll(settlementValues.falseDeclinations);
+        }
+    }
+
+    public void revertSettlement(UserState settlementValues) {
+        this.rating -= settlementValues.rating;
+        if (settlementValues.invertedFalseClaims != null) {
+            falseClaims.putAll(settlementValues.invertedFalseClaims);
+        }
+        if (settlementValues.falseClaims != null) {
+            for (String falseClaim : settlementValues.falseClaims.keySet()) {
+                falseClaims.remove(falseClaim);
+            }
+        }
+        if (settlementValues.invertedFalseApprovals != null) {
+            falseApprovals.putAll(settlementValues.invertedFalseApprovals);
+        }
+        if (settlementValues.falseApprovals != null) {
+            for (String falseApproval : settlementValues.falseApprovals.keySet()) {
+                falseApprovals.remove(falseApproval);
+            }
+        }
+        if (settlementValues.invertedFalseDeclinations != null) {
+            falseDeclinations.putAll(settlementValues.invertedFalseDeclinations);
+        }
+        if (settlementValues.falseDeclinations != null) {
+            for (String falseDeclination : settlementValues.falseDeclinations.keySet()) {
+                falseDeclinations.remove(falseDeclination);
+            }
         }
     }
 

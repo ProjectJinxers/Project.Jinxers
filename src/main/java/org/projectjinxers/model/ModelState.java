@@ -316,18 +316,25 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
      * @return the updated instance (can be this instance)
      */
     public ModelState updateUserState(IPLDObject<UserState> userState,
+            Collection<IPLDObject<SettlementRequest>> settlementRequests,
             Collection<IPLDObject<OwnershipRequest>> ownershipRequests, Collection<IPLDObject<Voting>> votings,
-            IPLDObject<ModelState> current) {
+            Collection<IPLDObject<SealedDocument>> sealedDocuments, IPLDObject<ModelState> current, long timestamp) {
         ModelState updated;
         if (current == null) {
             if (userState != null && this.userStates == null) {
                 this.userStates = new LinkedHashMap<>();
+            }
+            if (settlementRequests != null && this.settlementRequests == null) {
+                this.settlementRequests = new LinkedHashMap<>();
             }
             if (ownershipRequests != null && this.ownershipRequests == null) {
                 this.ownershipRequests = new LinkedHashMap<>();
             }
             if (votings != null && this.votings == null) {
                 this.votings = new LinkedHashMap<>();
+            }
+            if (sealedDocuments != null && this.sealedDocuments == null) {
+                this.sealedDocuments = new LinkedHashMap<>();
             }
             updated = this;
         }
@@ -344,6 +351,9 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
             else if (votings != null) {
                 updated.votings = new LinkedHashMap<>();
             }
+            if (this.settlementRequests != null) {
+                updated.settlementRequests = new LinkedHashMap<>(this.settlementRequests);
+            }
             if (this.sealedDocuments != null) {
                 updated.sealedDocuments = new LinkedHashMap<>(this.sealedDocuments);
             }
@@ -356,6 +366,12 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         }
         if (userState != null) {
             updated.userStates.put(USER_STATE_KEY_PROVIDER.getKey(userState), userState);
+        }
+        if (settlementRequests != null) {
+            for (IPLDObject<SettlementRequest> settlementRequest : settlementRequests) {
+                updated.settlementRequests.put(UserState.SETTLEMENT_REQUEST_KEY_PROVIDER.getKey(settlementRequest),
+                        settlementRequest);
+            }
         }
         if (ownershipRequests != null) {
             for (IPLDObject<OwnershipRequest> ownershipRequest : ownershipRequests) {
@@ -380,7 +396,12 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
                 updated.votings.put(VOTING_KEY_PROVIDER.getKey(voting), voting);
             }
         }
-        updated.timestamp = System.currentTimeMillis();
+        if (sealedDocuments != null) {
+            for (IPLDObject<SealedDocument> sealed : sealedDocuments) {
+                updated.sealedDocuments.put(SEALED_DOCUMENT_KEY_PROVIDER.getKey(sealed), sealed);
+            }
+        }
+        updated.timestamp = timestamp;
         return updated;
     }
 
