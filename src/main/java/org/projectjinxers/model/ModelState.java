@@ -15,6 +15,7 @@ package org.projectjinxers.model;
 
 import java.io.IOException;
 import java.lang.reflect.Array;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -23,6 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
@@ -50,6 +52,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
     private static final String KEY_SETTLEMENT_REQUESTS = "s";
     private static final String KEY_SEALED_DOCUMENTS = "d";
     private static final String KEY_OWNERSHIP_REQUESTS = "o";
+    private static final String KEY_REVIEW_TABLE = "r";
 
     private static final KeyProvider<UserState> USER_STATE_KEY_PROVIDER = new KeyProvider<>() {
 
@@ -141,12 +144,14 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
     private Map<String, IPLDObject<SettlementRequest>> settlementRequests;
     private Map<String, IPLDObject<SealedDocument>> sealedDocuments;
     private Map<String, IPLDObject<OwnershipRequest>[]> ownershipRequests;
+    private Map<String, String[]> reviewTable;
 
     private Map<String, IPLDObject<UserState>> newUserStates;
     private Map<String, IPLDObject<Voting>> newVotings;
     private Map<String, IPLDObject<SettlementRequest>> newSettlementRequests;
     private Map<String, IPLDObject<SealedDocument>> newSealedDocuments;
     private Map<String, IPLDObject<OwnershipRequest>[]> newOwnershipRequests;
+    private Map<String, String[]> newReviewTableEntries;
 
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
@@ -171,6 +176,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
                 LoaderFactory.SEALED_DOCUMENT, eager, SEALED_DOCUMENT_KEY_PROVIDER);
         this.ownershipRequests = reader.readLinkObjectCollections(KEY_OWNERSHIP_REQUESTS, context, validationContext,
                 LoaderFactory.OWNERSHIP_REQUEST, eager, OWNERSHIP_REQUESTS_KEY_PROVIDER);
+        this.reviewTable = reader.readLinkCollections(KEY_REVIEW_TABLE);
         if (validationContext != null) {
             validationContext.validateModelState(this);
         }
@@ -186,6 +192,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         writer.writeLinkObjects(KEY_SETTLEMENT_REQUESTS, settlementRequests, signer, context);
         writer.writeLinkObjects(KEY_SEALED_DOCUMENTS, sealedDocuments, signer, null);
         writer.writeLinkObjectArrays(KEY_OWNERSHIP_REQUESTS, ownershipRequests, signer, context);
+        writer.writeLinkArrays(KEY_REVIEW_TABLE, reviewTable);
     }
 
     public long getVersion() {
@@ -301,6 +308,10 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         return ownershipRequests.get(documentHash);
     }
 
+    public String[] getReviewTableEntries(String documentHash) {
+        return reviewTable == null ? null : reviewTable.get(documentHash);
+    }
+
     /**
      * Updates this instance or a copy, which depends on the value of the 'current' parameter. It will be a copy if that
      * value is not null. That value will also be the previousVersion of the updated instance. The first invocation of
@@ -318,7 +329,8 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
     public ModelState updateUserState(IPLDObject<UserState> userState,
             Collection<IPLDObject<SettlementRequest>> settlementRequests,
             Collection<IPLDObject<OwnershipRequest>> ownershipRequests, Collection<IPLDObject<Voting>> votings,
-            Collection<IPLDObject<SealedDocument>> sealedDocuments, IPLDObject<ModelState> current, long timestamp) {
+            Collection<IPLDObject<SealedDocument>> sealedDocuments, Map<String, String[]> reviewTable,
+            IPLDObject<ModelState> current, long timestamp) {
         ModelState updated;
         if (current == null) {
             if (userState != null && this.userStates == null) {
@@ -335,6 +347,16 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
             }
             if (sealedDocuments != null && this.sealedDocuments == null) {
                 this.sealedDocuments = new LinkedHashMap<>();
+            }
+            if (reviewTable != null) {
+                if (this.reviewTable == null) {
+                    this.reviewTable = new LinkedHashMap<>(reviewTable);
+                }
+                else {
+                    Map<String, String[]> temp = new LinkedHashMap<>();
+                    mergeStringArrayMaps(this.reviewTable, reviewTable, temp);
+                    this.reviewTable = temp;
+                }
             }
             updated = this;
         }
@@ -354,14 +376,32 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
             if (this.settlementRequests != null) {
                 updated.settlementRequests = new LinkedHashMap<>(this.settlementRequests);
             }
+            else if (settlementRequests != null) {
+                updated.settlementRequests = new LinkedHashMap<>();
+            }
             if (this.sealedDocuments != null) {
                 updated.sealedDocuments = new LinkedHashMap<>(this.sealedDocuments);
+            }
+            else if (sealedDocuments != null) {
+                updated.sealedDocuments = new LinkedHashMap<>();
             }
             if (this.ownershipRequests != null) {
                 updated.ownershipRequests = new LinkedHashMap<>(this.ownershipRequests);
             }
             else if (ownershipRequests != null) {
                 updated.ownershipRequests = new LinkedHashMap<>();
+            }
+            if (reviewTable != null) {
+                if (this.reviewTable == null) {
+                    updated.reviewTable = new LinkedHashMap<>(reviewTable);
+                }
+                else {
+                    updated.reviewTable = new LinkedHashMap<>();
+                    // merging retains 'links' to older versions of reviews, this is part of the contract (checking for
+                    // older versions would defy the purpose of this table) - validation must allow for the presence of
+                    // older versions, but can clean them up, if easily achievable
+                    mergeStringArrayMaps(this.reviewTable, reviewTable, updated.reviewTable);
+                }
             }
         }
         if (userState != null) {
@@ -443,6 +483,14 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         return newOwnershipRequests;
     }
 
+    public Map<String, String[]> getNewReviewTableEntries(ModelState since, boolean ignoreCached) {
+        if (ignoreCached || newReviewTableEntries == null) {
+            newReviewTableEntries = ModelUtility.getNewLinksArraysMap(reviewTable,
+                    since == null ? null : since.reviewTable);
+        }
+        return newReviewTableEntries;
+    }
+
     public void validateVotingCause(String votingKey, long validVersion, ValidationContext validationContext) {
         ModelState modelState = this;
         IPLDObject<Voting> voting = null;
@@ -493,11 +541,12 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         return res;
     }
 
-    public void prepareSettlementValidation(SettlementController controller, Map<String, UserState> affected) {
+    public void prepareSettlementValidation(SettlementController controller, Set<String> newReviewTableKeys,
+            Map<String, Set<String>> newReviewTableValues, Map<String, UserState> affected) {
         if (userStates != null) {
             for (Entry<String, IPLDObject<UserState>> entry : userStates.entrySet()) {
                 UserState userState = entry.getValue().getMapped();
-                if (userState.prepareSettlementValidation(controller)) {
+                if (userState.prepareSettlementValidation(controller, newReviewTableKeys, newReviewTableValues)) {
                     affected.put(entry.getKey(), userState);
                 }
             }
@@ -620,11 +669,24 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
                         }
                     }
                     IPLDObject<OwnershipRequest>[] copy = Arrays.copyOf(otherRequests, merged.size());
-                    merged.values().toArray(copy);
+                    copy = merged.values().toArray(copy);
                     res.ownershipRequests.put(key, copy);
                 }
             }
             res.ownershipRequests.putAll(newOwnershipRequests);
+        }
+
+        if (this.reviewTable == null) {
+            res.reviewTable = other.reviewTable;
+        }
+        else if (other.reviewTable == null) {
+            res.reviewTable = new LinkedHashMap<>(reviewTable);
+        }
+        else {
+            Map<String, String[]> newReviewTableEntries = other.newReviewTableEntries == null ? null
+                    : new LinkedHashMap<>(other.newReviewTableEntries);
+            res.reviewTable = new LinkedHashMap<>();
+            mergeStringArrayMaps(reviewTable, newReviewTableEntries, res.reviewTable);
         }
 
         res.previousVersion = validationContext.getPreviousVersion();
@@ -657,6 +719,51 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
 
         res.timestamp = validationContext.getMainSettlementController().getTimestamp();
         return res;
+    }
+
+    public void removeObsoleteReviewVersions(Map<String, Set<String>> obsoleteReviewVersions) {
+        for (Entry<String, Set<String>> entry : obsoleteReviewVersions.entrySet()) {
+            String key = entry.getKey();
+            String[] reviewHashes = reviewTable.get(key);
+            Set<String> obsolete = entry.getValue();
+            Collection<String> coll = new ArrayList<>();
+            for (String reviewHash : reviewHashes) {
+                if (!obsolete.contains(reviewHash)) {
+                    coll.add(reviewHash);
+                }
+            }
+            String[] cleaned = new String[0];
+            cleaned = coll.toArray(cleaned);
+            reviewTable.put(key, cleaned);
+        }
+    }
+
+    private void mergeStringArrayMaps(Map<String, String[]> map1, Map<String, String[]> map2,
+            Map<String, String[]> merged) {
+        for (Entry<String, String[]> entry : map1.entrySet()) {
+            String key = entry.getKey();
+            String[] otherEntries = map2 == null ? null : map2.remove(key);
+            if (otherEntries == null) {
+                merged.put(key, entry.getValue());
+            }
+            else {
+                Set<String> unique = new TreeSet<>();
+                Collection<String> coll = new ArrayList<>();
+                for (String s : entry.getValue()) {
+                    unique.add(s);
+                    coll.add(s);
+                }
+                for (String s : otherEntries) {
+                    if (!unique.contains(s)) {
+                        coll.add(s);
+                    }
+                }
+                String[] copy = new String[0];
+                copy = coll.toArray(copy);
+                merged.put(key, copy);
+            }
+        }
+        merged.putAll(map2);
     }
 
     @Override

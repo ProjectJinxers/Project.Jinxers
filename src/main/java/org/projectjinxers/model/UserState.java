@@ -26,6 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
@@ -207,17 +208,40 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
 
     };
 
-    public static Map<String, IPLDObject<Document>> expandDocuments(Map<String, IPLDObject<Document>> documents) {
-        Map<String, IPLDObject<Document>> res = new LinkedHashMap<>();
+    public static IPLDObject<Document> expandDocuments(Map<String, IPLDObject<Document>> documents,
+            Map<String, ?> exclude, Map<String, IPLDObject<Document>> expandInto, String requestedHash) {
+        IPLDObject<Document> res = null;
+        String request = requestedHash;
+        if (request != null) {
+            res = documents.get(requestedHash);
+            if (res != null) {
+                if (expandInto == null) {
+                    return res;
+                }
+                request = null;
+            }
+        }
+        Deque<IPLDObject<Document>> versions = expandInto == null ? null : new ArrayDeque<>();
         for (IPLDObject<Document> document : documents.values()) {
-            Deque<IPLDObject<Document>> versions = new ArrayDeque<>();
             Document doc;
             do {
-                versions.push(document);
+                if (versions != null) {
+                    versions.push(document);
+                }
                 doc = document.getMapped();
+                if (exclude != null && exclude.containsKey(doc.getPreviousVersionHash())) {
+                    break;
+                }
                 document = doc.getPreviousVersionObject();
                 if (document == null) {
                     break;
+                }
+                if (request != null && request.equals(document.getMultihash())) {
+                    if (expandInto == null) {
+                        return document;
+                    }
+                    res = document;
+                    request = null;
                 }
                 Document prev = document.getMapped();
                 if (doc.getDate().equals(prev.getDate())
@@ -225,6 +249,71 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
                     throw new ValidationException("date unchanged");
                 }
                 doc = prev;
+            }
+            while (true);
+            if (expandInto != null) {
+                for (IPLDObject<Document> version : versions) {
+                    expandInto.put(version.getMultihash(), version);
+                }
+            }
+        }
+        return res;
+    }
+
+    public static Map<String, IPLDObject<Document>> expandDocuments(Map<String, IPLDObject<Document>> documents,
+            Map<String, ?> exclude, Set<String> documentHashes, Map<String, Set<String>> reviewHashes,
+            Map<String, Set<String>> obsoleteReviewVersions) {
+        Map<String, IPLDObject<Document>> res = new LinkedHashMap<>();
+        for (IPLDObject<Document> document : documents.values()) {
+            Deque<IPLDObject<Document>> versions = new ArrayDeque<>();
+            Document doc;
+            String documentHash = null;
+            Set<String> hashes = null;
+            Set<String> obsoleteHashes = null;
+            boolean first = true;
+            do {
+                versions.push(document);
+                String multihash = document.getMultihash();
+                documentHashes.remove(multihash);
+                doc = document.getMapped();
+
+                document = doc.getPreviousVersionObject();
+                if (doc instanceof Review) {
+                    if (documentHash == null) {
+                        documentHash = ((Review) doc).getDocument().getMultihash();
+                        hashes = reviewHashes.get(documentHash);
+                    }
+                    if (!hashes.remove(multihash) && first) {
+                        throw new ValidationException("unexpected review hash");
+                    }
+                    if (hashes.size() == 0) {
+                        reviewHashes.remove(documentHash);
+                    }
+                    if (document == null) {
+                        break;
+                    }
+                    if (obsoleteHashes == null) {
+                        obsoleteHashes = obsoleteReviewVersions.get(documentHash);
+                        if (obsoleteHashes == null) {
+                            obsoleteHashes = new TreeSet<>();
+                            obsoleteReviewVersions.put(documentHash, obsoleteHashes);
+                        }
+                    }
+                    obsoleteHashes.add(document.getMultihash());
+                }
+                else if (document == null) {
+                    break;
+                }
+                Document prev = document.getMapped();
+                if (doc.getDate().equals(prev.getDate())
+                        && isEqual(doc.expectUserState().getUser(), prev.expectUserState().getUser())) {
+                    throw new ValidationException("date unchanged");
+                }
+                if (exclude != null && exclude.containsKey(document.getMultihash())) {
+                    break;
+                }
+                doc = prev;
+                first = false;
             }
             while (true);
             for (IPLDObject<Document> version : versions) {
@@ -245,6 +334,70 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
                 document = document.getMapped().getPreviousVersionObject();
             }
             while (document != null);
+            for (IPLDObject<Document> version : versions) {
+                res.put(version.getMultihash(), version);
+            }
+        }
+        return res;
+    }
+
+    public static Map<String, IPLDObject<Document>> expandRemovedDocuments(
+            Map<String, IPLDObject<DocumentRemoval>> documents, Map<String, ?> exclude, Set<String> documentHashes,
+            Map<String, Set<String>> reviewHashes, Map<String, Set<String>> obsoleteReviewVersions) {
+        Map<String, IPLDObject<Document>> res = new LinkedHashMap<>();
+        for (IPLDObject<DocumentRemoval> removed : documents.values()) {
+            Deque<IPLDObject<Document>> versions = new ArrayDeque<>();
+            Document doc;
+            String documentHash = null;
+            Set<String> hashes = null;
+            Set<String> obsoleteHashes = null;
+            IPLDObject<Document> document = removed.getMapped().getDocument();
+            boolean first = true;
+            do {
+                versions.push(document);
+                String multihash = document.getMultihash();
+                documentHashes.remove(multihash);
+                doc = document.getMapped();
+
+                document = doc.getPreviousVersionObject();
+                if (doc instanceof Review) {
+                    if (documentHash == null) {
+                        documentHash = ((Review) doc).getDocument().getMultihash();
+                        hashes = reviewHashes.get(documentHash);
+                    }
+                    if (!hashes.remove(multihash) && first) {
+                        throw new ValidationException("unexpected review hash");
+                    }
+                    if (hashes.size() == 0) {
+                        reviewHashes.remove(documentHash);
+                    }
+                    if (document == null) {
+                        break;
+                    }
+                    if (obsoleteHashes == null) {
+                        obsoleteHashes = obsoleteReviewVersions.get(documentHash);
+                        if (obsoleteHashes == null) {
+                            obsoleteHashes = new TreeSet<>();
+                            obsoleteReviewVersions.put(documentHash, obsoleteHashes);
+                        }
+                    }
+                    obsoleteHashes.add(document.getMultihash());
+                }
+                else if (document == null) {
+                    break;
+                }
+                Document prev = document.getMapped();
+                if (doc.getDate().equals(prev.getDate())
+                        && isEqual(doc.expectUserState().getUser(), prev.expectUserState().getUser())) {
+                    throw new ValidationException("date unchanged");
+                }
+                if (exclude != null && exclude.containsKey(document.getMultihash())) {
+                    break;
+                }
+                doc = prev;
+                first = false;
+            }
+            while (true);
             for (IPLDObject<Document> version : versions) {
                 res.put(version.getMultihash(), version);
             }
@@ -375,7 +528,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
      * @return the document wrapper stored in this instance with the given hash (null-safe)
      */
     public IPLDObject<Document> getDocument(String documentHash) {
-        return documents == null ? null : expandDocuments(documents).get(documentHash);
+        return documents == null ? null : expandDocuments(documents, null, null, documentHash);
     }
 
     /**
@@ -391,11 +544,16 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
      * @return the document stored in this instance with the given hash (no null checks!)
      */
     public Document expectDocument(String documentHash) {
-        return expandDocuments(documents).get(documentHash).getMapped();
+        return expandDocuments(documents, null, null, documentHash).getMapped();
     }
 
     public Map<String, IPLDObject<Document>> getAllDocuments() {
-        return documents == null ? null : expandDocuments(documents);
+        if (documents == null) {
+            return null;
+        }
+        Map<String, IPLDObject<Document>> res = new LinkedHashMap<>();
+        expandDocuments(documents, null, res, null);
+        return res;
     }
 
     /**
@@ -446,16 +604,19 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
      * date of the document with the given hash can be assumed as the last activity date).
      * 
      * @param documentHash the document hash
-     * @return the last activity date or null, if the document itself is the last activity
+     * @return the last activity date or null, if the document itself is the last activity TODO: use reviewTable (model
+     *         state) and expandDocuments without expandInto
      */
     public Date getLastActivityDate(String documentHash) {
         Set<String> relatedHashes = new HashSet<>();
         Set<String> unrelatedHashes = new HashSet<>();
         relatedHashes.add(documentHash);
         Document lastActivity = null;
-        Collection<IPLDObject<Document>> allDocuments = expandDocuments(documents).values();
-        main: for (IPLDObject<Document> document : allDocuments) {
-            String docHash = document.getMultihash();
+        Map<String, IPLDObject<Document>> allDocuments = new LinkedHashMap<>();
+        expandDocuments(documents, null, allDocuments, null);
+        main: for (Entry<String, IPLDObject<Document>> entry : allDocuments.entrySet()) {
+            String docHash = entry.getKey();
+            IPLDObject<Document> document = entry.getValue();
             Document doc = document.getMapped();
             String hash = doc.getPreviousVersionHash();
             if (hash != null) {
@@ -539,12 +700,12 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         UserState updated = copy();
         updated.version = this.version + 1;
         updated.previousVersion = current;
-        if (transferredOwnershipHashes != null && transferredOwnershipHashes.size() > 0) {
+        if (transferredOwnershipHashes != null) {
             for (String hash : transferredOwnershipHashes) {
                 updated.documents.remove(hash);
             }
         }
-        if (sreqs != null && sreqs.size() > 0) {
+        if (sreqs != null) {
             if (updated.settlementRequests == null) {
                 updated.settlementRequests = new LinkedHashMap<>();
             }
@@ -553,7 +714,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
                         settlementRequest);
             }
         }
-        if (oreqs != null && oreqs.size() > 0) {
+        if (oreqs != null) {
             if (updated.ownershipRequests == null) {
                 updated.ownershipRequests = new LinkedHashMap<>();
             }
@@ -562,7 +723,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
                         ownershipRequest);
             }
         }
-        if (granted != null && granted.size() > 0) {
+        if (granted != null) {
             if (updated.grantedOwnerships == null) {
                 updated.grantedOwnerships = new LinkedHashMap<>();
             }
@@ -574,7 +735,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
                 }
             }
         }
-        if (docs != null && docs.size() > 0) {
+        if (docs != null) {
             if (updated.documents == null) {
                 updated.documents = new LinkedHashMap<>();
             }
@@ -701,9 +862,54 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
 
     public Collection<IPLDObject<Document>> getNewDocuments(UserState since, boolean ignoreCached) {
         if (ignoreCached || newDocuments == null) {
-            newDocuments = documents == null ? null
-                    : ModelUtility.getNewLinks(expandDocuments(documents),
-                            since == null ? null : expandDocuments(since.documents));
+            if (since == null || since.documents == null) {
+                if (documents == null) {
+                    newDocuments = null;
+                }
+                else {
+                    Map<String, IPLDObject<Document>> tmp = new LinkedHashMap<>();
+                    expandDocuments(documents, null, tmp, null);
+                    newDocuments = tmp.values();
+                }
+            }
+            else {
+                Map<String, IPLDObject<Document>> newLinksMap = ModelUtility.getNewLinksMap(documents, since.documents);
+                if (newLinksMap == null) {
+                    newDocuments = null;
+                }
+                else {
+                    Map<String, IPLDObject<Document>> tmp = new LinkedHashMap<>();
+                    expandDocuments(newLinksMap, since.documents, tmp, null);
+                    newDocuments = tmp.values();
+                }
+            }
+        }
+        return newDocuments;
+    }
+
+    public Collection<IPLDObject<Document>> getNewDocuments(UserState since, Set<String> documentHashes,
+            Map<String, Set<String>> reviewHashes, Map<String, Set<String>> obsoleteReviewVersions,
+            boolean ignoreCached) {
+        if (ignoreCached || newDocuments == null) {
+            if (since == null || since.documents == null) {
+                if (documents == null) {
+                    newDocuments = null;
+                }
+                else {
+                    newDocuments = expandDocuments(documents, null, documentHashes, reviewHashes,
+                            obsoleteReviewVersions).values();
+                }
+            }
+            else {
+                Map<String, IPLDObject<Document>> newLinksMap = ModelUtility.getNewLinksMap(documents, since.documents);
+                if (newLinksMap == null) {
+                    newDocuments = null;
+                }
+                else {
+                    newDocuments = expandDocuments(newLinksMap, since.documents, documentHashes, reviewHashes,
+                            obsoleteReviewVersions).values();
+                }
+            }
         }
         return newDocuments;
     }
@@ -712,6 +918,20 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         if (ignoreCached || newRemovedDocuments == null) {
             newRemovedDocuments = ModelUtility.getNewForeignKeyLinksMap(removedDocuments,
                     since == null ? null : since.removedDocuments);
+        }
+        return newRemovedDocuments;
+    }
+
+    public Map<String, IPLDObject<DocumentRemoval>> getNewRemovedDocuments(UserState since, Set<String> documentHashes,
+            Map<String, Set<String>> reviewHashes, Map<String, Set<String>> obsoleteReviewVersions,
+            boolean ignoreCached) {
+        if (ignoreCached || newRemovedDocuments == null) {
+            newRemovedDocuments = ModelUtility.getNewForeignKeyLinksMap(removedDocuments,
+                    since == null ? null : since.removedDocuments);
+            if (newRemovedDocuments != null) {
+                expandRemovedDocuments(newRemovedDocuments, since == null ? null : since.removedDocuments,
+                        documentHashes, reviewHashes, obsoleteReviewVersions);
+            }
         }
         return newRemovedDocuments;
     }
@@ -756,11 +976,14 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         return newGrantedUnbans;
     }
 
-    boolean prepareSettlementValidation(SettlementController controller) {
+    boolean prepareSettlementValidation(SettlementController controller, Set<String> newReviewTableKeys,
+            Map<String, Set<String>> newReviewTableValues) {
         if (documents != null) {
             boolean res = false;
-            for (IPLDObject<Document> document : expandDocuments(documents).values()) {
-                res = controller.checkDocument(document, true) || res;
+            Map<String, IPLDObject<Document>> allDocuments = new HashMap<>();
+            expandDocuments(documents, null, allDocuments, null);
+            for (IPLDObject<Document> document : allDocuments.values()) {
+                res = controller.checkDocument(document, true, newReviewTableKeys, newReviewTableValues) || res;
             }
             if (res) {
                 return true;
@@ -906,8 +1129,10 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         SettlementController mainSettlementController = validationContext.getMainSettlementController();
         if (documents != null) {
             boolean res = false;
-            for (IPLDObject<Document> document : expandDocuments(documents).values()) {
-                res = mainSettlementController.checkDocument(document, true) || res;
+            Map<String, IPLDObject<Document>> allDocuments = new HashMap<>();
+            expandDocuments(documents, null, allDocuments, null);
+            for (IPLDObject<Document> document : allDocuments.values()) {
+                res = mainSettlementController.checkDocument(document, true, null, null) || res;
             }
             if (res) {
                 return true;
@@ -929,7 +1154,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         if (newDocuments != null) {
             this.newDocuments = null;
             for (IPLDObject<Document> document : newDocuments) {
-                mainSettlementController.checkDocument(document, true);
+                mainSettlementController.checkDocument(document, true, null, null);
             }
         }
     }

@@ -216,6 +216,26 @@ public class IPLDJsonWriter implements IPLDWriter {
     }
 
     @Override
+    public void writeLinkArrays(String key, Map<String, String[]> links) throws IOException {
+        if (links != null) {
+            jsonWriter.name(key).beginArray();
+            jsonWriter.beginArray();
+            for (String group : links.keySet()) {
+                writeLink(group);
+            }
+            jsonWriter.endArray();
+            for (String[] linkArray : links.values()) {
+                jsonWriter.beginArray();
+                for (String link : linkArray) {
+                    writeLink(link);
+                }
+                jsonWriter.endArray();
+            }
+            jsonWriter.endArray();
+        }
+    }
+
+    @Override
     public <D extends IPLDSerializable> void writeLinkObjectArrays(String key, Map<String, IPLDObject<D>[]> linkArrays,
             Signer signer, IPLDContext context) throws IOException {
         if (linkArrays != null) {

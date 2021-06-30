@@ -91,6 +91,7 @@ public class ValidationContext {
     private Map<String, IPLDObject<UserState>> keptUserStates;
 
     private Set<String> validated = new TreeSet<>();
+    private Map<String, Set<String>> obsoleteReviewVersions = new HashMap<>();
 
     public ValidationContext(IPLDContext context, IPLDObject<ModelState> currentValidLocalState,
             Set<String> currentLocalHashes, long timestamp, long timestampTolerance) {
@@ -116,6 +117,10 @@ public class ValidationContext {
 
     public SettlementController getMainSettlementController() {
         return mainSettlementController;
+    }
+
+    public Map<String, Set<String>> getObsoleteReviewVersions() {
+        return obsoleteReviewVersions;
     }
 
     public IPLDObject<ModelState> getPreviousVersion() {
@@ -203,6 +208,33 @@ public class ValidationContext {
                 }
             }
         }
+        Set<String> newReviewTableKeys;
+        Map<String, Set<String>> newReviewTableValues;
+        Set<String> newReviewTableKeysSettlement;
+        Map<String, Set<String>> newReviewTableValuesSettlement;
+        Map<String, String[]> newReviewTableEntries = modelState.getNewReviewTableEntries(commonState, false);
+        if (newReviewTableEntries == null) {
+            newReviewTableKeys = null;
+            newReviewTableValues = null;
+            newReviewTableKeysSettlement = null;
+            newReviewTableValuesSettlement = null;
+        }
+        else {
+            newReviewTableKeys = new TreeSet<>();
+            newReviewTableValues = new HashMap<>();
+            newReviewTableValuesSettlement = new HashMap<>();
+            for (Entry<String, String[]> entry : newReviewTableEntries.entrySet()) {
+                String key = entry.getKey();
+                newReviewTableKeys.add(key);
+                Set<String> values = new TreeSet<>();
+                for (String link : entry.getValue()) {
+                    values.add(link);
+                }
+                newReviewTableValues.put(key, values);
+                newReviewTableValuesSettlement.put(key, new TreeSet<>(values));
+            }
+            newReviewTableKeysSettlement = new TreeSet<>(newReviewTableKeys);
+        }
         Map<String, IPLDObject<UserState>> newUserStates = modelState.getNewUserStates(commonState, false);
         if (newUserStates != null) {
             for (Entry<String, IPLDObject<UserState>> entry : newUserStates.entrySet()) {
@@ -224,15 +256,21 @@ public class ValidationContext {
                     UserState.OWNERSHIP_KEY_COLLECTOR.validateMoveOnceUndeletableEntries(previousStates);
                     UserState.UNBAN_KEY_COLLECTOR.validateMoveOnceUndeletableEntries(previousStates);
                     validateUserState(userState, modelState, newSettlementRequestsMap, newOwnershipRequestsMap,
-                            previousStates);
+                            newReviewTableKeys, newReviewTableValues, previousStates);
                 }
             }
         }
         if (newSettlementRequestsMap != null && newSettlementRequestsMap.size() > 0) {
-            throw new ValidationException("New settlement requests out of sync (model state v user states)");
+            throw new ValidationException("new settlement requests out of sync (model state v user states)");
         }
         if (newOwnershipRequestsMap != null && newOwnershipRequestsMap.size() > 0) {
-            throw new ValidationException("New ownership requests out of sync (model state v user states)");
+            throw new ValidationException("new ownership requests out of sync (model state v user states)");
+        }
+        if (newReviewTableKeys != null && newReviewTableKeys.size() > 0) {
+            throw new ValidationException("new review table keys out of sync (too many)");
+        }
+        if (newReviewTableValues != null && newReviewTableValuesSettlement.size() > 0) {
+            throw new ValidationException("new review table values out of sync (too many)");
         }
         validateMustKeepModelStates(modelState.getPreviousVersion());
 
@@ -257,7 +295,12 @@ public class ValidationContext {
         // the main settlement controller is prepared for skipping reviews where there are no settlement requests for
         // the documents (including merge); all other settlement controllers won't be used for merging
         Map<String, UserState> affected = new HashMap<>();
-        modelState.prepareSettlementValidation(currentSettlementController, affected);
+        modelState.prepareSettlementValidation(currentSettlementController, newReviewTableKeysSettlement,
+                newReviewTableValuesSettlement, affected);
+        if (newReviewTableKeysSettlement != null
+                && (newReviewTableKeysSettlement.size() > 0 || newReviewTableValuesSettlement.size() > 0)) {
+            throw new ValidationException("review table inconsistency (too many new entries)");
+        }
 
         Map<String, UserState> toUpdate = new HashMap<>();
         for (Entry<String, UserState> entry : affected.entrySet()) {
@@ -544,7 +587,8 @@ public class ValidationContext {
     // state, which, if valid, is never validated again, and if invalid, is dropped immediately.
     private void validateUserState(UserState userState, ModelState modelState,
             Map<String, IPLDObject<SettlementRequest>> newSettlementRequestsMap,
-            Map<String, IPLDObject<OwnershipRequest>> newOwnershipRequestsMap, Collection<UserState> previousStates) {
+            Map<String, IPLDObject<OwnershipRequest>> newOwnershipRequestsMap, Set<String> documentHashes,
+            Map<String, Set<String>> reviewHashes, Collection<UserState> previousStates) {
         IPLDObject<UserState> common = commonUserStates.get(userState.getUser().getMultihash());
         UserState since = common == null ? null : common.getMapped();
         IPLDObject<User> userObject = userState.getUser();
@@ -553,7 +597,8 @@ public class ValidationContext {
             userObject = currentValidLocalState.getMapped().expectUserState(userHash).getMapped().getUser();
         }
         User user = userObject.getMapped();
-        Collection<IPLDObject<Document>> newDocuments = userState.getNewDocuments(since, false);
+        Collection<IPLDObject<Document>> newDocuments = userState.getNewDocuments(since, documentHashes, reviewHashes,
+                obsoleteReviewVersions, false);
         if (newDocuments != null) {
             for (IPLDObject<Document> document : newDocuments) {
                 if (validated.add(document.getMultihash())) {
@@ -561,7 +606,8 @@ public class ValidationContext {
                 }
             }
         }
-        Map<String, IPLDObject<DocumentRemoval>> newRemovedDocuments = userState.getNewRemovedDocuments(since, false);
+        Map<String, IPLDObject<DocumentRemoval>> newRemovedDocuments = userState.getNewRemovedDocuments(since,
+                documentHashes, reviewHashes, obsoleteReviewVersions, false);
         if (newRemovedDocuments != null) {
             for (IPLDObject<DocumentRemoval> removal : newRemovedDocuments.values()) {
                 if (validated.add(removal.getMultihash())) {

@@ -65,6 +65,20 @@ public class ModelUtility {
         }
     }
 
+    public static <T> int indexOfNonNullEntry(T[] array, T entry) {
+        if (array == null) {
+            return -1;
+        }
+        int i = 0;
+        for (T item : array) {
+            if (entry.equals(item)) {
+                return i;
+            }
+            i++;
+        }
+        return -1;
+    }
+
     public static <D extends IPLDSerializable> Collection<IPLDObject<D>> getNewLinks(Map<String, IPLDObject<D>> now,
             Map<String, IPLDObject<D>> since) {
         if (now == null || now.size() == 0) {
@@ -178,6 +192,42 @@ public class ModelUtility {
         return res.size() == 0 ? null : res;
     }
 
+    public static Map<String, String[]> getNewLinksArraysMap(Map<String, String[]> now, Map<String, String[]> since) {
+        if (now == null || now.size() == 0) {
+            return null;
+        }
+        if (since == null || since.size() == 0) {
+            return new LinkedHashMap<>(now);
+        }
+        Map<String, String[]> res = new LinkedHashMap<>();
+        for (Entry<String, String[]> entry : now.entrySet()) {
+            String key = entry.getKey();
+            String[] values = entry.getValue();
+            String[] knownValues = since.get(key);
+            if (knownValues == null) {
+                res.put(key, values);
+            }
+            else {
+                Set<String> knownKeys = new HashSet<>();
+                for (String knownValue : knownValues) {
+                    knownKeys.add(knownValue);
+                }
+                Collection<String> coll = new ArrayList<>();
+                for (String value : values) {
+                    if (!knownKeys.contains(value)) {
+                        coll.add(value);
+                    }
+                }
+                if (coll.size() > 0) {
+                    String[] arr = new String[0];
+                    arr = coll.toArray(arr);
+                    res.put(key, arr);
+                }
+            }
+        }
+        return res.size() == 0 ? null : res;
+    }
+
     public static <D extends IPLDSerializable> Map<String, IPLDObject<D>[]> getNewLinkArraysMap(
             Map<String, IPLDObject<D>[]> now, Map<String, IPLDObject<D>[]> since) {
         if (now == null || now.size() == 0) {
@@ -198,7 +248,6 @@ public class ModelUtility {
                 Set<String> knownKeys = new HashSet<>();
                 Collection<IPLDObject<D>> coll = new ArrayList<>();
                 for (IPLDObject<D> knownValue : knownValues) {
-                    coll.add(knownValue);
                     knownKeys.add(knownValue.getMultihash());
                 }
                 for (IPLDObject<D> value : values) {
@@ -206,9 +255,11 @@ public class ModelUtility {
                         coll.add(value);
                     }
                 }
-                IPLDObject<D>[] union = Arrays.copyOf(knownValues, 0);
-                union = coll.toArray(union);
-                res.put(key, union);
+                if (coll.size() > 0) {
+                    IPLDObject<D>[] arr = Arrays.copyOf(knownValues, 0);
+                    arr = coll.toArray(arr);
+                    res.put(key, arr);
+                }
             }
         }
         return res.size() == 0 ? null : res;

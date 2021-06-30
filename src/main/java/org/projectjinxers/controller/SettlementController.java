@@ -667,7 +667,8 @@ public class SettlementController {
         String documentMultihash = document.getMultihash();
         if (invalidRequests.contains(documentMultihash)) {
             if (validationMode) {
-                throw new ValidationException("settlement request on removed document");
+                throw new ValidationException(
+                        "settlement request on removed, replaced or too recently negatively reviewed document");
             }
             return false;
         }
@@ -706,7 +707,8 @@ public class SettlementController {
         return true;
     }
 
-    public boolean checkDocument(IPLDObject<Document> document, boolean needRequest) {
+    public boolean checkDocument(IPLDObject<Document> document, boolean needRequest, Set<String> newReviewTableKeys,
+            Map<String, Set<String>> newReviewTableValues) {
         Document doc = document.getMapped();
         String previousVersionHash = doc.getPreviousVersionHash();
         if (previousVersionHash != null) {
@@ -717,6 +719,12 @@ public class SettlementController {
             Review review = (Review) doc;
             IPLDObject<Document> reviewed = review.getDocument();
             String documentMultihash = reviewed.getMultihash();
+            if (newReviewTableValues != null) {
+                Set<String> values = newReviewTableValues.get(documentMultihash);
+                if (values != null && values.remove(document.getMultihash()) && values.size() == 0) {
+                    newReviewTableValues.remove(documentMultihash);
+                }
+            }
             if (invalidRequests.contains(documentMultihash)) {
                 return false;
             }
@@ -758,6 +766,9 @@ public class SettlementController {
                 data.addReview(reviewObject);
                 return true;
             }
+        }
+        else if (newReviewTableKeys != null) {
+            newReviewTableKeys.remove(document.getMultihash());
         }
         return false;
     }
@@ -1076,7 +1087,7 @@ public class SettlementController {
             IPLDObject tmp = review;
             @SuppressWarnings("unchecked")
             IPLDObject<Document> document = tmp;
-            res = checkDocument(document, true) || res;
+            res = checkDocument(document, true, null, null) || res;
         }
         return res;
     }

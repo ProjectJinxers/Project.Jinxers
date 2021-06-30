@@ -144,7 +144,7 @@ public class Document implements IPLDSerializable {
         this.date = new Date(time);
         this.source = reader.readString(KEY_SOURCE);
         this.contents = reader.readLinkObject(KEY_CONTENTS, context, validationContext, LoaderFactory.DOCUMENT_CONTENTS,
-                eager);
+                false); // saves a lot of memory when validating and sealing
         if (validationContext != null && contents == null) {
             handleMissingContents();
         }

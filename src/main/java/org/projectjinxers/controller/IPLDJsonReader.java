@@ -324,6 +324,28 @@ public class IPLDJsonReader implements IPLDReader {
     }
 
     @Override
+    public Map<String, String[]> readLinkCollections(String key) {
+        String[][] linkArrays = linkArrayArrays.get(key);
+        if (linkArrays == null) {
+            return null;
+        }
+        Map<String, String[]> res = new LinkedHashMap<>();
+        int i = 0;
+        boolean first = true;
+        String[] keys = null;
+        for (String[] links : linkArrays) {
+            if (first) {
+                keys = links;
+                first = false;
+            }
+            else {
+                res.put(keys[i++], links);
+            }
+        }
+        return res;
+    }
+
+    @Override
     public <D extends IPLDSerializable> Map<String, IPLDObject<D>[]> readLinkObjectCollections(String key,
             IPLDContext context, ValidationContext validationContext, LoaderFactory<D> loaderFactory, boolean eager,
             KeyProvider<D> keyProvider) {
