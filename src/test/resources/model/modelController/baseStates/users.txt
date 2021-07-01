@@ -1,0 +1,12 @@
+This is not a resource file! There are no plain-text credentials stored in the system. This file's purpose is to keep
+track of the users, that are stored in the base states json files. Without this additional information, there is no
+way to actually make use of those users in derived test scenarios (except for user and newOwner, as there are constants
+in the test classes).
+
+user:pass
+second:pass2
+third:pass3
+fourth:pass4
+user<i>:pass<i> (i in [5, 24])
+
+newOwner:newpass

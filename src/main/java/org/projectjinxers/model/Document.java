@@ -170,7 +170,7 @@ public class Document implements IPLDSerializable {
         writer.writeNumber(KEY_DATE, date.getTime());
         writer.writeString(KEY_SOURCE, source);
         writer.writeLink(KEY_CONTENTS, contents, signer, context);
-        writer.writeLink(KEY_USER_STATE, userState, signer, null);
+        writer.writeLink(KEY_USER_STATE, userState, signer, context);
         writer.writeLink(KEY_PREVIOUS_VERSION, previousVersion, signer, null);
         writer.writeLink(KEY_FIRST_VERSION, firstVersion, signer, null);
         writer.writeLinkObjects(KEY_LINKS, links, signer, context);
@@ -200,6 +200,10 @@ public class Document implements IPLDSerializable {
      */
     public Date getDate() {
         return date;
+    }
+
+    public IPLDObject<DocumentContents> getContents() {
+        return contents;
     }
 
     /**

@@ -188,4 +188,8 @@ public class IPLDContext {
         return cache.get(multihash);
     }
 
+    public void clearCache() {
+        cache.clear();
+    }
+
 }

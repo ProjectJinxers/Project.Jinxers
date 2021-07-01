@@ -110,14 +110,16 @@ public interface IPLDSerializable {
             }
             Set<String> previousHashes = null;
             Iterator<D2> secondPreviousStatesIterator = secondPreviousStates.iterator();
-            D2 secondPreviousState = secondPreviousStatesIterator.next();
+            D2 secondPreviousState = secondPreviousStatesIterator.hasNext() ? secondPreviousStatesIterator.next()
+                    : null;
             for (D1 previousState : firstPreviousStates) {
                 Set<String> hashes = new HashSet<>();
                 Set<String> sourceHashes = firstKeyCollector.getHashes(previousState);
                 if (sourceHashes != null) {
                     hashes.addAll(sourceHashes);
                 }
-                Set<String> movedHashes = secondKeyCollector.getHashes(secondPreviousState);
+                Set<String> movedHashes = secondPreviousState == null ? null
+                        : secondKeyCollector.getHashes(secondPreviousState);
                 if (movedHashes != null) {
                     hashes.addAll(movedHashes);
                 }

@@ -23,13 +23,18 @@ import static org.projectjinxers.controller.TestIPFSAccessUtil.NEW_OWNER_SIGNER;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.projectjinxers.account.Users;
 import org.projectjinxers.config.Config;
 import org.projectjinxers.model.Document;
+import org.projectjinxers.model.DocumentContents;
 import org.projectjinxers.model.GrantedOwnership;
 import org.projectjinxers.model.ModelState;
+import org.projectjinxers.model.User;
 import org.projectjinxers.model.UserState;
 import org.spongycastle.util.encoders.Base64;
 
@@ -63,6 +68,36 @@ class ModelControllerTest {
     }
 
     @Test
+    void testFirstActionEver() throws Exception {
+        ModelController controller = new ModelController(access, null, 0);
+        User user = new User("user", Users.createAccount("user", "pass").getPubKey());
+        UserState userState = new UserState(new IPLDObject<>(user));
+        DocumentContents contents = new DocumentContents("Abstract", "Contents");
+        Document document = new Document("Title", null, null, null, null, new IPLDObject<>(contents),
+                new IPLDObject<>(userState));
+        IPLDObject<Document> documentObject = new IPLDObject<Document>(document);
+        controller.saveDocument(documentObject, DEFAULT_SIGNER);
+        String newHash = access.waitForPublishedMessage(Config.getSharedInstance().getIOTAMainAddress(), 100);
+        IPLDObject<ModelState> firstEverModelState = new IPLDObject<>(newHash, new ModelState(),
+                controller.getContext(), new ValidationContext(controller.getContext(), null, null,
+                        System.currentTimeMillis(), ValidationContext.TIMESTAMP_TOLERANCE));
+        controller.getContext().clearCache();
+        ModelState firstEver = firstEverModelState.getMapped();
+        assertNull(firstEver.getPreviousVersion());
+        Set<Entry<String, IPLDObject<UserState>>> allUserStateEntries = firstEver.getAllUserStateEntries();
+        assertEquals(1, allUserStateEntries.size());
+        Entry<String, IPLDObject<UserState>> singleEntry = allUserStateEntries.iterator().next();
+        UserState loadedUserState = singleEntry.getValue().getMapped();
+        Map<String, IPLDObject<Document>> allDocuments = loadedUserState.getAllDocuments();
+        assertEquals(1, allDocuments.size());
+        Document loadedDocument = allDocuments.values().iterator().next().getMapped();
+        assertNull(loadedDocument.getPreviousVersion());
+        assertNull(loadedDocument.getFirstVersionHash());
+        assertEquals("Title", loadedDocument.getTitle());
+        assertNotNull(loadedDocument.getContents());
+    }
+
+    @Test
     void testSaveDocument() throws Exception {
         String[] hashes = access.readObjects("model/modelController/saveDocument/simple.json");
         final String modelStateHash = hashes[1];
@@ -78,7 +113,7 @@ class ModelControllerTest {
         IPLDObject<Document> documentObject = new IPLDObject<Document>(document);
         IPLDObject<UserState> userState = modelState.getUserState(userHash);
         controller.saveDocument(documentObject, DEFAULT_SIGNER);
-        String newHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 0);
+        String newHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 100);
         IPLDObject<ModelState> nextModelState = new IPLDObject<>(newHash, new ModelState(), controller.getContext(),
                 null);
         IPLDObject<UserState> nextUserState = nextModelState.getMapped().getUserState(userHash);

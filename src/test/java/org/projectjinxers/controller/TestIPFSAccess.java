@@ -18,6 +18,7 @@ import static org.ethereum.crypto.HashUtil.sha3;
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -478,8 +479,12 @@ public class TestIPFSAccess extends IPFSAccess {
         if (res != null) {
             return res;
         }
+        InputStream resourceAsStream = getClass().getClassLoader().getResourceAsStream(address);
+        if (resourceAsStream == null) {
+            throw new FileNotFoundException(address);
+        }
         BufferedReader br = new BufferedReader(
-                new InputStreamReader(getClass().getClassLoader().getResourceAsStream(address)));
+                new InputStreamReader(resourceAsStream));
         try {
             res = br.readLine();
             if (res != null) {

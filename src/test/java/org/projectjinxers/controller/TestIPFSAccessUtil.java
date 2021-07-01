@@ -27,16 +27,13 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
-import org.ethereum.crypto.ECKey.ECDSASignature;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.projectjinxers.account.ECCSigner;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.account.Users;
 import org.projectjinxers.model.Document;
-import org.projectjinxers.model.DocumentContents;
 import org.projectjinxers.model.IPLDSerializable;
-import org.projectjinxers.model.Loader;
 import org.projectjinxers.model.LoaderFactory;
 import org.projectjinxers.model.ModelState;
 import org.projectjinxers.model.User;
@@ -57,16 +54,16 @@ import com.google.gson.JsonParser;
 class TestIPFSAccessUtil {
 
     private static final String[] PRINT_HASHES_FILEPATHS = {
-            "model/modelController/transferOwnership/existingReq.json" };
+            "model/modelController/baseStates/fourUsers.json" };
 
     private static final String UPDATE_FILE_CONTENTS_SINGLE_PATH = null;
-    private static final String UPDATE_FILE_CONTENTS_MULTIPLE_PATH = null;
+    private static final String UPDATE_FILE_CONTENTS_MULTIPLE_PATH = "model/modelController/baseStates/fourUsers.json";
     private static final String REPLACE_FILE_CONTENTS_SINGLE_PATH = null;
-    private static final String REPLACE_FILE_CONTENTS_MULTIPLE_PATH = "model/modelController/transferOwnership/reclaim.json";
+    private static final String REPLACE_FILE_CONTENTS_MULTIPLE_PATH = null;
 
     /**
      * If not null, and this hash is encountered during replacing, the in memory models will be cleared and re-populated
-     * by saving the root again (after resetting all multhihashes).
+     * by saving the root again (after resetting all multihashes).
      */
     private static final String REPLACE_ROOT_HASH = "aad7535fc00a12a500224335e42f502fcaf809754b620324a3f0df3966aaa529";
     private static final LoaderFactory<?> ROOT_LOADER_FACTORY = LoaderFactory.MODEL_STATE;
@@ -124,29 +121,28 @@ class TestIPFSAccessUtil {
 
     private static final Map<String, ModelUpdater> UPDATERS = new HashMap<>();
     static {
-        UPDATERS.put("8a8b7891c09fa2105fa7d219e36a858be8c0d3a462a3546b7757f316467e7956", new ModelUpdater() {
+        UPDATERS.put("c1cf8466bcb5a624138e843755193822c75c0bb1347b60073766ec42bf3ad060", new ModelUpdater() {
 
             @Override
             public IPLDObject<?> update(String hash, IPLDContext context, Set<String> removeHashes)
                     throws IOException, IllegalArgumentException, IllegalAccessException {
-                String opHash = "d7125adf8e58b52181edeefbb874aa5d40c6037df9a7fc6d8f81e66e3669cbe7";
-                removeHashes.add(opHash);
-                Loader<Document> loader = LoaderFactory.DOCUMENT.createLoader();
-                IPLDObject<Document> document = new IPLDObject<>(opHash, loader, context, null);
-                Document mapped = document.getMapped();
-                mapped.update(mapped.getVersion(), mapped.getTags(),
-                        new IPLDObject<>(new DocumentContents("Abstract", "Contents")), null);
-                // DOCUMENT_DATE_FIELD.set(mapped, ELIGIBLE_FOR_OWNERSHIP_TRANSFER);
-                String newHash = context.saveObject(document, DEFAULT_SIGNER);
-                IPLDObject<Document> updated = new IPLDObject<>(hash, loader, context, null);
-                ECDSASignature foreignSignature = updated.getMetadata().getSignature();
-                String userStateHash = "fe80c488b6972d6f62e2f1a6bc5f9f458e6bbbb65d5c61f4b7d9be38d2aff9ff";
-                IPLDObject<UserState> userState = new IPLDObject<>(userStateHash,
-                        LoaderFactory.USER_STATE.createLoader(), context, null);
-                IPLDObject<Document> loaded = new IPLDObject<>(newHash, loader, context, null);
-                IPLDObject<Document> transferred = loaded.getMapped().transferTo(userState, loaded, foreignSignature);
-                newHash = context.saveObject(transferred, NEW_OWNER_SIGNER);
-                return new IPLDObject<>(newHash, LoaderFactory.REVIEW.createLoader(), context, null);
+                IPLDObject<ModelState> modelState = new IPLDObject<>(hash, new ModelState(), context, null);
+                IPLDObject<ModelState> updatedState = null;
+                for (int i = 5; i < 25; i++) {
+                    String username = "user" + i;
+                    String password = "pass" + i;
+                    User user = new User(username, Users.createAccount(username, password).getPubKey());
+                    UserState userState = new UserState(new IPLDObject<User>(user));
+                    IPLDObject<UserState> userStateObject = new IPLDObject<UserState>(userState);
+                    userStateObject.save(context, new ECCSigner(username, password));
+                    ModelState updated = modelState.getMapped().updateUserState(userStateObject, null, null, null, null,
+                            null, i == 5 ? modelState : null, System.currentTimeMillis());
+                    if (updated != modelState.getMapped()) {
+                        updatedState = new IPLDObject<>(updated);
+                    }
+                }
+                updatedState.save(context, null);
+                return modelState;
             }
 
         });
@@ -190,7 +186,7 @@ class TestIPFSAccessUtil {
         UserState userState = new UserState(userObject);
         IPLDObject<UserState> userStateObject = new IPLDObject<>(userState);
         IPLDObject<ModelState> modelStateObject = new IPLDObject<>(modelState);
-        modelState.updateUserState(userStateObject, null, null, null, null, null, null, 0);
+        modelState.updateUserState(userStateObject, null, null, null, null, null, null, System.currentTimeMillis());
         Signer signer = DEFAULT_SIGNER;
         modelStateObject.save(context, signer);
         byte[][] allObjects = access.getAllObjects();

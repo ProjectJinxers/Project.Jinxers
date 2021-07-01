@@ -403,7 +403,6 @@ public class ModelController {
                 settlementController = null;
             }
         }
-        String ownerHash = document == null ? null : document.getMapped().expectUserState().getUser().getMultihash();
         Set<String> userHashes = new LinkedHashSet<>();
         Map<String, Queue<IPLDObject<Document>>> documents = new HashMap<>();
         Map<String, Queue<IPLDObject<OwnershipRequest>>> ownershipRequests = new HashMap<>();
@@ -652,8 +651,13 @@ public class ModelController {
                 sealedDocuments = null;
             }
         }
+        String ownerHash = settlementRequests == null ? null
+                : settlementRequests.peek().getMapped().getUserState().getMapped().getUser().getMultihash();
         for (String userHash : userHashes) {
-            IPLDObject<UserState> userState = modelState.expectUserState(userHash);
+            IPLDObject<UserState> userState = modelState.getUserState(userHash);
+            if (userState == null && document != null) {
+                userState = document.getMapped().getUserState();
+            }
             Queue<IPLDObject<Document>> docs = documents.get(userHash);
             if (queuedDocuments != null) {
                 synchronized (queuedDocuments) {

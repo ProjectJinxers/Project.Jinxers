@@ -272,7 +272,10 @@ public class ValidationContext {
         if (newReviewTableValues != null && newReviewTableValuesSettlement.size() > 0) {
             throw new ValidationException("new review table values out of sync (too many)");
         }
-        validateMustKeepModelStates(modelState.getPreviousVersion());
+        IPLDObject<ModelState> previousVersion = modelState.getPreviousVersion();
+        if (previousVersion != null) {
+            validateMustKeepModelStates(previousVersion);
+        }
 
         // we already prepare the settlement requests required for merging; in order to prevent them from influencing
         // the outcome of the validation, we don't set the flag, that makes main validation include them
@@ -597,8 +600,18 @@ public class ValidationContext {
             userObject = currentValidLocalState.getMapped().expectUserState(userHash).getMapped().getUser();
         }
         User user = userObject.getMapped();
-        Collection<IPLDObject<Document>> newDocuments = userState.getNewDocuments(since, documentHashes, reviewHashes,
-                obsoleteReviewVersions, false);
+        Collection<IPLDObject<Document>> newDocuments;
+        Map<String, IPLDObject<DocumentRemoval>> newRemovedDocuments;
+        if (documentHashes == null) {
+            newDocuments = userState.getNewDocuments(since, false);
+            newRemovedDocuments = userState.getNewRemovedDocuments(since, false);
+        }
+        else {
+            newDocuments = userState.getNewDocuments(since, documentHashes, reviewHashes,
+                    obsoleteReviewVersions, false);
+            newRemovedDocuments = userState.getNewRemovedDocuments(since, documentHashes, reviewHashes,
+                    obsoleteReviewVersions, false);
+        }
         if (newDocuments != null) {
             for (IPLDObject<Document> document : newDocuments) {
                 if (validated.add(document.getMultihash())) {
@@ -606,8 +619,6 @@ public class ValidationContext {
                 }
             }
         }
-        Map<String, IPLDObject<DocumentRemoval>> newRemovedDocuments = userState.getNewRemovedDocuments(since,
-                documentHashes, reviewHashes, obsoleteReviewVersions, false);
         if (newRemovedDocuments != null) {
             for (IPLDObject<DocumentRemoval> removal : newRemovedDocuments.values()) {
                 if (validated.add(removal.getMultihash())) {
