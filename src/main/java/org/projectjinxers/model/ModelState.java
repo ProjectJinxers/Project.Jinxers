@@ -186,7 +186,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
     public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
         writer.writeNumber(KEY_VERSION, version);
         writer.writeNumber(KEY_TIMESTAMP, timestamp);
-        writer.writeLink(KEY_PREVIOUS_VERSION, previousVersion, signer, null);
+        writer.writeLink(KEY_PREVIOUS_VERSION, previousVersion, signer, context);
         writer.writeLinkObjects(KEY_USER_STATES, userStates, signer, context);
         writer.writeLinkObjects(KEY_VOTINGS, votings, signer, context);
         writer.writeLinkObjects(KEY_SETTLEMENT_REQUESTS, settlementRequests, signer, context);
@@ -742,7 +742,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
             Map<String, String[]> merged) {
         for (Entry<String, String[]> entry : map1.entrySet()) {
             String key = entry.getKey();
-            String[] otherEntries = map2 == null ? null : map2.remove(key);
+            String[] otherEntries = map2 == null ? null : map2.get(key);
             if (otherEntries == null) {
                 merged.put(key, entry.getValue());
             }
@@ -763,7 +763,12 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
                 merged.put(key, copy);
             }
         }
-        merged.putAll(map2);
+        for (Entry<String, String[]> entry : map2.entrySet()) {
+            String key = entry.getKey();
+            if (!merged.containsKey(key)) {
+                merged.put(key, entry.getValue());
+            }
+        }
     }
 
     @Override

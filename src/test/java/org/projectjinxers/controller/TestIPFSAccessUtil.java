@@ -19,6 +19,7 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -33,9 +34,11 @@ import org.projectjinxers.account.ECCSigner;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.account.Users;
 import org.projectjinxers.model.Document;
+import org.projectjinxers.model.DocumentContents;
 import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.LoaderFactory;
 import org.projectjinxers.model.ModelState;
+import org.projectjinxers.model.Review;
 import org.projectjinxers.model.User;
 import org.projectjinxers.model.UserState;
 
@@ -53,20 +56,20 @@ import com.google.gson.JsonParser;
  */
 class TestIPFSAccessUtil {
 
-    private static final String[] PRINT_HASHES_FILEPATHS = {
-            "model/modelController/baseStates/fourUsers.json" };
+    private static final String[] PRINT_HASHES_FILEPATHS = { "model/modelController/settlement/eligible_20_3.json" };
 
     private static final String UPDATE_FILE_CONTENTS_SINGLE_PATH = null;
-    private static final String UPDATE_FILE_CONTENTS_MULTIPLE_PATH = "model/modelController/baseStates/fourUsers.json";
+    private static final String UPDATE_FILE_CONTENTS_MULTIPLE_PATH = "model/modelController/baseStates/twentyfourUsers.json";
     private static final String REPLACE_FILE_CONTENTS_SINGLE_PATH = null;
-    private static final String REPLACE_FILE_CONTENTS_MULTIPLE_PATH = null;
+    private static final String REPLACE_FILE_CONTENTS_MULTIPLE_PATH = "model/modelController/settlement/eligible_20_3.json";
 
     /**
      * If not null, and this hash is encountered during replacing, the in memory models will be cleared and re-populated
      * by saving the root again (after resetting all multihashes).
      */
-    private static final String REPLACE_ROOT_HASH = "aad7535fc00a12a500224335e42f502fcaf809754b620324a3f0df3966aaa529";
+    private static final String REPLACE_ROOT_HASH = "273f7e0455ea3372aba02fbea266e01eb48399dc4f06f93db690f2db36719ebe";
     private static final LoaderFactory<?> ROOT_LOADER_FACTORY = LoaderFactory.MODEL_STATE;
+    private static final boolean REPLACE_ALL = true; //
 
     private static Field DOCUMENT_DATE_FIELD;
     {
@@ -79,7 +82,13 @@ class TestIPFSAccessUtil {
         }
     }
 
+    private static final long REQUIRED_SETTLEMENT_REQUEST_AGE = 1000L * 60 * 60 * 24 * 4;
+    private static final long REQUIRED_SETTLEMENT_EXECUTION_AGE = 1000L * 60 * 60 * 24 * 4;
     private static final long REQUIRED_OWNERSHIP_TRANSFER_INACTIVITY = 1000L * 60 * 60 * 24 * 30;
+    private static final Date ELIGIBLE_FOR_SETTLEMENT_REQUEST = new Date(
+            System.currentTimeMillis() - REQUIRED_SETTLEMENT_REQUEST_AGE);
+    private static final Date ELIGIBLE_FOR_SETTLEMENT_EXECUTION = new Date(
+            System.currentTimeMillis() - REQUIRED_SETTLEMENT_EXECUTION_AGE);
     private static final Date ELIGIBLE_FOR_OWNERSHIP_TRANSFER = new Date(
             System.currentTimeMillis() - REQUIRED_OWNERSHIP_TRANSFER_INACTIVITY);
 
@@ -95,7 +104,9 @@ class TestIPFSAccessUtil {
      * 
      * @author ProjectJinxers
      */
-    static interface ModelUpdater {
+    static interface ModelUpdater<T extends IPLDSerializable> {
+
+        IPLDObject<T> load(String hash, IPLDContext context);
 
         /**
          * Updates the model with the given hash in memory. If the model needs to be signed with a different signer,
@@ -114,38 +125,71 @@ class TestIPFSAccessUtil {
          * @throws IllegalAccessException   if access by reflection fails
          * @throws IllegalArgumentException if access by reflection fails
          */
-        IPLDObject<?> update(String hash, IPLDContext context, Set<String> removeHashes)
+        IPLDObject<T> update(IPLDObject<T> loaded, IPLDContext context, Set<String> removeHashes)
                 throws IOException, IllegalArgumentException, IllegalAccessException;
 
     }
 
-    private static final Map<String, ModelUpdater> UPDATERS = new HashMap<>();
+    private static final Map<String, ModelUpdater<?>> UPDATERS = new HashMap<>();
     static {
-        UPDATERS.put("c1cf8466bcb5a624138e843755193822c75c0bb1347b60073766ec42bf3ad060", new ModelUpdater() {
+        UPDATERS.put("273f7e0455ea3372aba02fbea266e01eb48399dc4f06f93db690f2db36719ebe",
+                new ModelUpdater<ModelState>() {
 
-            @Override
-            public IPLDObject<?> update(String hash, IPLDContext context, Set<String> removeHashes)
-                    throws IOException, IllegalArgumentException, IllegalAccessException {
-                IPLDObject<ModelState> modelState = new IPLDObject<>(hash, new ModelState(), context, null);
-                IPLDObject<ModelState> updatedState = null;
-                for (int i = 5; i < 25; i++) {
-                    String username = "user" + i;
-                    String password = "pass" + i;
-                    User user = new User(username, Users.createAccount(username, password).getPubKey());
-                    UserState userState = new UserState(new IPLDObject<User>(user));
-                    IPLDObject<UserState> userStateObject = new IPLDObject<UserState>(userState);
-                    userStateObject.save(context, new ECCSigner(username, password));
-                    ModelState updated = modelState.getMapped().updateUserState(userStateObject, null, null, null, null,
-                            null, i == 5 ? modelState : null, System.currentTimeMillis());
-                    if (updated != modelState.getMapped()) {
-                        updatedState = new IPLDObject<>(updated);
+                    @Override
+                    public IPLDObject<ModelState> load(String hash, IPLDContext context) {
+                        return new IPLDObject<>(hash, LoaderFactory.MODEL_STATE.createLoader(), context, null);
                     }
-                }
-                updatedState.save(context, null);
-                return modelState;
-            }
 
-        });
+                    @Override
+                    public IPLDObject<ModelState> update(IPLDObject<ModelState> loaded, IPLDContext context,
+                            Set<String> removeHashes)
+                            throws IOException, IllegalArgumentException, IllegalAccessException {
+                        IPLDObject<UserState> userState = loaded.getMapped()
+                                .expectUserState("1140e8cd69b506268623fd27f869185e0ef188650227327357da93bfa988d6dd");
+                        Document document = new Document("Seal me", null, null, null, null,
+                                new IPLDObject<>(new DocumentContents(null, "Contents")), userState);
+                        makeEligibleForSettlementExcecution(document);
+                        IPLDObject<Document> documentObject = new TestIPLDObject<>(document, DEFAULT_SIGNER);
+                        String documentHash = documentObject.save(context, DEFAULT_SIGNER);
+                        UserState updated = userState.getMapped().updateLinks(Collections.singleton(documentObject),
+                                null, null, null, null, null, userState);
+                        prepareForSave(documentObject, context, removeHashes);
+
+                        int reviewCount = 0;
+                        int approveCount = 0;
+                        Set<Entry<String, IPLDObject<UserState>>> allUserStateEntries = new HashSet<>(
+                                loaded.getMapped().getAllUserStateEntries());
+                        for (Entry<String, IPLDObject<UserState>> entry : allUserStateEntries) {
+                            if (entry.getValue() != userState) {
+                                String username = entry.getValue().getMapped().getUser().getMapped().getUsername();
+                                if (username.startsWith("user")) {
+                                    String password = username.replace("user", "pass");
+                                    Signer signer = new ECCSigner(username, password);
+                                    IPLDObject<Document> review = new TestIPLDObject<>(new Review(null, null, null,
+                                            null, null, new IPLDObject<>(new DocumentContents(null, "Review")),
+                                            documentObject, false, ++approveCount < 4 ? Boolean.TRUE : null,
+                                            entry.getValue()), signer);
+                                    String reviewHash = review.save(context, signer);
+                                    prepareForSave(review, context, removeHashes);
+                                    UserState updatedReviewer = entry.getValue().getMapped().updateLinks(
+                                            Collections.singleton(review), null, null, null, null, null,
+                                            entry.getValue());
+                                    loaded.getMapped().updateUserState(new IPLDObject<>(updatedReviewer), null, null,
+                                            null, null, Map.of(documentHash, new String[] { reviewHash }), null,
+                                            System.currentTimeMillis());
+                                    if (++reviewCount == 20) {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        // prepareForSave(userState, context, removeHashes);
+                        loaded.getMapped().updateUserState(new IPLDObject<>(updated), null, null, null, null, null,
+                                null, System.currentTimeMillis());
+                        return loaded;
+                    }
+
+                });
     }
 
     private static final boolean PRETTY_PRINTING = true;
@@ -153,6 +197,146 @@ class TestIPFSAccessUtil {
 
     private static final String HEADER = "\n****************************************************************\n%s\n\n";
     private static final String FOOTER = "\n****************************************************************\n";
+
+    private static Field MULTIHASH_FIELD;
+    {
+        try {
+            MULTIHASH_FIELD = IPLDObject.class.getDeclaredField("multihash");
+            MULTIHASH_FIELD.setAccessible(true);
+        }
+        catch (NoSuchFieldException | SecurityException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static boolean prepareForSave(IPLDObject<?> object, IPLDContext context, Set<String> removeHashes)
+            throws IllegalArgumentException, IllegalAccessException, IOException {
+        boolean res = false;
+        IPLDSerializable mapped = object.getMapped();
+        Class<?> clazz = mapped.getClass();
+        do {
+            Field[] declaredFields = clazz.getDeclaredFields();
+            for (Field field : declaredFields) {
+                Class<?> fieldType = field.getType();
+                if (fieldType == IPLDObject.class) {
+                    field.setAccessible(true);
+                    IPLDObject<?> value = (IPLDObject<?>) field.get(mapped);
+                    if (value != null) {
+                        IPLDObject<?> updated = checkMultihash(value, context, removeHashes);
+                        if (updated != null) {
+                            res = true;
+                            if (updated != value) {
+                                field.set(mapped, updated);
+                            }
+                        }
+                    }
+                }
+                else if (Map.class.isAssignableFrom(fieldType)) {
+                    field.setAccessible(true);
+                    @SuppressWarnings("unchecked")
+                    Map<Object, Object> map = (Map<Object, Object>) field.get(mapped);
+                    if (map != null) {
+                        Map<Object, Object> updatedValues = new HashMap<>();
+                        for (Entry<?, ?> entry : map.entrySet()) {
+                            Object value = entry.getValue();
+                            if (value instanceof IPLDObject<?>) {
+                                IPLDObject<?> updated = checkMultihash((IPLDObject<?>) value, context, removeHashes);
+                                if (updated != null) { // we keep the key, as it is ignored during saving and duplicate
+                                                       // keys are extremely unlikely
+                                    if (updated == value) {
+                                        res = true;
+                                    }
+                                    else {
+                                        updatedValues.put(entry.getKey(), updated);
+                                    }
+                                }
+                            }
+                            else if (value instanceof IPLDObject<?>[]) {
+                                List<IPLDObject<?>> updatedList = new ArrayList<>();
+                                boolean changed = false;
+                                for (IPLDObject<?> val : (IPLDObject<?>[]) value) {
+                                    IPLDObject<?> updated = checkMultihash(val, context, removeHashes);
+                                    if (updated == null || updated == val) {
+                                        updatedList.add(val);
+                                        if (!res && updated != null) {
+                                            res = true;
+                                        }
+                                    }
+                                    else {
+                                        updatedList.add(updated);
+                                        changed = true;
+                                    }
+                                }
+                                if (changed) {
+                                    IPLDObject<?>[] updatedArray = (IPLDObject<?>[]) Array
+                                            .newInstance(value.getClass().getComponentType(), 0);
+                                    updatedArray = updatedList.toArray(updatedArray);
+                                    updatedValues.put(entry.getKey(), updatedArray);
+                                }
+                            }
+                        }
+                        if (updatedValues.size() > 0) {
+                            for (Entry<?, ?> entry : updatedValues.entrySet()) {
+                                map.put(entry.getKey(), entry.getValue());
+                            }
+                            res = true;
+                        }
+                    }
+                }
+            }
+            clazz = clazz.getSuperclass();
+        }
+        while (clazz != null);
+        return res;
+    }
+
+    private static IPLDObject<?> checkMultihash(IPLDObject<?> object, IPLDContext context, Set<String> removeHashes)
+            throws IllegalArgumentException, IllegalAccessException, IOException {
+        String multihash = object.getMultihash();
+        if (multihash != null) {
+            ModelUpdater<?> updater = UPDATERS.get(multihash);
+            IPLDObject<?> updated = updater == null ? null : update(updater, multihash, context, removeHashes);
+            if (updated == null) {
+                if (updater == null) {
+                    if (prepareForSave(object, context, removeHashes) || REPLACE_ALL) {
+                        removeHashes.add(multihash);
+                        MULTIHASH_FIELD.set(object, null);
+                        return object;
+                    }
+                }
+                else {
+                    removeHashes.add(multihash);
+                }
+            }
+            else {
+                removeHashes.add(multihash);
+            }
+            return updated;
+        }
+        return null;
+    }
+
+    private static <T extends IPLDSerializable> IPLDObject<T> update(ModelUpdater<T> updater, String hash,
+            IPLDContext context, Set<String> removeHashes)
+            throws IllegalArgumentException, IllegalAccessException, IOException {
+        IPLDObject<T> loaded = updater.load(hash, context);
+        return updater.update(loaded, context, removeHashes);
+    }
+
+    public static void makeEligibleForSettlementRequest(Document document)
+            throws IllegalArgumentException, IllegalAccessException {
+        DOCUMENT_DATE_FIELD.set(document, ELIGIBLE_FOR_SETTLEMENT_REQUEST);
+    }
+
+    public static void makeEligibleForSettlementExcecution(Document document)
+            throws IllegalArgumentException, IllegalAccessException {
+        DOCUMENT_DATE_FIELD.set(document, ELIGIBLE_FOR_SETTLEMENT_EXECUTION);
+    }
+
+    public static void makeEligibleForOwnershipTransfer(Document document)
+            throws IllegalArgumentException, IllegalAccessException {
+        DOCUMENT_DATE_FIELD.set(document, ELIGIBLE_FOR_OWNERSHIP_TRANSFER);
+    }
 
     private TestIPFSAccess access;
     private IPLDContext context;
@@ -266,10 +450,10 @@ class TestIPFSAccessUtil {
         }
         else {
             if (!updateObject(hash, signer) && replace) {
-                access.removeObject(hash);
+                access.removeOldObject(hash);
             }
             for (String removeHash : removeHashes) {
-                access.removeObject(removeHash);
+                access.removeOldObject(removeHash);
             }
         }
         byte[][] allObjects = access.getAllObjects();
@@ -304,11 +488,11 @@ class TestIPFSAccessUtil {
             }
             if (remove != null) {
                 for (String hash : remove) {
-                    access.removeObject(hash);
+                    access.removeOldObject(hash);
                 }
             }
             for (String removeHash : removeHashes) {
-                access.removeObject(removeHash);
+                access.removeOldObject(removeHash);
             }
         }
         else {
@@ -342,30 +526,47 @@ class TestIPFSAccessUtil {
 
     private boolean updateObject(String hash, Signer signer)
             throws IOException, IllegalArgumentException, IllegalAccessException {
-        ModelUpdater updater = UPDATERS.get(hash);
+        ModelUpdater<?> updater = UPDATERS.get(hash);
         if (updater != null) {
-            IPLDObject<?> updated = updater.update(hash, context, removeHashes);
-            if (updated != null) {
-                updated.save(context, signer);
-                return true;
-            }
-            return false;
+            return updateObject(updater, hash, signer);
         }
         return true;
     }
 
+    private <T extends IPLDSerializable> boolean updateObject(ModelUpdater<T> updater, String hash, Signer signer)
+            throws IOException, IllegalArgumentException, IllegalAccessException {
+        IPLDObject<T> loaded = updater.load(hash, context);
+        IPLDObject<T> updated = updater.update(loaded, context, removeHashes);
+        if (updated != null) {
+            updated.save(context, signer);
+            return updated != loaded;
+        }
+        return false;
+    }
+
     private void replaceRoot(String rootHash) throws IOException, IllegalArgumentException, IllegalAccessException {
         removeHashes.add(rootHash);
-        ModelUpdater rootUpdater = UPDATERS.get(rootHash);
-        IPLDObject<?> root = rootUpdater == null ? null : rootUpdater.update(rootHash, context, removeHashes);
-        if (root == null) {
+        ModelUpdater<?> rootUpdater = UPDATERS.get(rootHash);
+        IPLDObject<?> root;
+        if (rootUpdater == null) {
             root = new IPLDObject<>(rootHash, ROOT_LOADER_FACTORY.createLoader(), context, null);
         }
-        prepareForSave(root);
-        for (String remove : removeHashes) {
-            access.removeObject(remove);
+        else {
+            root = updateRoot(rootUpdater, rootHash);
         }
-        context.saveObject(root, DEFAULT_SIGNER);
+        prepareForSave(root, context, removeHashes);
+        for (String remove : removeHashes) {
+            access.removeOldObject(remove);
+        }
+        String newRootHash = context.saveObject(root, DEFAULT_SIGNER);
+        System.out.println("New root hash: " + newRootHash + "\n");
+    }
+
+    private <T extends IPLDSerializable> IPLDObject<T> updateRoot(ModelUpdater<T> rootUpdater, String rootHash)
+            throws IllegalArgumentException, IllegalAccessException, IOException {
+        IPLDObject<T> loaded = rootUpdater.load(rootHash, context);
+        IPLDObject<T> updated = rootUpdater.update(loaded, context, removeHashes);
+        return updated == null ? loaded : updated;
     }
 
     private String getJSONString(byte[] bytes) {
@@ -374,124 +575,6 @@ class TestIPFSAccessUtil {
             return PRETTY_GSON.toJson(JsonParser.parseString(compact));
         }
         return compact;
-    }
-
-    private static Field MULTIHASH_FIELD;
-    {
-        try {
-            MULTIHASH_FIELD = IPLDObject.class.getDeclaredField("multihash");
-            MULTIHASH_FIELD.setAccessible(true);
-        }
-        catch (NoSuchFieldException | SecurityException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private boolean prepareForSave(IPLDObject<?> object)
-            throws IllegalArgumentException, IllegalAccessException, IOException {
-        boolean res = false;
-        IPLDSerializable mapped = object.getMapped();
-        Class<?> clazz = mapped.getClass();
-        do {
-            Field[] declaredFields = clazz.getDeclaredFields();
-            for (Field field : declaredFields) {
-                Class<?> fieldType = field.getType();
-                if (fieldType == IPLDObject.class) {
-                    field.setAccessible(true);
-                    IPLDObject<?> value = (IPLDObject<?>) field.get(mapped);
-                    if (value != null) {
-                        IPLDObject<?> updated = checkMultihash(value);
-                        if (updated != null) {
-                            res = true;
-                            if (updated != value) {
-                                field.set(mapped, updated);
-                            }
-                        }
-                    }
-                }
-                else if (Map.class.isAssignableFrom(fieldType)) {
-                    field.setAccessible(true);
-                    @SuppressWarnings("unchecked")
-                    Map<Object, Object> map = (Map<Object, Object>) field.get(mapped);
-                    if (map != null) {
-                        Map<Object, Object> updatedValues = new HashMap<>();
-                        for (Entry<?, ?> entry : map.entrySet()) {
-                            Object value = entry.getValue();
-                            if (value instanceof IPLDObject<?>) {
-                                IPLDObject<?> updated = checkMultihash((IPLDObject<?>) value);
-                                if (updated != null) { // we keep the key, as it is ignored during saving and duplicate
-                                                       // keys are extremely unlikely
-                                    if (updated == value) {
-                                        res = true;
-                                    }
-                                    else {
-                                        updatedValues.put(entry.getKey(), updated);
-                                    }
-                                }
-                            }
-                            else if (value instanceof IPLDObject<?>[]) {
-                                List<IPLDObject<?>> updatedList = new ArrayList<>();
-                                boolean changed = false;
-                                for (IPLDObject<?> val : (IPLDObject<?>[]) value) {
-                                    IPLDObject<?> updated = checkMultihash(val);
-                                    if (updated == null || updated == val) {
-                                        updatedList.add(val);
-                                        if (!res && updated != null) {
-                                            res = true;
-                                        }
-                                    }
-                                    else {
-                                        updatedList.add(updated);
-                                        changed = true;
-                                    }
-                                }
-                                if (changed) {
-                                    IPLDObject<?>[] updatedArray = (IPLDObject<?>[]) Array
-                                            .newInstance(value.getClass().getComponentType(), 0);
-                                    updatedArray = updatedList.toArray(updatedArray);
-                                    updatedValues.put(entry.getKey(), updatedArray);
-                                }
-                            }
-                        }
-                        if (updatedValues.size() > 0) {
-                            for (Entry<?, ?> entry : updatedValues.entrySet()) {
-                                map.put(entry.getKey(), entry.getValue());
-                            }
-                            res = true;
-                        }
-                    }
-                }
-            }
-            clazz = clazz.getSuperclass();
-        }
-        while (clazz != null);
-        return res;
-    }
-
-    private IPLDObject<?> checkMultihash(IPLDObject<?> object)
-            throws IllegalArgumentException, IllegalAccessException, IOException {
-        String multihash = object.getMultihash();
-        if (multihash != null) {
-            ModelUpdater updater = UPDATERS.get(multihash);
-            IPLDObject<?> updated = updater == null ? null : updater.update(multihash, context, removeHashes);
-            if (updated == null) {
-                if (updater == null) {
-                    if (prepareForSave(object)) {
-                        removeHashes.add(multihash);
-                        MULTIHASH_FIELD.set(object, null);
-                        return object;
-                    }
-                }
-                else {
-                    removeHashes.add(multihash);
-                }
-            }
-            else {
-                removeHashes.add(multihash);
-            }
-            return updated;
-        }
-        return null;
     }
 
 }

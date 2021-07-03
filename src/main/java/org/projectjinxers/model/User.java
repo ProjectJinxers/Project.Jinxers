@@ -71,6 +71,10 @@ public class User implements IPLDSerializable, Loader<User> {
         writer.writeByteArray(KEY_PUBLIC_KEY, publicKey, ByteCodec.DEFAULT);
     }
 
+    public String getUsername() {
+        return username;
+    }
+
     /**
      * Verifies the signature with this user's public key.
      * 

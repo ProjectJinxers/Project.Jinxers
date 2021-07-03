@@ -38,7 +38,7 @@ public class SettlementController {
 
     static class SettlementData {
 
-        private static final int MIN_TOTAL_COUNT = 10;
+        private static final int MIN_TOTAL_COUNT = 20;
         private static final double MIN_MARGIN = 2.5;
 
         private boolean requested;

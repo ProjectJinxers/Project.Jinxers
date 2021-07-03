@@ -150,7 +150,8 @@ public class IPLDJsonReader implements IPLDReader {
     }
 
     private String getLink(JsonElement element) {
-        return element.getAsJsonObject().get(KEY_INNER_LINK).getAsString();
+        return element.isJsonObject() ? element.getAsJsonObject().get(KEY_INNER_LINK).getAsString()
+                : element.getAsString();
     }
 
     private String[] getLinkArray(JsonArray array) {
@@ -169,7 +170,7 @@ public class IPLDJsonReader implements IPLDReader {
 
     @Override
     public boolean hasLinkKey(String key) {
-        return links.containsKey(key);
+        return links.containsKey(key) || primitives.containsKey(key);
     }
 
     @Override
@@ -179,7 +180,7 @@ public class IPLDJsonReader implements IPLDReader {
 
     @Override
     public boolean hasLinkArrayKey(String key) {
-        return linkArrays.containsKey(key);
+        return linkArrays.containsKey(key) || primitiveArrays.containsKey(key);
     }
 
     @Override
@@ -225,7 +226,8 @@ public class IPLDJsonReader implements IPLDReader {
 
     @Override
     public String readLink(String key) {
-        return links.get(key);
+        String res = links.get(key);
+        return res == null ? readString(key) : res;
     }
 
     @Override
@@ -320,7 +322,8 @@ public class IPLDJsonReader implements IPLDReader {
 
     @Override
     public String[] readLinksArray(String key) {
-        return linkArrays.get(key);
+        String[] res = linkArrays.get(key);
+        return res == null ? readStringArray(key) : res;
     }
 
     @Override

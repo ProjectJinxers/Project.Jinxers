@@ -32,7 +32,7 @@ public enum IPLDEncoding {
 
         @Override
         public IPLDWriter createWriter() {
-            return new IPLDJsonWriter();
+            return new IPLDJsonWriter(true);
         }
 
     },
@@ -48,7 +48,7 @@ public enum IPLDEncoding {
 
         @Override
         public IPLDWriter createWriter() {
-            return new IPLDJsonWriter();
+            return new IPLDJsonWriter(true);
         }
 
     };

@@ -132,7 +132,7 @@ class IPLDSerializationTest {
         IPLDObject<StringLinkValueData> object = new IPLDObject<>(stringLinkData);
         byte[] bytes = writer.write(context, object, null);
         String json = new String(bytes, StandardCharsets.UTF_8);
-        assertEquals(jsonString("{\"link\":{\"/\":\"a\"}}"), json);
+        assertEquals(jsonString("{\"link\":\"a\"}"), json);
     }
 
     static class ObjectLinkValueData implements IPLDWritable {
@@ -158,7 +158,7 @@ class IPLDSerializationTest {
         Mockito.doReturn("a").when(spy).saveObject(Mockito.any(), Mockito.any());
         byte[] bytes = writer.write(spy, object, null);
         String json = new String(bytes, StandardCharsets.UTF_8);
-        assertEquals(jsonString("{\"link\":{\"/\":\"a\"}}"), json);
+        assertEquals(jsonString("{\"link\":\"a\"}"), json);
     }
 
     static class PrimitiveArrayValueData implements IPLDWritable {
@@ -221,7 +221,7 @@ class IPLDSerializationTest {
         IPLDObject<StringLinkArrayValueData> object = new IPLDObject<>(stringLinkArrayValueData);
         byte[] bytes = writer.write(context, object, null);
         String json = new String(bytes, StandardCharsets.UTF_8);
-        assertEquals(jsonString("{\"links\":[{\"/\":\"a\"},{\"/\":\"b\"},{\"/\":\"c\"}]}"), json);
+        assertEquals(jsonString("{\"links\":[\"a\",\"b\",\"c\"]}"), json);
     }
 
     static class ObjectLinkArrayValueData implements IPLDWritable {
@@ -245,7 +245,7 @@ class IPLDSerializationTest {
         IPLDObject<ObjectLinkArrayValueData> object = new IPLDObject<>(objectArrayValueData);
         byte[] bytes = writer.write(context, object, null);
         String json = new String(bytes, StandardCharsets.UTF_8);
-        assertEquals(jsonString("{\"links\":[{\"/\":\"a\"},{\"/\":\"b\"},{\"/\":\"c\"}]}"), json);
+        assertEquals(jsonString("{\"links\":[\"a\",\"b\",\"c\"]}"), json);
     }
 
     @Test
@@ -272,7 +272,7 @@ class IPLDSerializationTest {
         }).when(spy).saveObject(Mockito.any(), Mockito.any());
         byte[] bytes = writer.write(spy, object, null);
         String json = new String(bytes, StandardCharsets.UTF_8);
-        assertEquals(jsonString("{\"links\":[{\"/\":\"a\"},{\"/\":\"b\"},{\"/\":\"c\"}]}"), json);
+        assertEquals(jsonString("{\"links\":[\"a\",\"b\",\"c\"]}"), json);
     }
 
     @Test

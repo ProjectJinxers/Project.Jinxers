@@ -480,7 +480,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         writer.writeNumber(KEY_VERSION, version);
         writer.writeNumber(KEY_RATING, rating);
         writer.writeLink(KEY_USER, user, signer, context);
-        writer.writeLink(KEY_PREVIOUS_VERSION, previousVersion, signer, null);
+        writer.writeLink(KEY_PREVIOUS_VERSION, previousVersion, signer, context);
         writer.writeLinkObjects(KEY_DOCUMENTS, documents, signer, context);
         writer.writeLinkObjects(KEY_REMOVED_DOCUMENTS, removedDocuments, signer, null);
         writer.writeLinkObjects(KEY_FALSE_CLAIMS, falseClaims, signer, null);
@@ -599,13 +599,29 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         return false;
     }
 
+    public void validateRelatedDocument(String documentHash, String[] reviewHashes) {
+        if (documents != null) {
+            if (documents.containsKey(documentHash)) {
+                return;
+            }
+            if (reviewHashes != null) {
+                for (String reviewHash : reviewHashes) {
+                    if (documents.containsKey(reviewHash)) {
+                        return;
+                    }
+                }
+            }
+        }
+        throw new ValidationException("unrelated document");
+    }
+
     /**
      * Finds related documents and returns the date of the most recent one or null, if there is none (in which case the
-     * date of the document with the given hash can be assumed as the last activity date).
+     * date of the document with the given hash can be assumed as the last activity date). TODO: use reviewTable (model
+     * state) and expandDocuments without expandInto
      * 
      * @param documentHash the document hash
-     * @return the last activity date or null, if the document itself is the last activity TODO: use reviewTable (model
-     *         state) and expandDocuments without expandInto
+     * @return the last activity date or null, if the document itself is the last activity
      */
     public Date getLastActivityDate(String documentHash) {
         Set<String> relatedHashes = new HashSet<>();

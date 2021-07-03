@@ -536,7 +536,8 @@ public class ValidationContext {
     }
 
     /*
-     * verify signature, and required rating - settlement controller is responsible for remaining validations
+     * verify signature, required rating and requestor's relation to document - settlement controller is responsible for
+     * remaining validations
      */
     private void validateSettlementRequest(IPLDObject<SettlementRequest> request, ModelState modelState) {
         SettlementRequest req = request.getMapped();
@@ -548,6 +549,8 @@ public class ValidationContext {
             user = currentValidLocalState.getMapped().expectUserState(userHash).getMapped().getUser();
         }
         context.verifySignature(request, Signer.VERIFIER, user.getMapped());
+        String documentHash = req.getDocument().getMultihash();
+        userState.validateRelatedDocument(documentHash, modelState.getReviewTableEntries(documentHash));
     }
 
     /*
@@ -607,8 +610,8 @@ public class ValidationContext {
             newRemovedDocuments = userState.getNewRemovedDocuments(since, false);
         }
         else {
-            newDocuments = userState.getNewDocuments(since, documentHashes, reviewHashes,
-                    obsoleteReviewVersions, false);
+            newDocuments = userState.getNewDocuments(since, documentHashes, reviewHashes, obsoleteReviewVersions,
+                    false);
             newRemovedDocuments = userState.getNewRemovedDocuments(since, documentHashes, reviewHashes,
                     obsoleteReviewVersions, false);
         }

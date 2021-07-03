@@ -85,14 +85,14 @@ public class Review extends Document implements DocumentAction, Loader<Review> {
         super.write(writer, signer, context);
         writer.writeIfTrue(KEY_INVERT_TRUTH, invertTruth);
         writer.writeBoolean(KEY_APPROVE, approve);
-        writer.writeLink(KEY_DOCUMENT, document, signer, null);
+        writer.writeLink(KEY_DOCUMENT, document, signer, context);
         writer.writeLinkObjects(KEY_INVERT_TRUTH_LINKS, invertTruthLinks, signer, null);
     }
 
     @Override
     protected void handleMissingContents() {
-        if (Boolean.FALSE.equals(approve)) {
-            throw new ValidationException("declining review without contents");
+        if (!Boolean.TRUE.equals(approve)) {
+            throw new ValidationException("non-approving review without contents");
         }
     }
 

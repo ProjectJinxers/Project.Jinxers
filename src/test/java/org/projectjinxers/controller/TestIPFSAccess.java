@@ -22,12 +22,12 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.Stream;
@@ -71,6 +71,9 @@ public class TestIPFSAccess extends IPFSAccess {
 
     private boolean calculatingHashOnly;
 
+    private Set<String> savedHashes = new TreeSet<>();
+    private boolean recordSavedObjects;
+
     @Override
     public byte[] loadObject(String hash) throws IOException {
         return objects.get(hash);
@@ -94,6 +97,9 @@ public class TestIPFSAccess extends IPFSAccess {
             throw new RuntimeException("Simulated save failure");
         }
         objects.put(hash, bytes);
+        if (recordSavedObjects) {
+            savedHashes.add(hash);
+        }
         return hash;
     }
 
@@ -166,7 +172,10 @@ public class TestIPFSAccess extends IPFSAccess {
     private String addJsonObject(JsonObject o) {
         String json = GSON.toJson(o);
         byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
-        return saveObject(IPLDEncoding.JSON.getIn(), bytes, IPLDEncoding.JSON.getOut());
+        recordSavedObjects = false;
+        String res = saveObject(IPLDEncoding.JSON.getIn(), bytes, IPLDEncoding.JSON.getOut());
+        recordSavedObjects = true;
+        return res;
     }
 
     /**
@@ -201,16 +210,15 @@ public class TestIPFSAccess extends IPFSAccess {
     }
 
     /**
-     * Removes an object with the given hash (no IPFS functionality, just for test purposes)
+     * Removes an object with the given hash, unless it has just been saved (no IPFS functionality, just for test
+     * purposes)
      * 
      * @param hash the hash of the object to remove
      */
-    public void removeObject(String hash) {
-        objects.remove(hash);
-    }
-
-    public void retainObjects(Collection<String> hash) {
-
+    public void removeOldObject(String hash) {
+        if (!savedHashes.contains(hash)) {
+            objects.remove(hash);
+        }
     }
 
     public void removeAllObjects() {
@@ -483,8 +491,7 @@ public class TestIPFSAccess extends IPFSAccess {
         if (resourceAsStream == null) {
             throw new FileNotFoundException(address);
         }
-        BufferedReader br = new BufferedReader(
-                new InputStreamReader(resourceAsStream));
+        BufferedReader br = new BufferedReader(new InputStreamReader(resourceAsStream));
         try {
             res = br.readLine();
             if (res != null) {

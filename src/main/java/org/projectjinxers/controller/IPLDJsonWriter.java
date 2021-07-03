@@ -36,10 +36,11 @@ import com.google.gson.stream.JsonWriter;
  */
 public class IPLDJsonWriter implements IPLDWriter {
 
+    private boolean compact;
     private JsonWriter jsonWriter;
 
-    IPLDJsonWriter() {
-
+    IPLDJsonWriter(boolean compact) {
+        this.compact = compact;
     }
 
     @Override
@@ -259,7 +260,12 @@ public class IPLDJsonWriter implements IPLDWriter {
     }
 
     private void writeLink(String link) throws IOException {
-        jsonWriter.beginObject().name("/").value(link).endObject();
+        if (compact) {
+            jsonWriter.value(link);
+        }
+        else {
+            jsonWriter.beginObject().name("/").value(link).endObject();
+        }
     }
 
     private void writeMetadata(Metadata metadata) throws IOException {

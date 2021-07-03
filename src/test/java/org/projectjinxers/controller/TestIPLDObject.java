@@ -28,6 +28,7 @@ import org.projectjinxers.model.Metadata;
 public class TestIPLDObject<D extends IPLDSerializable> extends IPLDObject<D> {
 
     private D fixture;
+    private Signer signer;
     private String testMultihash;
     private Metadata testMetadata;
     private ECDSASignature testSignature;
@@ -41,6 +42,12 @@ public class TestIPLDObject<D extends IPLDSerializable> extends IPLDObject<D> {
     public TestIPLDObject(D data) {
         super(data);
         this.fixture = data;
+    }
+
+    public TestIPLDObject(D data, Signer signer) {
+        super(data);
+        this.signer = signer;
+        this.defaultBehavior = true;
     }
 
     /**
@@ -158,7 +165,7 @@ public class TestIPLDObject<D extends IPLDSerializable> extends IPLDObject<D> {
     @Override
     String save(IPLDContext context, Signer signer) throws IOException {
         if (defaultBehavior) {
-            return super.save(context, signer);
+            return super.save(context, this.signer == null ? signer : this.signer);
         }
         return testMultihash;
     }
