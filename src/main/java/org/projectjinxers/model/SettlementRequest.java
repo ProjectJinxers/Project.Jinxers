@@ -35,6 +35,15 @@ public class SettlementRequest implements DocumentAction, Loader<SettlementReque
     private IPLDObject<Document> document;
     private IPLDObject<UserState> userState;
 
+    SettlementRequest() {
+
+    }
+
+    public SettlementRequest(IPLDObject<Document> document, IPLDObject<UserState> userState) {
+        this.document = document;
+        this.userState = userState;
+    }
+
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {

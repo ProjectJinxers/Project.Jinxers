@@ -543,6 +543,14 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
      * @param documentHash the document hash
      * @return the document stored in this instance with the given hash (no null checks!)
      */
+    public IPLDObject<Document> expectDocumentObject(String documentHash) {
+        return expandDocuments(documents, null, null, documentHash);
+    }
+
+    /**
+     * @param documentHash the document hash
+     * @return the document stored in this instance with the given hash (no null checks!)
+     */
     public Document expectDocument(String documentHash) {
         return expandDocuments(documents, null, null, documentHash).getMapped();
     }

@@ -398,7 +398,6 @@ public class ValidationContext {
                     localVersion = localState.getVersion();
                 }
                 if (localVersion == remoteVersion) {
-                    // minor potential for optimization: evaluate if this is valid
                     if (remoteStateObject == null) {
                         return;
                     }

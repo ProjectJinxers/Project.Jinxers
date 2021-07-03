@@ -34,6 +34,7 @@ import org.projectjinxers.model.Document;
 import org.projectjinxers.model.DocumentContents;
 import org.projectjinxers.model.GrantedOwnership;
 import org.projectjinxers.model.ModelState;
+import org.projectjinxers.model.SettlementRequest;
 import org.projectjinxers.model.User;
 import org.projectjinxers.model.UserState;
 import org.spongycastle.util.encoders.Base64;
@@ -233,11 +234,11 @@ class ModelControllerTest {
         }
         assertNull(userState.getMapped().getDocument(documentObject.getMultihash()));
 
-        // now we restore normal save behavior
-        access.clearNoSaveFailures();
         access.simulateModelStateMessage(config.getIOTAMainAddress(), "invalid");
         assertNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 200));
 
+        // now we restore normal save behavior
+        access.clearNoSaveFailures();
         // prepare for valid simulated message
         String[] newHashes = access.readObjects("model/modelController/saveDocument/simple_rec.json");
         access.simulateModelStateMessage(config.getIOTAMainAddress(), newHashes[0]);
@@ -248,6 +249,108 @@ class ModelControllerTest {
         assertNotSame(nextUserState, userState); // copy of pending user state from first attempt
         Document doc = nextUserState.getMapped().expectDocument(documentObject.getMultihash());
         assertEquals("Title", doc.getTitle());
+    }
+
+    @Test
+    void testEligibleSettlementRequest() throws Exception {
+        String[] validHashes = access.readObjects("model/modelController/baseStates/twentyfourUsers.json");
+        final String validModelStateHash = validHashes[12];
+        Config config = Config.getSharedInstance();
+        access.saveModelStateHash(config.getIOTAMainAddress(), validModelStateHash);
+        ModelController controller = new ModelController(access, config, 0);
+
+        String[] hashes = access.readObjects("model/modelController/settlement/eligible.json");
+        final String modelStateHash = hashes[27];
+        final String userHash = hashes[16];
+        final String documentHash = hashes[20];
+        access.simulateModelStateMessage(config.getIOTAMainAddress(), modelStateHash);
+
+        String newHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 400);
+        access.simulateModelStateMessage(config.getIOTAMainAddress(), newHash); // confirmed by other node (simulated)
+        waitFor(100);
+        IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
+        ModelState modelState = modelStateObject.getMapped();
+        assertNotNull(modelState);
+
+        IPLDObject<UserState> userState = modelState.expectUserState(userHash);
+        IPLDObject<Document> document = userState.getMapped().expectDocumentObject(documentHash);
+        SettlementRequest request = new SettlementRequest(document, userState);
+        controller.issueSettlementRequest(new IPLDObject<>(request), DEFAULT_SIGNER);
+
+        assertNotNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 100));
+    }
+
+    @Test
+    void testEligibleSettlementRequestDeferredBySaveFailure() throws Exception {
+        String[] validHashes = access.readObjects("model/modelController/baseStates/twentyfourUsers.json");
+        final String validModelStateHash = validHashes[12];
+        Config config = Config.getSharedInstance();
+        access.saveModelStateHash(config.getIOTAMainAddress(), validModelStateHash);
+        ModelController controller = new ModelController(access, config, 0);
+
+        String[] hashes = access.readObjects("model/modelController/settlement/eligible.json");
+        final String modelStateHash = hashes[27];
+        final String userHash = hashes[16];
+        final String documentHash = hashes[20];
+        access.simulateModelStateMessage(config.getIOTAMainAddress(), modelStateHash);
+        String newHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 400);
+        access.simulateModelStateMessage(config.getIOTAMainAddress(), newHash); // confirmed by other node (simulated)
+        waitFor(100);
+        IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
+        ModelState modelState = modelStateObject.getMapped();
+        assertNotNull(modelState);
+
+        IPLDObject<UserState> userState = modelState.expectUserState(userHash);
+        IPLDObject<Document> document = userState.getMapped().expectDocumentObject(documentHash);
+        SettlementRequest request = new SettlementRequest(document, userState);
+
+        access.failSaveIn(2);
+        controller.issueSettlementRequest(new IPLDObject<>(request), DEFAULT_SIGNER);
+
+        assertNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 100));
+
+        // trigger next local save (shouldn't change anything prior)
+        access.simulateModelStateMessage(config.getIOTAMainAddress(), newHash);
+        assertNotNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 100));
+    }
+
+    @Test
+    void testEligibleSettlementRequestDeferredTwiceBySaveFailure() throws Exception {
+        String[] validHashes = access.readObjects("model/modelController/baseStates/twentyfourUsers.json");
+        final String validModelStateHash = validHashes[12];
+        Config config = Config.getSharedInstance();
+        access.saveModelStateHash(config.getIOTAMainAddress(), validModelStateHash);
+        ModelController controller = new ModelController(access, config, 0);
+
+        String[] hashes = access.readObjects("model/modelController/settlement/eligible.json");
+        final String modelStateHash = hashes[27];
+        final String userHash = hashes[16];
+        final String documentHash = hashes[20];
+        access.simulateModelStateMessage(config.getIOTAMainAddress(), modelStateHash);
+        String newHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 400);
+        access.simulateModelStateMessage(config.getIOTAMainAddress(), newHash); // confirmed by other node (simulated)
+        waitFor(100);
+        IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
+        ModelState modelState = modelStateObject.getMapped();
+        assertNotNull(modelState);
+
+        IPLDObject<UserState> userState = modelState.expectUserState(userHash);
+        IPLDObject<Document> document = userState.getMapped().expectDocumentObject(documentHash);
+        SettlementRequest request = new SettlementRequest(document, userState);
+
+        access.failSaveIn(2);
+        controller.issueSettlementRequest(new IPLDObject<>(request), DEFAULT_SIGNER);
+
+        assertNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 100));
+
+        access.failSaveIn(1);
+        // trigger next local save (shouldn't change anything prior)
+        access.simulateModelStateMessage(config.getIOTAMainAddress(), newHash);
+        assertNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 100));
+
+        // trigger next local save (shouldn't change anything prior)
+        access.simulateModelStateMessage(config.getIOTAMainAddress(), newHash);
+        assertNotNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 100));
     }
 
     @Test

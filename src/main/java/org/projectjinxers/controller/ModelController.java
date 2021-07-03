@@ -237,6 +237,9 @@ public class ModelController {
                 mergeWithValidated(loaded);
             }
         }
+        catch (Exception e) {
+            // ignore
+        }
         finally {
             validatingModelState = false;
         }
@@ -372,8 +375,8 @@ public class ModelController {
         SettlementController settlementController = currentSnapshot == null ? null
                 : currentSnapshot.createPreEvaluationSnapshot(System.currentTimeMillis());
         Queue<IPLDObject<SettlementRequest>> settlementRequests = null;
-        boolean settlementChanged = false;
         if (settlementController != null) {
+            boolean settlementChanged = false;
             if (queuedSettlementRequests != null) {
                 synchronized (queuedSettlementRequests) {
                     if (queuedSettlementRequests.size() > 0) {
@@ -388,12 +391,13 @@ public class ModelController {
                 }
             }
             if (settlementRequest != null) {
-                settlementChanged = settlementController.checkRequest(settlementRequest.getMapped().getDocument(),
-                        false, true) || settlementChanged;
-                if (settlementRequests == null) {
-                    settlementRequests = new ArrayDeque<>();
+                if (settlementController.checkRequest(settlementRequest.getMapped().getDocument(), false, true)) {
+                    settlementChanged = true;
+                    if (settlementRequests == null) {
+                        settlementRequests = new ArrayDeque<>();
+                    }
+                    settlementRequests.add(settlementRequest);
                 }
-                settlementRequests.add(settlementRequest);
             }
             settlementChanged = settlementController.applyNewTimestamp() || settlementChanged;
             if (settlementChanged) {
@@ -651,8 +655,14 @@ public class ModelController {
                 sealedDocuments = null;
             }
         }
-        String ownerHash = settlementRequests == null ? null
-                : settlementRequests.peek().getMapped().getUserState().getMapped().getUser().getMultihash();
+        String ownerHash;
+        if (settlementRequests == null) {
+            ownerHash = null;
+        }
+        else {
+            ownerHash = settlementRequests.peek().getMapped().getUserState().getMapped().getUser().getMultihash();
+            userHashes.add(ownerHash);
+        }
         for (String userHash : userHashes) {
             IPLDObject<UserState> userState = modelState.getUserState(userHash);
             if (userState == null && document != null) {
@@ -685,7 +695,7 @@ public class ModelController {
             Queue<IPLDObject<SettlementRequest>> sreqs = settlementRequests != null && userHash.equals(ownerHash)
                     ? settlementRequests
                     : null;
-            UserState settlementValues = settlementController == null ? null : settlementStates.get(userHash);
+            UserState settlementValues = settlementStates == null ? null : settlementStates.get(userHash);
             if (abortLocalChanges) {
                 requeue(userHash, null, docs, settlementRequests, oreqs, granted, hashes, votings);
                 handleUserStateUnsaved(updatedUserStates, settlementStates, document, newReviewTableEntries);
@@ -722,7 +732,10 @@ public class ModelController {
         }
         long timestamp = settlementController == null ? System.currentTimeMillis()
                 : settlementController.getTimestamp();
-        if (updatedUserStates.isEmpty()) { // must be voting(s)
+        if (updatedUserStates.isEmpty()) {
+            if (votings == null) {
+                return false;
+            }
             modelState = modelState.updateUserState(null, null, null, votings, null, newReviewTableEntries,
                     currentModelState, timestamp);
         }

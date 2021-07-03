@@ -1036,7 +1036,9 @@ public class SettlementController {
     boolean enterMergeMode() {
         if (main && validationMode) {
             validationMode = false;
-            resetSettlementData = true;
+            if (eligibleMainValidation != null) {
+                resetSettlementData = true;
+            }
             if (forMainValidation) {
                 this.timestamp = System.currentTimeMillis();
                 forMainValidation = false;

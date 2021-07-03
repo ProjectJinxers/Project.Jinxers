@@ -38,7 +38,6 @@ import org.projectjinxers.model.DocumentContents;
 import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.LoaderFactory;
 import org.projectjinxers.model.ModelState;
-import org.projectjinxers.model.Review;
 import org.projectjinxers.model.User;
 import org.projectjinxers.model.UserState;
 
@@ -56,18 +55,18 @@ import com.google.gson.JsonParser;
  */
 class TestIPFSAccessUtil {
 
-    private static final String[] PRINT_HASHES_FILEPATHS = { "model/modelController/settlement/eligible_20_3.json" };
+    private static final String[] PRINT_HASHES_FILEPATHS = { "model/modelController/settlement/eligible.json" };
 
     private static final String UPDATE_FILE_CONTENTS_SINGLE_PATH = null;
     private static final String UPDATE_FILE_CONTENTS_MULTIPLE_PATH = "model/modelController/baseStates/twentyfourUsers.json";
     private static final String REPLACE_FILE_CONTENTS_SINGLE_PATH = null;
-    private static final String REPLACE_FILE_CONTENTS_MULTIPLE_PATH = "model/modelController/settlement/eligible_20_3.json";
+    private static final String REPLACE_FILE_CONTENTS_MULTIPLE_PATH = "model/modelController/baseStates/twentyfourUsers.json";
 
     /**
      * If not null, and this hash is encountered during replacing, the in memory models will be cleared and re-populated
      * by saving the root again (after resetting all multihashes).
      */
-    private static final String REPLACE_ROOT_HASH = "273f7e0455ea3372aba02fbea266e01eb48399dc4f06f93db690f2db36719ebe";
+    private static final String REPLACE_ROOT_HASH = "7fce759c8479bbd973b5854a5a34801a4b8fe7435656701631c92bba82a91364";
     private static final LoaderFactory<?> ROOT_LOADER_FACTORY = LoaderFactory.MODEL_STATE;
     private static final boolean REPLACE_ALL = true; //
 
@@ -132,64 +131,28 @@ class TestIPFSAccessUtil {
 
     private static final Map<String, ModelUpdater<?>> UPDATERS = new HashMap<>();
     static {
-        UPDATERS.put("273f7e0455ea3372aba02fbea266e01eb48399dc4f06f93db690f2db36719ebe",
-                new ModelUpdater<ModelState>() {
+        UPDATERS.put("5d2472dd9bfb9cae46fe28db028a0d8e288feff71ac9305c585be79323df2a4d", new ModelUpdater<UserState>() {
 
-                    @Override
-                    public IPLDObject<ModelState> load(String hash, IPLDContext context) {
-                        return new IPLDObject<>(hash, LoaderFactory.MODEL_STATE.createLoader(), context, null);
-                    }
+            @Override
+            public IPLDObject<UserState> load(String hash, IPLDContext context) {
+                return new IPLDObject<>(hash, LoaderFactory.USER_STATE.createLoader(), context, null);
+            }
 
-                    @Override
-                    public IPLDObject<ModelState> update(IPLDObject<ModelState> loaded, IPLDContext context,
-                            Set<String> removeHashes)
-                            throws IOException, IllegalArgumentException, IllegalAccessException {
-                        IPLDObject<UserState> userState = loaded.getMapped()
-                                .expectUserState("1140e8cd69b506268623fd27f869185e0ef188650227327357da93bfa988d6dd");
-                        Document document = new Document("Seal me", null, null, null, null,
-                                new IPLDObject<>(new DocumentContents(null, "Contents")), userState);
-                        makeEligibleForSettlementExcecution(document);
-                        IPLDObject<Document> documentObject = new TestIPLDObject<>(document, DEFAULT_SIGNER);
-                        String documentHash = documentObject.save(context, DEFAULT_SIGNER);
-                        UserState updated = userState.getMapped().updateLinks(Collections.singleton(documentObject),
-                                null, null, null, null, null, userState);
-                        prepareForSave(documentObject, context, removeHashes);
+            @Override
+            public IPLDObject<UserState> update(IPLDObject<UserState> loaded, IPLDContext context,
+                    Set<String> removeHashes) throws IOException, IllegalArgumentException, IllegalAccessException {
+                Document document = new Document("Seal me", null, null, null, null,
+                        new IPLDObject<>(new DocumentContents(null, "Contents")), loaded);
+                makeEligibleForSettlementExcecution(document);
+                IPLDObject<Document> documentObject = new TestIPLDObject<>(document, DEFAULT_SIGNER);
+                documentObject.save(context, DEFAULT_SIGNER);
+                UserState updated = loaded.getMapped().updateLinks(Collections.singleton(documentObject), null, null,
+                        null, null, null, loaded);
+                loaded.save(context, null);
+                return new IPLDObject<>(updated);
+            }
 
-                        int reviewCount = 0;
-                        int approveCount = 0;
-                        Set<Entry<String, IPLDObject<UserState>>> allUserStateEntries = new HashSet<>(
-                                loaded.getMapped().getAllUserStateEntries());
-                        for (Entry<String, IPLDObject<UserState>> entry : allUserStateEntries) {
-                            if (entry.getValue() != userState) {
-                                String username = entry.getValue().getMapped().getUser().getMapped().getUsername();
-                                if (username.startsWith("user")) {
-                                    String password = username.replace("user", "pass");
-                                    Signer signer = new ECCSigner(username, password);
-                                    IPLDObject<Document> review = new TestIPLDObject<>(new Review(null, null, null,
-                                            null, null, new IPLDObject<>(new DocumentContents(null, "Review")),
-                                            documentObject, false, ++approveCount < 4 ? Boolean.TRUE : null,
-                                            entry.getValue()), signer);
-                                    String reviewHash = review.save(context, signer);
-                                    prepareForSave(review, context, removeHashes);
-                                    UserState updatedReviewer = entry.getValue().getMapped().updateLinks(
-                                            Collections.singleton(review), null, null, null, null, null,
-                                            entry.getValue());
-                                    loaded.getMapped().updateUserState(new IPLDObject<>(updatedReviewer), null, null,
-                                            null, null, Map.of(documentHash, new String[] { reviewHash }), null,
-                                            System.currentTimeMillis());
-                                    if (++reviewCount == 20) {
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                        // prepareForSave(userState, context, removeHashes);
-                        loaded.getMapped().updateUserState(new IPLDObject<>(updated), null, null, null, null, null,
-                                null, System.currentTimeMillis());
-                        return loaded;
-                    }
-
-                });
+        });
     }
 
     private static final boolean PRETTY_PRINTING = true;
