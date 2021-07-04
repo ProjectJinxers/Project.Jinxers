@@ -190,7 +190,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         writer.writeLinkObjects(KEY_USER_STATES, userStates, signer, context);
         writer.writeLinkObjects(KEY_VOTINGS, votings, signer, context);
         writer.writeLinkObjects(KEY_SETTLEMENT_REQUESTS, settlementRequests, signer, context);
-        writer.writeLinkObjects(KEY_SEALED_DOCUMENTS, sealedDocuments, signer, null);
+        writer.writeLinkObjects(KEY_SEALED_DOCUMENTS, sealedDocuments, signer, context);
         writer.writeLinkObjectArrays(KEY_OWNERSHIP_REQUESTS, ownershipRequests, signer, context);
         writer.writeLinkArrays(KEY_REVIEW_TABLE, reviewTable);
     }
@@ -205,6 +205,10 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
 
     public IPLDObject<ModelState> getPreviousVersion() {
         return previousVersion;
+    }
+
+    public Set<Entry<String, IPLDObject<SettlementRequest>>> getAllSettlementRequestEntries() {
+        return settlementRequests == null ? null : settlementRequests.entrySet();
     }
 
     public Set<String> expectAllUserHashes() {

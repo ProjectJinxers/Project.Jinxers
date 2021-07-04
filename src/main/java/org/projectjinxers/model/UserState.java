@@ -261,7 +261,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
     }
 
     public static Map<String, IPLDObject<Document>> expandDocuments(Map<String, IPLDObject<Document>> documents,
-            Map<String, ?> exclude, Set<String> documentHashes, Map<String, Set<String>> reviewHashes,
+            Map<String, ?> exclude, Map<String, Set<String>> reviewHashes,
             Map<String, Set<String>> obsoleteReviewVersions) {
         Map<String, IPLDObject<Document>> res = new LinkedHashMap<>();
         for (IPLDObject<Document> document : documents.values()) {
@@ -274,7 +274,6 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             do {
                 versions.push(document);
                 String multihash = document.getMultihash();
-                documentHashes.remove(multihash);
                 doc = document.getMapped();
 
                 document = doc.getPreviousVersionObject();
@@ -342,7 +341,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
     }
 
     public static Map<String, IPLDObject<Document>> expandRemovedDocuments(
-            Map<String, IPLDObject<DocumentRemoval>> documents, Map<String, ?> exclude, Set<String> documentHashes,
+            Map<String, IPLDObject<DocumentRemoval>> documents, Map<String, ?> exclude,
             Map<String, Set<String>> reviewHashes, Map<String, Set<String>> obsoleteReviewVersions) {
         Map<String, IPLDObject<Document>> res = new LinkedHashMap<>();
         for (IPLDObject<DocumentRemoval> removed : documents.values()) {
@@ -356,7 +355,6 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             do {
                 versions.push(document);
                 String multihash = document.getMultihash();
-                documentHashes.remove(multihash);
                 doc = document.getMapped();
 
                 document = doc.getPreviousVersionObject();
@@ -911,17 +909,15 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         return newDocuments;
     }
 
-    public Collection<IPLDObject<Document>> getNewDocuments(UserState since, Set<String> documentHashes,
-            Map<String, Set<String>> reviewHashes, Map<String, Set<String>> obsoleteReviewVersions,
-            boolean ignoreCached) {
+    public Collection<IPLDObject<Document>> getNewDocuments(UserState since, Map<String, Set<String>> reviewHashes,
+            Map<String, Set<String>> obsoleteReviewVersions, boolean ignoreCached) {
         if (ignoreCached || newDocuments == null) {
             if (since == null || since.documents == null) {
                 if (documents == null) {
                     newDocuments = null;
                 }
                 else {
-                    newDocuments = expandDocuments(documents, null, documentHashes, reviewHashes,
-                            obsoleteReviewVersions).values();
+                    newDocuments = expandDocuments(documents, null, reviewHashes, obsoleteReviewVersions).values();
                 }
             }
             else {
@@ -930,8 +926,8 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
                     newDocuments = null;
                 }
                 else {
-                    newDocuments = expandDocuments(newLinksMap, since.documents, documentHashes, reviewHashes,
-                            obsoleteReviewVersions).values();
+                    newDocuments = expandDocuments(newLinksMap, since.documents, reviewHashes, obsoleteReviewVersions)
+                            .values();
                 }
             }
         }
@@ -946,15 +942,15 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         return newRemovedDocuments;
     }
 
-    public Map<String, IPLDObject<DocumentRemoval>> getNewRemovedDocuments(UserState since, Set<String> documentHashes,
+    public Map<String, IPLDObject<DocumentRemoval>> getNewRemovedDocuments(UserState since,
             Map<String, Set<String>> reviewHashes, Map<String, Set<String>> obsoleteReviewVersions,
             boolean ignoreCached) {
         if (ignoreCached || newRemovedDocuments == null) {
             newRemovedDocuments = ModelUtility.getNewForeignKeyLinksMap(removedDocuments,
                     since == null ? null : since.removedDocuments);
             if (newRemovedDocuments != null) {
-                expandRemovedDocuments(newRemovedDocuments, since == null ? null : since.removedDocuments,
-                        documentHashes, reviewHashes, obsoleteReviewVersions);
+                expandRemovedDocuments(newRemovedDocuments, since == null ? null : since.removedDocuments, reviewHashes,
+                        obsoleteReviewVersions);
             }
         }
         return newRemovedDocuments;

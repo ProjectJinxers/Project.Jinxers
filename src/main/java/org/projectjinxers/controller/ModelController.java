@@ -370,17 +370,27 @@ public class ModelController {
      */
     private boolean saveLocalChanges(IPLDObject<Document> document, IPLDObject<SettlementRequest> settlementRequest,
             OwnershipTransferController ownershipTransferController) throws IOException {
+        long timestamp = settlementRequest == null ? System.currentTimeMillis()
+                : settlementRequest.getMapped().getTimestamp();
         IPLDObject<ModelState> currentModelState = currentValidatedState;
         ModelState modelState = currentModelState == null ? new ModelState() : currentModelState.getMapped();
         SettlementController settlementController = currentSnapshot == null ? null
-                : currentSnapshot.createPreEvaluationSnapshot(System.currentTimeMillis());
+                : currentSnapshot.createPreEvaluationSnapshot(timestamp);
         Queue<IPLDObject<SettlementRequest>> settlementRequests = null;
         if (settlementController != null) {
             boolean settlementChanged = false;
             if (queuedSettlementRequests != null) {
                 synchronized (queuedSettlementRequests) {
                     if (queuedSettlementRequests.size() > 0) {
-                        settlementRequests = new ArrayDeque<>(queuedSettlementRequests);
+                        SettlementRequest sameTimestamp = settlementRequest == null ? null
+                                : settlementRequest.getMapped();
+                        settlementRequests = new ArrayDeque<>();
+                        for (IPLDObject<SettlementRequest> request : queuedSettlementRequests) {
+                            SettlementRequest req = request.getMapped();
+                            req.synchronizeTimestamp(sameTimestamp);
+                            sameTimestamp = req;
+                            settlementRequests.add(request);
+                        }
                     }
                 }
                 if (settlementRequests != null) {
@@ -393,11 +403,11 @@ public class ModelController {
             if (settlementRequest != null) {
                 if (settlementController.checkRequest(settlementRequest.getMapped().getDocument(), false, true)) {
                     settlementChanged = true;
-                    if (settlementRequests == null) {
-                        settlementRequests = new ArrayDeque<>();
-                    }
-                    settlementRequests.add(settlementRequest);
                 }
+                if (settlementRequests == null) {
+                    settlementRequests = new ArrayDeque<>();
+                }
+                settlementRequests.add(settlementRequest);
             }
             settlementChanged = settlementController.applyNewTimestamp() || settlementChanged;
             if (settlementChanged) {
@@ -730,8 +740,6 @@ public class ModelController {
                     newReviewTableEntries);
             return false;
         }
-        long timestamp = settlementController == null ? System.currentTimeMillis()
-                : settlementController.getTimestamp();
         if (updatedUserStates.isEmpty()) {
             if (votings == null) {
                 return false;

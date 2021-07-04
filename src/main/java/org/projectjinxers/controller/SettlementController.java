@@ -27,6 +27,7 @@ import org.projectjinxers.model.GrantedUnban;
 import org.projectjinxers.model.ModelState;
 import org.projectjinxers.model.Review;
 import org.projectjinxers.model.SealedDocument;
+import org.projectjinxers.model.SettlementRequest;
 import org.projectjinxers.model.User;
 import org.projectjinxers.model.UserState;
 
@@ -41,8 +42,8 @@ public class SettlementController {
         private static final int MIN_TOTAL_COUNT = 20;
         private static final double MIN_MARGIN = 2.5;
 
-        private boolean requested;
         private boolean forMainValidation;
+        private long requestedAt;
         private String documentOwner;
         private IPLDObject<Document> document;
         private IPLDObject<Document> invertTruth;
@@ -171,7 +172,7 @@ public class SettlementController {
 
         SettlementData createPreEvaluationSnapshot() {
             SettlementData res = new SettlementData();
-            res.requested = requested;
+            res.requestedAt = requestedAt;
             res.forMainValidation = forMainValidation;
             res.documentOwner = documentOwner;
             res.document = document;
@@ -623,6 +624,7 @@ public class SettlementController {
 
     private boolean main;
     private long timestamp;
+    private long timestampTolerance;
 
     private boolean validationMode = true;
     private boolean forMainValidation;
@@ -644,14 +646,25 @@ public class SettlementController {
 
     private TruthInversionGraph truthInversionGraph;
 
-    SettlementController(boolean main, long timestamp) {
+    SettlementController(ModelState validState, boolean main, long timestamp, long timestampTolerance) {
         this.main = main;
         this.timestamp = timestamp;
+        if (timestampTolerance > 0) {
+            this.timestampTolerance = timestampTolerance;
+        }
         if (main) {
             this.forMainValidation = true;
             this.invalidByReview = new HashMap<>();
             this.invalidByTimestamp = new TreeSet<>();
             this.removedDocuments = new TreeSet<>();
+        }
+        Set<Entry<String, IPLDObject<SettlementRequest>>> requestEntries = validState == null ? null
+                : validState.getAllSettlementRequestEntries();
+        if (requestEntries != null) {
+            for (Entry<String, IPLDObject<SettlementRequest>> entry : requestEntries) {
+                SettlementRequest request = entry.getValue().getMapped();
+                addEligibleSettlement(request.getDocument(), false).requestedAt = request.getTimestamp();
+            }
         }
     }
 
@@ -674,8 +687,9 @@ public class SettlementController {
         }
         Document doc = document.getMapped();
         long time = doc.getDate().getTime();
-        long diff = timestamp - time;
+        long diff = timestamp + timestampTolerance - time;
         if (invalidByTimestamp != null && invalidByTimestamp.contains(documentMultihash)) {
+            diff = timestamp + timestampTolerance - eligibleSettlements.get(documentMultihash).requestedAt;
             if (diff >= SETTLEMENT_THRESHOLD) {
                 invalidByTimestamp.remove(documentMultihash);
                 return true;
@@ -690,11 +704,13 @@ public class SettlementController {
             return false;
         }
         SettlementData data = addEligibleSettlement(document, false);
-        data.requested = true;
+        if (data.requestedAt == 0) {
+            data.requestedAt = timestamp;
+        }
         if (forMainValidation) {
             data.forMainValidation = true;
         }
-        eligibleSettlements.put(documentMultihash, data);
+        diff = timestamp + timestampTolerance - data.requestedAt;
         if (diff < SETTLEMENT_THRESHOLD) {
             if (sealed && validationMode) {
                 throw new ValidationException("invalid sealing");
@@ -730,7 +746,7 @@ public class SettlementController {
             }
             if (Boolean.FALSE.equals(review.getApprove())) {
                 long time = review.getDate().getTime();
-                long diff = timestamp - time;
+                long diff = timestamp + timestampTolerance - time;
                 if (diff < REQUEST_THRESHOLD) {
                     if (validationMode) {
                         throw new ValidationException("settlement postponed by review");
@@ -747,13 +763,17 @@ public class SettlementController {
                         return false;
                     }
                 }
-                else if (diff < SETTLEMENT_THRESHOLD) {
-                    if (main) {
-                        invalidByReview.put(document.getMultihash(), documentMultihash);
-                    }
-                    else {
-                        eligibleSettlements.remove(documentMultihash);
-                        return false;
+                else {
+                    SettlementData settlementData = eligibleSettlements.get(documentMultihash);
+                    diff = time + timestampTolerance - settlementData.requestedAt;
+                    if (diff < SETTLEMENT_THRESHOLD) {
+                        if (main) {
+                            invalidByReview.put(document.getMultihash(), documentMultihash);
+                        }
+                        else {
+                            eligibleSettlements.remove(documentMultihash);
+                            return false;
+                        }
                     }
                 }
             }
@@ -856,7 +876,7 @@ public class SettlementController {
             documentOwners.add(owner);
             eligibleSettlements.put(documentMultihash, data);
         }
-        else if (needRequest && !data.requested) {
+        else if (needRequest && data.requestedAt == 0) {
             return null;
         }
         return data;
@@ -897,7 +917,7 @@ public class SettlementController {
             for (Entry<String, SettlementData> entry : eligibleSettlements.entrySet()) {
                 String key = entry.getKey();
                 SettlementData data = entry.getValue();
-                if (data.requested && (invalid == null || !invalid.contains(key)) && data.count()) {
+                if (data.requestedAt != 0 && (invalid == null || !invalid.contains(key)) && data.count()) {
                     SealedDocument evaluated = data.evaluate(modelState);
                     if (evaluated != null) {
                         res = true;
@@ -966,7 +986,7 @@ public class SettlementController {
             Set<String> invalid = new TreeSet<>(invalidByReview.values());
             for (Entry<String, SettlementData> entry : eligibleSettlements.entrySet()) {
                 SettlementData data = entry.getValue();
-                if (data.requested && data.forMainValidation) {
+                if (data.requestedAt != 0 && data.forMainValidation) {
                     String documentHash = entry.getKey();
                     if (!invalid.contains(documentHash)) {
                         if (data.count()) {
@@ -1049,7 +1069,8 @@ public class SettlementController {
     }
 
     public SettlementController createPreEvaluationSnapshot(long timestamp) {
-        SettlementController res = new SettlementController(true, timestamp <= 0 ? this.timestamp : timestamp);
+        SettlementController res = new SettlementController(null, true, timestamp <= 0 ? this.timestamp : timestamp,
+                timestampTolerance);
         res.documentOwners.addAll(documentOwners);
         res.invalidRequests.addAll(invalidRequests);
         for (Entry<String, SettlementData> entry : eligibleSettlements.entrySet()) {
