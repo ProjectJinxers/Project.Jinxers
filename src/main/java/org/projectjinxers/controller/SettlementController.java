@@ -191,16 +191,6 @@ public class SettlementController {
             this.sealedDocument = null;
         }
 
-        /*
-         * non-review: approved by majority -> owner true claim, approvers true approval, decliners false declination
-         * [non-inverting] neutral review: approved by majority -> [owner nothing, approvers true approval,] decliners
-         * false declination [non-inverting] approving review: approved by majority -> [owner true claim, approvers true
-         * approval,] decliners false declination [non-inverting] declining review: approved by majority -> [owner true
-         * claim, approvers true approval,] decliners false declination [non-inverting] neutral review of lie: approved
-         * by majority -> [owner nothing, approvers true approval,] decliners false declination [non-inverting]
-         * declining review of lie: declined by majority -> [owner true claim, approvers true approval,] decliners false
-         * declination approved by majority -> [owner true claim, approvers true approval,] decliners false declination
-         */
         private SealedDocument approversWon(boolean noNeutralReview) {
             falseDeclinations = new HashMap<>();
             if (invertTruth == null) {
@@ -233,17 +223,6 @@ public class SettlementController {
             return sealedDocument;
         }
 
-        /*
-         * non-review: declined by majority -> owner false claim, decliners true declination, approvers false approval
-         * [non-inverting] neutral review: declined by majority -> owner nothing, [decliners true declination,]
-         * approvers false approval [non-inverting] approving review: declined by majority -> owner false claim,
-         * [decliners true declination,] approvers false approval [non-inverting] declining review: declined by majority
-         * -> owner false claim, [decliners true declination,] approvers false approval [non-inverting] neutral review
-         * of lie: declined by majority -> owner nothing, [decliners true declination,] approvers false approval
-         * [non-inverting] approving review of lie: declined by majority -> owner false claim, [decliners true
-         * declination,] approvers false approval approved by majority -> owner false claim, [decliners true
-         * declination,] approvers false approval
-         */
         private SealedDocument declinersWon(boolean noNeutralReview) {
             if (noNeutralReview) {
                 falseClaim = document.getMapped().expectUserState().getUser();
@@ -450,7 +429,6 @@ public class SettlementController {
         static TruthInversionGraph createGraph(IPLDObject<Document> invertTruth) {
             TruthInversionGraph res = new TruthInversionGraph();
             res.index = new HashMap<>();
-            res.secondaryEntryPoints = new HashMap<>();
             res.document = invertTruth;
             res.index.put(invertTruth.getMultihash(), res);
             Document doc = invertTruth.getMapped();
@@ -479,6 +457,9 @@ public class SettlementController {
                     throw new ValidationException("Can't validate potientially cascading truth inversion");
                 }
                 index.put(multihash, node);
+                if (secondaryEntryPoints == null) {
+                    secondaryEntryPoints = new HashMap<>();
+                }
                 secondaryEntryPoints.put(multihash, node);
                 res = node;
             }
@@ -535,8 +516,8 @@ public class SettlementController {
             String parentHash = document.getMultihash();
             TruthInversionGraphNode reviewedNode = index.get(parentHash);
             if (reviewedNode != null) { // no immediate review of an affected document => irrelevant
-                if (reviewedNode == this || (secondaryEntryPoints != null
-                        && reviewedNode == secondaryEntryPoints.get(reviewObject.getMultihash()))) {
+                if (review.isInvertTruth() && (reviewedNode == this || (secondaryEntryPoints != null
+                        && reviewedNode == secondaryEntryPoints.get(reviewObject.getMultihash())))) {
                     // we don't want the newly settled truth inversion reviews in this graph, but the links have to be
                     // somewhere, so we add them to the reviewed document
                     addInvertTruthLinks(review, reviewedNode);
@@ -616,7 +597,7 @@ public class SettlementController {
         String key = user.getMultihash();
         UserState res = userStates.get(key);
         if (res == null) {
-            res = new UserState(user);
+            res = new UserState();
             userStates.put(key, res);
         }
         return res;
@@ -724,17 +705,34 @@ public class SettlementController {
     }
 
     public boolean checkDocument(IPLDObject<Document> document, boolean needRequest, Set<String> newReviewTableKeys,
-            Map<String, Set<String>> newReviewTableValues) {
+            Map<String, Set<String>> newReviewTableValues, Map<String, Map<String, String>> reviewers) {
         Document doc = document.getMapped();
         String previousVersionHash = doc.getPreviousVersionHash();
         if (previousVersionHash != null) {
             invalidRequests.add(previousVersionHash);
             eligibleSettlements.remove(previousVersionHash);
         }
+        if (newReviewTableKeys != null) {
+            newReviewTableKeys.remove(document.getMultihash());
+        }
         if (doc instanceof Review) {
             Review review = (Review) doc;
             IPLDObject<Document> reviewed = review.getDocument();
             String documentMultihash = reviewed.getMultihash();
+            if (reviewers != null) {
+                Map<String, String> docReviewers = reviewers.get(documentMultihash);
+                String reviewerHash = review.expectUserState().getUser().getMultihash();
+                if (docReviewers == null) {
+                    docReviewers = new HashMap<>();
+                    docReviewers.put(reviewerHash, document.getMultihash());
+                }
+                else if (previousVersionHash == null || !previousVersionHash.equals(docReviewers.get(reviewerHash))) {
+                    throw new ValidationException("multiple reviews by same user");
+                }
+                else {
+                    docReviewers.put(reviewerHash, document.getMultihash());
+                }
+            }
             if (newReviewTableValues != null) {
                 Set<String> values = newReviewTableValues.get(documentMultihash);
                 if (values != null && values.remove(document.getMultihash()) && values.size() == 0) {
@@ -765,14 +763,22 @@ public class SettlementController {
                 }
                 else {
                     SettlementData settlementData = eligibleSettlements.get(documentMultihash);
-                    diff = time + timestampTolerance - settlementData.requestedAt;
-                    if (diff < SETTLEMENT_THRESHOLD) {
-                        if (main) {
-                            invalidByReview.put(document.getMultihash(), documentMultihash);
-                        }
-                        else {
-                            eligibleSettlements.remove(documentMultihash);
+                    if (settlementData == null) {
+                        if (needRequest) {
                             return false;
+                        }
+                    }
+                    else {
+                        diff = time + timestampTolerance - settlementData.requestedAt;
+                        if (diff < SETTLEMENT_THRESHOLD) {
+                            if (main) {
+                                invalidByReview.put(document.getMultihash(), documentMultihash);
+                            }
+                            else {
+                                invalidRequests.add(documentMultihash);
+                                eligibleSettlements.remove(documentMultihash);
+                                return false;
+                            }
                         }
                     }
                 }
@@ -786,9 +792,6 @@ public class SettlementController {
                 data.addReview(reviewObject);
                 return true;
             }
-        }
-        else if (newReviewTableKeys != null) {
-            newReviewTableKeys.remove(document.getMultihash());
         }
         return false;
     }
@@ -952,7 +955,8 @@ public class SettlementController {
                             IPLDObject<Document> document = entry.getValue();
                             Document doc = document.getMapped();
                             if (doc instanceof Review) {
-                                if (((Review) doc).isInvertTruth() && modelState.isSealedDocument(entry.getKey())) {
+                                if (((Review) doc).isInvertTruth() && !sealedDocuments.containsKey(entry.getKey())
+                                        && modelState.isSealedDocument(entry.getKey())) {
                                     truthInversionGraph.addTruthInversionReview(document);
                                 }
                                 else {
@@ -984,6 +988,7 @@ public class SettlementController {
             eligibleMainValidation = new HashMap<>();
             documentOwnersMainValidation = new TreeSet<>();
             Set<String> invalid = new TreeSet<>(invalidByReview.values());
+            invalid.addAll(invalidByTimestamp);
             for (Entry<String, SettlementData> entry : eligibleSettlements.entrySet()) {
                 SettlementData data = entry.getValue();
                 if (data.requestedAt != 0 && data.forMainValidation) {
@@ -1110,7 +1115,11 @@ public class SettlementController {
             IPLDObject tmp = review;
             @SuppressWarnings("unchecked")
             IPLDObject<Document> document = tmp;
-            res = checkDocument(document, true, null, null) || res;
+            res = checkDocument(document, true, null, null, null) || res;
+        }
+        for (String key : invalidByTimestamp) {
+            SettlementData settlementData = eligibleSettlements.get(key);
+            res = checkRequest(settlementData.document, false, false) || res;
         }
         return res;
     }

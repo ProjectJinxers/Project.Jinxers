@@ -42,7 +42,7 @@ public class GrantedUnban implements IPLDSerializable, Loader<GrantedUnban> {
 
     @Override
     public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
-        writer.writeLink(KEY_UNBAN_REQUEST, unbanRequest, signer, null);
+        writer.writeLink(KEY_UNBAN_REQUEST, unbanRequest, null, null);
     }
 
     public IPLDObject<UnbanRequest> getUnbanRequest() {

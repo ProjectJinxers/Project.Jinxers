@@ -62,7 +62,7 @@ public interface IPLDWriter {
     void writeBoolean(String key, Boolean value) throws IOException;
 
     /**
-     * Convenience method for writes a boolean property if its value is true only by default. Can still be overridden,
+     * Convenience method for writing a boolean property if its value is true only by default. Can still be overridden,
      * in case false also has to be written.
      * 
      * @param key   the key

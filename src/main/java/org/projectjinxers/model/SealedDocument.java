@@ -31,7 +31,7 @@ public class SealedDocument implements IPLDSerializable, Loader<SealedDocument> 
     private static final String KEY_TRUTH_INVERTED = "i";
     private static final String KEY_DOCUMENT = "d";
 
-    private boolean truthInverted;
+    private Boolean truthInverted;
     private IPLDObject<Document> document;
 
     SealedDocument() {
@@ -50,18 +50,22 @@ public class SealedDocument implements IPLDSerializable, Loader<SealedDocument> 
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {
-        this.truthInverted = Boolean.TRUE.equals(reader.readBoolean(KEY_TRUTH_INVERTED));
+        this.truthInverted = reader.readBoolean(KEY_TRUTH_INVERTED);
         this.document = reader.readLinkObject(KEY_DOCUMENT, context, validationContext, LoaderFactory.DOCUMENT, eager);
     }
 
     @Override
     public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
-        writer.writeIfTrue(KEY_TRUTH_INVERTED, truthInverted);
-        writer.writeLink(KEY_DOCUMENT, document, signer, context);
+        writer.writeBoolean(KEY_TRUTH_INVERTED, truthInverted);
+        writer.writeLink(KEY_DOCUMENT, document, null, null);
+    }
+
+    public boolean isOriginal() {
+        return truthInverted == null;
     }
 
     public boolean isTruthInverted() {
-        return truthInverted;
+        return Boolean.TRUE.equals(truthInverted);
     }
 
     public IPLDObject<Document> getDocument() {
@@ -70,7 +74,7 @@ public class SealedDocument implements IPLDSerializable, Loader<SealedDocument> 
 
     public SealedDocument invertTruth() {
         SealedDocument res = new SealedDocument(document);
-        res.truthInverted = !truthInverted;
+        res.truthInverted = !Boolean.TRUE.equals(truthInverted);
         return res;
     }
 

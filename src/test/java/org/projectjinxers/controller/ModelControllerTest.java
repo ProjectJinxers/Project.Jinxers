@@ -384,6 +384,29 @@ class ModelControllerTest {
     }
 
     @Test
+    void testTruthInversion() throws Exception {
+        String[] validHashes = access.readObjects("model/modelController/settlement/sealed_20_3_1.json");
+        final String validModelStateHash = validHashes[58];
+        Config config = Config.getSharedInstance();
+        access.saveModelStateHash(config.getIOTAMainAddress(), validModelStateHash);
+        ModelController controller = new ModelController(access, config, 0);
+
+        String[] hashes = access.readObjects("model/modelController/settlement/validTruthInversion.json");
+        String modelStateHash = hashes[89];
+        access.simulateModelStateMessage(config.getIOTAMainAddress(), modelStateHash);
+        assertNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 100));
+
+        hashes = access.readObjects("model/modelController/settlement/sealedTruthInversion.json");
+        modelStateHash = hashes[41]; // final String userHash = hashes[29]; final String documentHash = hashes[66];
+        access.simulateModelStateMessage(config.getIOTAMainAddress(), modelStateHash);
+
+        assertNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 400));
+
+        IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
+        assertEquals(modelStateHash, modelStateObject.getMultihash());
+    }
+
+    @Test
     void testBlockedSettlementRequest() throws Exception {
         String[] validHashes = access.readObjects("model/modelController/baseStates/twentyfourUsers.json");
         final String validModelStateHash = validHashes[12];

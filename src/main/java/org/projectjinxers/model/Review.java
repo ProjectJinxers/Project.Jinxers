@@ -85,8 +85,8 @@ public class Review extends Document implements DocumentAction, Loader<Review> {
         super.write(writer, signer, context);
         writer.writeIfTrue(KEY_INVERT_TRUTH, invertTruth);
         writer.writeBoolean(KEY_APPROVE, approve);
-        writer.writeLink(KEY_DOCUMENT, document, signer, context);
-        writer.writeLinkObjects(KEY_INVERT_TRUTH_LINKS, invertTruthLinks, signer, null);
+        writer.writeLink(KEY_DOCUMENT, document, null, null);
+        writer.writeLinkObjects(KEY_INVERT_TRUTH_LINKS, invertTruthLinks, null, null);
     }
 
     @Override
@@ -136,8 +136,10 @@ public class Review extends Document implements DocumentAction, Loader<Review> {
      * @return the updated object
      */
     public Review update(String title, String subtitle, String version, String tags, String source,
-            IPLDObject<DocumentContents> contents, Boolean approve, IPLDObject<Document> current) {
-        Review res = (Review) super.update(title, subtitle, version, tags, source, contents, current);
+            IPLDObject<DocumentContents> contents, boolean invertTruth, Boolean approve, IPLDObject<Document> current,
+            IPLDObject<UserState> userState) {
+        Review res = (Review) super.update(title, subtitle, version, tags, source, contents, current, userState);
+        res.invertTruth = invertTruth;
         res.approve = approve;
         return res;
     }

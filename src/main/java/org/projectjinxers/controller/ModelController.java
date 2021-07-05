@@ -498,7 +498,7 @@ public class ModelController {
                             }
                             docs.add(transferred);
                             if (settlementController != null) {
-                                settlementController.checkDocument(transferredDocument, true, null, null);
+                                settlementController.checkDocument(transferredDocument, true, null, null, null);
                             }
                             userHashes.add(key);
                         }
@@ -554,7 +554,7 @@ public class ModelController {
                     else {
                         for (IPLDObject<Document> doc : entry.getValue()) {
                             docs.add(doc);
-                            settlementController.checkDocument(doc, true, null, null);
+                            settlementController.checkDocument(doc, true, null, null, null);
                         }
                     }
                 }
@@ -617,7 +617,7 @@ public class ModelController {
             }
             queue.add(document);
             if (settlementController != null) {
-                settlementController.checkDocument(document, true, null, null);
+                settlementController.checkDocument(document, true, null, null, null);
             }
         }
         if (queuedVotings != null) {
@@ -645,9 +645,11 @@ public class ModelController {
         }
         Map<String, UserState> settlementStates;
         Collection<IPLDObject<SealedDocument>> sealedDocuments;
+        Collection<String> sealedDocumentHashes;
         if (settlementController == null) {
             settlementStates = null;
             sealedDocuments = null;
+            sealedDocumentHashes = null;
         }
         else {
             Map<String, SealedDocument> sealedDocs = new HashMap<>();
@@ -655,14 +657,17 @@ public class ModelController {
                 settlementStates = new HashMap<>();
                 settlementController.update(settlementStates, modelState, sealedDocs);
                 sealedDocuments = new ArrayList<>();
+                sealedDocumentHashes = new ArrayList<>();
                 for (SealedDocument doc : sealedDocs.values()) {
                     sealedDocuments.add(new IPLDObject<>(doc));
+                    sealedDocumentHashes.add(doc.getDocument().getMultihash());
                 }
                 userHashes.addAll(settlementStates.keySet());
             }
             else {
                 settlementStates = null;
                 sealedDocuments = null;
+                sealedDocumentHashes = null;
             }
         }
         String ownerHash;
@@ -716,7 +721,7 @@ public class ModelController {
                     || settlementValues != null) {
                 try {
                     UserState updated = toSave.getMapped().updateLinks(docs, sreqs, oreqs, granted, hashes,
-                            settlementValues, toSave);
+                            sealedDocumentHashes, settlementValues, toSave);
                     IPLDObject<UserState> updatedObject = new IPLDObject<>(updated);
                     updatedObject.save(context, null);
                     updatedUserStates.put(userHash, updatedObject);
@@ -1053,14 +1058,13 @@ public class ModelController {
             ModelState localRoot = validated.getMapped();
             checkPendingUserStatesAndQueues(localRoot);
             Map<String, Set<String>> obsoleteReviewVersions = currentValidationContext.getObsoleteReviewVersions();
-            if (obsoleteReviewVersions.size() == 0) {
+            if (obsoleteReviewVersions.size() == 0 || !localRoot.removeObsoleteReviewVersions(obsoleteReviewVersions)) {
                 nextValidatedState = validated;
                 this.currentValidatedState = nextValidatedState;
                 this.currentSnapshot = currentValidationContext.getMainSettlementController()
                         .createPreEvaluationSnapshot(0);
                 return true;
             }
-            localRoot.removeObsoleteReviewVersions(obsoleteReviewVersions);
             localMergeBase = localRoot;
         }
         else {

@@ -431,7 +431,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
     private Map<String, IPLDObject<Review>> invertedFalseApprovals;
     private Map<String, IPLDObject<Review>> invertedFalseDeclinations;
 
-    UserState() {
+    public UserState() {
 
     }
 
@@ -480,10 +480,10 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         writer.writeLink(KEY_USER, user, signer, context);
         writer.writeLink(KEY_PREVIOUS_VERSION, previousVersion, signer, context);
         writer.writeLinkObjects(KEY_DOCUMENTS, documents, signer, context);
-        writer.writeLinkObjects(KEY_REMOVED_DOCUMENTS, removedDocuments, signer, null);
-        writer.writeLinkObjects(KEY_FALSE_CLAIMS, falseClaims, signer, null);
-        writer.writeLinkObjects(KEY_FALSE_APPROVALS, falseApprovals, signer, null);
-        writer.writeLinkObjects(KEY_FALSE_DECLINATIONS, falseDeclinations, signer, null);
+        writer.writeLinkObjects(KEY_REMOVED_DOCUMENTS, removedDocuments, null, null);
+        writer.writeLinkObjects(KEY_FALSE_CLAIMS, falseClaims, null, null);
+        writer.writeLinkObjects(KEY_FALSE_APPROVALS, falseApprovals, null, null);
+        writer.writeLinkObjects(KEY_FALSE_DECLINATIONS, falseDeclinations, null, null);
         writer.writeLinkObjects(KEY_SETTLEMENT_REQUESTS, settlementRequests, signer, context);
         writer.writeLinkObjects(KEY_OWNERSHIP_REQUESTS, ownershipRequests, signer, context);
         writer.writeLinkObjects(KEY_UNBAN_REQUESTS, unbanRequests, signer, context);
@@ -605,14 +605,21 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         return false;
     }
 
-    public void validateRelatedDocument(String documentHash, String[] reviewHashes) {
+    public void validateRelatedDocument(String firstDocumentVersionHash, String[] reviewHashes) {
         if (documents != null) {
-            if (documents.containsKey(documentHash)) {
+            if (documents.containsKey(firstDocumentVersionHash)) {
                 return;
             }
             if (reviewHashes != null) {
+                Map<String, IPLDObject<Document>> allDocuments = null;
                 for (String reviewHash : reviewHashes) {
-                    if (documents.containsKey(reviewHash)) {
+                    if (allDocuments == null) {
+                        allDocuments = new HashMap<>();
+                        if (expandDocuments(documents, null, allDocuments, reviewHash) != null) {
+                            return;
+                        }
+                    }
+                    else if (allDocuments.containsKey(reviewHash)) {
                         return;
                     }
                 }
@@ -718,7 +725,8 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
      */
     public UserState updateLinks(Collection<IPLDObject<Document>> docs, Collection<IPLDObject<SettlementRequest>> sreqs,
             Collection<IPLDObject<OwnershipRequest>> oreqs, Collection<IPLDObject<GrantedOwnership>> granted,
-            Collection<String> transferredOwnershipHashes, UserState settlementValues, IPLDObject<UserState> current) {
+            Collection<String> transferredOwnershipHashes, Collection<String> sealedDocuments,
+            UserState settlementValues, IPLDObject<UserState> current) {
         UserState updated = copy();
         updated.version = this.version + 1;
         updated.previousVersion = current;
@@ -765,8 +773,15 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
                 updated.documents.put(DOCUMENT_KEY_PROVIDER.getKey(document), document);
             }
         }
-        if (settlementValues != null) {
-            updated.applySettlement(settlementValues);
+        if (sealedDocuments != null) {
+            if (updated.settlementRequests != null) { // null happens when sealed document is not an original
+                for (String hash : sealedDocuments) {
+                    updated.settlementRequests.remove(hash);
+                }
+            }
+            if (settlementValues != null) {
+                updated.applySettlement(settlementValues);
+            }
         }
         return updated;
     }
@@ -828,7 +843,9 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
     public void removeFalseClaim(IPLDObject<Document> document) {
         rating += FALSE_CLAIM_PENALTY;
         String documentHash = document.getMultihash();
-        falseClaims.remove(documentHash);
+        if (falseClaims != null) { // false... maps are null if this is a new temp instance for truth inversion
+            falseClaims.remove(documentHash);
+        }
         if (invertedFalseClaims == null) {
             invertedFalseClaims = new HashMap<>();
         }
@@ -839,7 +856,9 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
     public void removeFalseApproval(IPLDObject<Review> review) {
         rating += FALSE_APPROVAL_PENALTY;
         String documentHash = review.getMultihash();
-        falseApprovals.remove(documentHash);
+        if (falseApprovals != null) {
+            falseApprovals.remove(documentHash);
+        }
         if (invertedFalseApprovals == null) {
             invertedFalseApprovals = new HashMap<>();
         }
@@ -850,7 +869,9 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
     public void removeFalseDeclination(IPLDObject<Review> review) {
         rating += FALSE_DECLINATION_PENALTY;
         String documentHash = review.getMultihash();
-        falseDeclinations.remove(documentHash);
+        if (falseDeclinations != null) {
+            falseDeclinations.remove(documentHash);
+        }
         if (invertedFalseDeclinations == null) {
             invertedFalseDeclinations = new HashMap<>();
         }
@@ -895,7 +916,8 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
                 }
             }
             else {
-                Map<String, IPLDObject<Document>> newLinksMap = ModelUtility.getNewLinksMap(documents, since.documents);
+                Map<String, IPLDObject<Document>> newLinksMap = ModelUtility.getNewForeignKeyLinksMap(documents,
+                        since.documents);
                 if (newLinksMap == null) {
                     newDocuments = null;
                 }
@@ -921,13 +943,16 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
                 }
             }
             else {
-                Map<String, IPLDObject<Document>> newLinksMap = ModelUtility.getNewLinksMap(documents, since.documents);
+                Map<String, IPLDObject<Document>> newLinksMap = ModelUtility.getNewForeignKeyLinksMap(documents,
+                        since.documents);
                 if (newLinksMap == null) {
                     newDocuments = null;
                 }
                 else {
-                    newDocuments = expandDocuments(newLinksMap, since.documents, reviewHashes, obsoleteReviewVersions)
-                            .values();
+                    Map<String, IPLDObject<Document>> allCurrentDocuments = new HashMap<>();
+                    expandDocuments(since.documents, null, allCurrentDocuments, null);
+                    newDocuments = expandDocuments(newLinksMap, allCurrentDocuments, reviewHashes,
+                            obsoleteReviewVersions).values();
                 }
             }
         }
@@ -997,13 +1022,14 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
     }
 
     boolean prepareSettlementValidation(SettlementController controller, Set<String> newReviewTableKeys,
-            Map<String, Set<String>> newReviewTableValues) {
+            Map<String, Set<String>> newReviewTableValues, Map<String, Map<String, String>> reviewers) {
         if (documents != null) {
             boolean res = false;
             Map<String, IPLDObject<Document>> allDocuments = new HashMap<>();
             expandDocuments(documents, null, allDocuments, null);
             for (IPLDObject<Document> document : allDocuments.values()) {
-                res = controller.checkDocument(document, true, newReviewTableKeys, newReviewTableValues) || res;
+                res = controller.checkDocument(document, true, newReviewTableKeys, newReviewTableValues, reviewers)
+                        || res;
             }
             if (res) {
                 return true;
@@ -1152,7 +1178,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             Map<String, IPLDObject<Document>> allDocuments = new HashMap<>();
             expandDocuments(documents, null, allDocuments, null);
             for (IPLDObject<Document> document : allDocuments.values()) {
-                res = mainSettlementController.checkDocument(document, true, null, null) || res;
+                res = mainSettlementController.checkDocument(document, true, null, null, null) || res;
             }
             if (res) {
                 return true;
@@ -1174,7 +1200,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         if (newDocuments != null) {
             this.newDocuments = null;
             for (IPLDObject<Document> document : newDocuments) {
-                mainSettlementController.checkDocument(document, true, null, null);
+                mainSettlementController.checkDocument(document, true, null, null, null);
             }
         }
     }
@@ -1232,6 +1258,9 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             }
         }
         if (settlementValues.falseClaims != null) {
+            if (falseClaims == null) {
+                falseClaims = new LinkedHashMap<>();
+            }
             falseClaims.putAll(settlementValues.falseClaims);
         }
         if (settlementValues.invertedFalseApprovals != null) {
@@ -1240,6 +1269,9 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             }
         }
         if (settlementValues.falseApprovals != null) {
+            if (falseApprovals == null) {
+                falseApprovals = new LinkedHashMap<>();
+            }
             falseApprovals.putAll(settlementValues.falseApprovals);
         }
         if (settlementValues.invertedFalseDeclinations != null) {
@@ -1248,6 +1280,9 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             }
         }
         if (settlementValues.falseDeclinations != null) {
+            if (falseDeclinations == null) {
+                falseDeclinations = new LinkedHashMap<>();
+            }
             falseDeclinations.putAll(settlementValues.falseDeclinations);
         }
     }
@@ -1288,7 +1323,9 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             }
         }
         else if (actual == null) {
-            throw new ValidationException("unexpected missing false map");
+            if (expected.size() > 0) {
+                throw new ValidationException("unexpected missing false map");
+            }
         }
         else if (expected.size() != actual.size()) {
             throw new ValidationException("unexpected size of false map");

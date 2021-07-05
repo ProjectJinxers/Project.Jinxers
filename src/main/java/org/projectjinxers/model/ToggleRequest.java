@@ -74,7 +74,7 @@ public abstract class ToggleRequest implements IPLDSerializable {
     public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
         writer.writeIfTrue(KEY_ACTIVE, active);
         writer.writeNumber(KEY_PAYLOAD, payload);
-        writer.writeLink(KEY_USER_STATE, userState, signer, null);
+        writer.writeLink(KEY_USER_STATE, userState, null, null);
     }
 
     /**

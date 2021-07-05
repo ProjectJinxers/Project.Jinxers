@@ -171,8 +171,8 @@ public class Document implements IPLDSerializable {
         writer.writeString(KEY_SOURCE, source);
         writer.writeLink(KEY_CONTENTS, contents, signer, context);
         writer.writeLink(KEY_USER_STATE, userState, signer, context);
-        writer.writeLink(KEY_PREVIOUS_VERSION, previousVersion, signer, null);
-        writer.writeLink(KEY_FIRST_VERSION, firstVersion, signer, null);
+        writer.writeLink(KEY_PREVIOUS_VERSION, previousVersion, null, null);
+        writer.writeLink(KEY_FIRST_VERSION, firstVersion, null, null);
         writer.writeLinkObjects(KEY_LINKS, links, signer, context);
     }
 
@@ -271,8 +271,8 @@ public class Document implements IPLDSerializable {
     }
 
     public Document update(String version, String tags, IPLDObject<DocumentContents> contents,
-            IPLDObject<Document> current) {
-        return update(title, subtitle, version, tags, source, contents, current);
+            IPLDObject<Document> current, IPLDObject<UserState> userState) {
+        return update(title, subtitle, version, tags, source, contents, current, userState);
     }
 
     /**
@@ -292,7 +292,7 @@ public class Document implements IPLDSerializable {
      * @return the updated object
      */
     public Document update(String title, String subtitle, String version, String tags, String source,
-            IPLDObject<DocumentContents> contents, IPLDObject<Document> current) {
+            IPLDObject<DocumentContents> contents, IPLDObject<Document> current, IPLDObject<UserState> userState) {
         Document updated = current == null ? this : createCopyInstance();
         updated.title = title;
         updated.subtitle = subtitle;
@@ -306,6 +306,7 @@ public class Document implements IPLDSerializable {
             updated.firstVersion = getFirstVersionForSuccessor(current);
             updated.links = links == null ? null : new LinkedHashMap<>(links);
         }
+        updated.userState = userState;
         return updated;
     }
 

@@ -42,7 +42,7 @@ public class DocumentRemoval implements DocumentAction, Loader<DocumentRemoval> 
 
     @Override
     public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
-        writer.writeLink(KEY_DOCUMENT, document, signer, null);
+        writer.writeLink(KEY_DOCUMENT, document, null, null);
     }
 
     @Override

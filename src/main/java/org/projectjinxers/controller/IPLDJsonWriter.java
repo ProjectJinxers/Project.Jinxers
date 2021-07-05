@@ -118,7 +118,7 @@ public class IPLDJsonWriter implements IPLDWriter {
 
     @Override
     public void writeBooleanArray(String key, boolean[] value) throws IOException {
-        if (value != null) {
+        if (value != null && (!compact || value.length > 0)) {
             jsonWriter.name(key).beginArray();
             for (boolean val : value) {
                 jsonWriter.value(val);
@@ -129,14 +129,14 @@ public class IPLDJsonWriter implements IPLDWriter {
 
     @Override
     public void writeByteArray(String key, byte[] value, ByteCodec codec) throws IOException {
-        if (value != null) {
+        if (value != null && (!compact || value.length > 0)) {
             writeString(key, codec.encode(value));
         }
     }
 
     @Override
     public void writeCharArray(String key, char[] value) throws IOException {
-        if (value != null) {
+        if (value != null && (!compact || value.length > 0)) {
             jsonWriter.name(key).beginArray();
             for (char val : value) {
                 jsonWriter.value(val);
@@ -147,7 +147,7 @@ public class IPLDJsonWriter implements IPLDWriter {
 
     @Override
     public void writeIntArray(String key, int[] value) throws IOException {
-        if (value != null) {
+        if (value != null && (!compact || value.length > 0)) {
             jsonWriter.name(key).beginArray();
             for (int val : value) {
                 jsonWriter.value(val);
@@ -158,7 +158,7 @@ public class IPLDJsonWriter implements IPLDWriter {
 
     @Override
     public void writeLongArray(String key, long[] value) throws IOException {
-        if (value != null) {
+        if (value != null && (!compact || value.length > 0)) {
             jsonWriter.name(key).beginArray();
             for (long val : value) {
                 jsonWriter.value(val);
@@ -169,7 +169,7 @@ public class IPLDJsonWriter implements IPLDWriter {
 
     @Override
     public void writeNumberArray(String key, Number[] value) throws IOException {
-        if (value != null) {
+        if (value != null && (!compact || value.length > 0)) {
             jsonWriter.name(key).beginArray();
             for (Number val : value) {
                 jsonWriter.value(val);
@@ -180,7 +180,7 @@ public class IPLDJsonWriter implements IPLDWriter {
 
     @Override
     public void writeStringArray(String key, String[] value) throws IOException {
-        if (value != null) {
+        if (value != null && (!compact || value.length > 0)) {
             jsonWriter.name(key).beginArray();
             for (String val : value) {
                 jsonWriter.value(val);
@@ -191,7 +191,7 @@ public class IPLDJsonWriter implements IPLDWriter {
 
     @Override
     public void writeLinkArray(String key, String[] links) throws IOException {
-        if (links != null) {
+        if (links != null && (!compact || links.length > 0)) {
             jsonWriter.name(key).beginArray();
             for (String link : links) {
                 writeLink(link);
@@ -203,7 +203,7 @@ public class IPLDJsonWriter implements IPLDWriter {
     @Override
     public void writeLinkArray(String key, IPLDObject<?>[] links, Signer signer, IPLDContext context)
             throws IOException {
-        if (links != null) {
+        if (links != null && (!compact || links.length > 0)) {
             jsonWriter.name(key).beginArray();
             for (IPLDObject<?> link : links) {
                 String multihash = link.getMultihash();
@@ -218,7 +218,7 @@ public class IPLDJsonWriter implements IPLDWriter {
 
     @Override
     public void writeLinkArrays(String key, Map<String, String[]> links) throws IOException {
-        if (links != null) {
+        if (links != null && (!compact || links.size() > 0)) {
             jsonWriter.name(key).beginArray();
             jsonWriter.beginArray();
             for (String group : links.keySet()) {
@@ -239,7 +239,7 @@ public class IPLDJsonWriter implements IPLDWriter {
     @Override
     public <D extends IPLDSerializable> void writeLinkObjectArrays(String key, Map<String, IPLDObject<D>[]> linkArrays,
             Signer signer, IPLDContext context) throws IOException {
-        if (linkArrays != null) {
+        if (linkArrays != null && (!compact || linkArrays.size() > 0)) {
             jsonWriter.name(key).beginArray();
             for (IPLDObject<D>[] linkArray : linkArrays.values()) {
                 if (linkArray.length > 0) {

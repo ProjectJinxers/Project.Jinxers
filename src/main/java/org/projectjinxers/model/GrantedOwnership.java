@@ -62,8 +62,8 @@ public class GrantedOwnership implements IPLDSerializable, Loader<GrantedOwnersh
 
     @Override
     public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
-        writer.writeLink(KEY_DOCUMENT, document, signer, null);
-        writer.writeLink(KEY_MODEL_STATE, modelState, signer, null);
+        writer.writeLink(KEY_DOCUMENT, document, null, null);
+        writer.writeLink(KEY_MODEL_STATE, modelState, null, null);
     }
 
     public IPLDObject<Document> getDocument() {

@@ -64,7 +64,7 @@ public class UnbanRequest extends ToggleRequest implements DocumentAction, Votab
         writer.writeBoolean(KEY_ANONYMOUS, anonymous);
         writer.writeNumber(KEY_HASH_SEED, hashSeed);
         writer.writeNumber(KEY_DEADLINE, deadline.getTime());
-        writer.writeLink(KEY_DOCUMENT, document, signer, null);
+        writer.writeLink(KEY_DOCUMENT, document, null, null);
     }
 
     @Override

@@ -75,7 +75,7 @@ public class OwnershipRequest extends ToggleRequest implements DocumentAction, L
         writer.writeIfTrue(KEY_ANONYMOUS_VOTING, anonymousVoting);
         writer.writeNumber(KEY_VOTING_HASH_SEED, votingHashSeed);
         writer.writeNumber(KEY_TIMESTAMP, timestamp);
-        writer.writeLink(KEY_DOCUMENT, document, signer, null);
+        writer.writeLink(KEY_DOCUMENT, document, null, null);
     }
 
     /**

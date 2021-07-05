@@ -19,7 +19,7 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -35,7 +35,6 @@ import org.projectjinxers.account.ECCSigner;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.account.Users;
 import org.projectjinxers.model.Document;
-import org.projectjinxers.model.DocumentContents;
 import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.LoaderFactory;
 import org.projectjinxers.model.ModelState;
@@ -58,18 +57,19 @@ import com.google.gson.JsonParser;
  */
 class TestIPFSAccessUtil {
 
-    private static final String[] PRINT_HASHES_FILEPATHS = { "model/modelController/settlement/sealed_20_3.json" };
+    private static final String[] PRINT_HASHES_FILEPATHS = {
+            "model/modelController/settlement/validTruthInversion.json" };
 
     private static final String UPDATE_FILE_CONTENTS_SINGLE_PATH = null;
     private static final String UPDATE_FILE_CONTENTS_MULTIPLE_PATH = "model/modelController/baseStates/twentyfourUsers.json";
     private static final String REPLACE_FILE_CONTENTS_SINGLE_PATH = null;
-    private static final String REPLACE_FILE_CONTENTS_MULTIPLE_PATH = "model/modelController/settlement/validRequest.json";
+    private static final String REPLACE_FILE_CONTENTS_MULTIPLE_PATH = "model/modelController/settlement/validTruthInversion.json";
 
     /**
      * If not null, and this hash is encountered during replacing, the in memory models will be cleared and re-populated
      * by saving the root again (after resetting all multihashes).
      */
-    private static final String REPLACE_ROOT_HASH = "c3bf09edd91da2656a7a6b2989e1925413d36667699c8c0c04e154dbc6bd8405";
+    private static final String REPLACE_ROOT_HASH = "2f4dd65e45ba914d1d4aae62bf86f3d550ffa47051fa03abc0f0b148b75fa984";
     private static final LoaderFactory<?> ROOT_LOADER_FACTORY = LoaderFactory.MODEL_STATE;
     private static final boolean REPLACE_ALL = false; // set to true to replace all saved objects with new saved
                                                       // objects, regardless of whether or not they or their referenced
@@ -136,7 +136,7 @@ class TestIPFSAccessUtil {
 
     private static final Map<String, ModelUpdater<?>> UPDATERS = new HashMap<>();
     static {
-        UPDATERS.put("c3bf09edd91da2656a7a6b2989e1925413d36667699c8c0c04e154dbc6bd8405",
+        UPDATERS.put("2f4dd65e45ba914d1d4aae62bf86f3d550ffa47051fa03abc0f0b148b75fa984",
                 new ModelUpdater<ModelState>() {
 
                     @Override
@@ -152,47 +152,62 @@ class TestIPFSAccessUtil {
                                 .expectUserState("1140e8cd69b506268623fd27f869185e0ef188650227327357da93bfa988d6dd");
                         String documentHash = "d93fd2d86eb0aec5b1183300b49b61a15b42e461f62b235be49f10d3499af136";
                         IPLDObject<Document> document = userState.getMapped().getDocument(documentHash);
-                        int reviewCount = 0;
-                        int approveCount = 0;
+                        long timestamp = System.currentTimeMillis();
                         Set<Entry<String, IPLDObject<UserState>>> allUserStateEntries = new LinkedHashSet<>(
                                 loaded.getMapped().getAllUserStateEntries());
                         ModelState updated = loaded.getMapped();
                         for (Entry<String, IPLDObject<UserState>> entry : allUserStateEntries) {
                             if (entry.getValue() == userState) {
                                 UserState updatedOwner = entry.getValue().getMapped().updateLinks(null, null, null,
-                                        null, null, null, entry.getValue());
-                                updatedOwner.handleTrueClaim();
+                                        null, null, null, null, entry.getValue());
+                                updatedOwner.removeTrueClaim(document);
                                 IPLDObject<UserState> updatedOwnerState = new IPLDObject<>(updatedOwner);
-                                updatedOwnerState.save(context, DEFAULT_SIGNER);
-                                SealedDocument sealed = new SealedDocument(document);
-                                updated = updated.updateUserState(updatedOwnerState, null, null, null,
-                                        Collections.singleton(new IPLDObject<>(sealed)), null, loaded,
-                                        System.currentTimeMillis());
+                                updatedOwnerState.save(context, null);
+                                updated = updated.updateUserState(updatedOwnerState, null, null, null, null, null,
+                                        loaded, timestamp);
                             }
                             else {
                                 String username = entry.getValue().getMapped().getUser().getMapped().getUsername();
+                                if ("second".equals(username)) {
+                                    Signer signer = new ECCSigner(username, "pass2");
+                                    IPLDObject<Review> review = new IPLDObject<>(
+                                            "478bd50f6195695aaec6d68c41d69764e73449a1e1f0282ac04a1eee4ad4a3af",
+                                            LoaderFactory.REVIEW.createLoader(), context, null);
+
+                                    IPLDObject<Document> toSeal = entry.getValue().getMapped()
+                                            .expectDocumentObject(review.getMultihash());
+                                    UserState rewarded = entry.getValue().getMapped().updateLinks(null, null, null,
+                                            null, null, Set.of(toSeal.getMultihash()), null, entry.getValue());
+
+                                    rewarded.removeFalseDeclination(review);
+
+                                    IPLDObject<UserState> rewardedObject = new IPLDObject<>(rewarded);
+                                    SealedDocument sealed = new SealedDocument(toSeal);
+                                    SealedDocument inverted = loaded.getMapped().expectSealedDocument(documentHash)
+                                            .invertTruth();
+                                    updated.updateUserState(rewardedObject, null, null, null,
+                                            Arrays.asList(new IPLDObject<>(sealed), new IPLDObject<>(inverted)), null,
+                                            null, timestamp);
+                                }
                                 if (username.startsWith("user")) {
                                     String password = username.replace("user", "pass");
                                     Signer signer = new ECCSigner(username, password);
-                                    Boolean approve = ++approveCount < 4 ? Boolean.TRUE : null;
-                                    IPLDObject<Document> review = new IPLDObject<>(new Review(null, null, null, null,
-                                            null, new IPLDObject<>(new DocumentContents(null, "Review")), document,
-                                            false, approve, entry.getValue()));
-                                    String reviewHash = review.save(context, signer);
-                                    UserState updatedReviewer = entry.getValue().getMapped().updateLinks(
-                                            Collections.singleton(review), null, null, null, null, null,
-                                            entry.getValue());
-                                    if (Boolean.TRUE.equals(approve)) {
-                                        updatedReviewer.handleTrueApproval();
+
+                                    Map<String, IPLDObject<Document>> allDocuments = entry.getValue().getMapped()
+                                            .getAllDocuments();
+                                    IPLDObject review = null;
+                                    if (allDocuments != null && Boolean.TRUE.equals(
+                                            ((Review) ((review = allDocuments.values().iterator().next()).getMapped()))
+                                                    .getApprove())) {
+                                        UserState updatedReviewer = entry.getValue().getMapped().updateLinks(null, null,
+                                                null, null, null, null, null, entry.getValue());
+
+                                        updatedReviewer.removeTrueApproval(review);
+
+                                        updated.updateUserState(new IPLDObject<>(updatedReviewer), null, null, null,
+                                                null, null, null, timestamp);
                                     }
-                                    IPLDObject<UserState> updatedReviewerState = new IPLDObject<>(updatedReviewer);
-                                    updatedReviewerState.save(context, signer);
-                                    updated.updateUserState(updatedReviewerState, null, null, null, null,
-                                            Map.of(documentHash, new String[] { reviewHash }), null,
-                                            System.currentTimeMillis());
-                                    if (++reviewCount == 20) {
-                                        break;
-                                    }
+
                                 }
                             }
                         }

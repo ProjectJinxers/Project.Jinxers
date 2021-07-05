@@ -97,8 +97,8 @@ public class OwnershipSelection implements Votable {
         writer.writeIfTrue(KEY_ANONYMOUS, anonymous);
         writer.writeNumber(KEY_HASH_SEED, hashSeed);
         writer.writeNumber(KEY_DEADLINE, deadline.getTime());
-        writer.writeLink(KEY_DOCUMENT, document, signer, null);
-        writer.writeLinkObjects(KEY_SELECTION, selection, signer, null);
+        writer.writeLink(KEY_DOCUMENT, document, null, null);
+        writer.writeLinkObjects(KEY_SELECTION, selection, null, null);
     }
 
     @Override

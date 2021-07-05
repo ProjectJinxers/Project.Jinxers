@@ -62,8 +62,8 @@ public class SettlementRequest implements DocumentAction, Loader<SettlementReque
     @Override
     public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
         writer.writeNumber(KEY_TIMESTAMP, timestamp);
-        writer.writeLink(KEY_DOCUMENT, document, signer, null);
-        writer.writeLink(KEY_USER_STATE, userState, signer, context);
+        writer.writeLink(KEY_DOCUMENT, document, null, null);
+        writer.writeLink(KEY_USER_STATE, userState, null, null);
     }
 
     public long getTimestamp() {

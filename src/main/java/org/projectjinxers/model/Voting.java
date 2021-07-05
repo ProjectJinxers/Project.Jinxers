@@ -120,9 +120,9 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
     public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
         writer.writeNumber(KEY_SEED, seed);
         writer.writeNumber(KEY_OBFUSCATION_VERSION, obfuscationVersion);
-        writer.writeLink(KEY_SUBJECT, subject, signer, context);
+        writer.writeLink(KEY_SUBJECT, subject, null, context);
         writer.writeLink(KEY_INITIAL_MODEL_STATE, initialModelState, null, null);
-        writer.writeLinkObjects(KEY_VOTES, votes, signer, context);
+        writer.writeLinkObjects(KEY_VOTES, votes, null, null);
     }
 
     /**

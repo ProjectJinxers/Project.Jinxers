@@ -36,6 +36,7 @@ import org.projectjinxers.model.GrantedUnban;
 import org.projectjinxers.model.LoaderFactory;
 import org.projectjinxers.model.ModelState;
 import org.projectjinxers.model.OwnershipRequest;
+import org.projectjinxers.model.Review;
 import org.projectjinxers.model.SealedDocument;
 import org.projectjinxers.model.SettlementRequest;
 import org.projectjinxers.model.Tally;
@@ -189,7 +190,10 @@ public class ValidationContext {
                 false);
         if (newSealedDocuments != null) {
             for (IPLDObject<SealedDocument> sealed : newSealedDocuments.values()) {
-                currentSettlementController.checkRequest(sealed.getMapped().getDocument(), true, true);
+                SealedDocument mapped = sealed.getMapped();
+                if (mapped.isOriginal()) {
+                    currentSettlementController.checkRequest(mapped.getDocument(), true, true);
+                }
             }
         }
         Map<String, IPLDObject<OwnershipRequest>> newOwnershipRequestsMap;
@@ -293,8 +297,9 @@ public class ValidationContext {
         // the main settlement controller is prepared for skipping reviews where there are no settlement requests for
         // the documents (including merge); all other settlement controllers won't be used for merging
         Map<String, UserState> affected = new HashMap<>();
+        Map<String, Map<String, String>> reviewers = new HashMap<>();
         modelState.prepareSettlementValidation(currentSettlementController, newReviewTableKeysSettlement,
-                newReviewTableValuesSettlement, affected);
+                newReviewTableValuesSettlement, reviewers, affected);
         if (newReviewTableKeysSettlement != null
                 && (newReviewTableKeysSettlement.size() > 0 || newReviewTableValuesSettlement.size() > 0)) {
             throw new ValidationException("review table inconsistency (too many new entries)");
@@ -313,7 +318,8 @@ public class ValidationContext {
         }
         Map<String, SealedDocument> sealedDocuments = new HashMap<>();
         if (currentSettlementController.evaluate(sealedDocuments, modelState)) {
-            currentSettlementController.update(toUpdate, modelState, sealedDocuments);
+            currentSettlementController.update(toUpdate,
+                    currentValidLocalState == null ? null : currentValidLocalState.getMapped(), sealedDocuments);
         }
         for (Entry<String, UserState> entry : affected.entrySet()) {
             String key = entry.getKey();
@@ -543,7 +549,11 @@ public class ValidationContext {
             user = currentValidLocalState.getMapped().expectUserState(userHash).getMapped().getUser();
         }
         context.verifySignature(request, Signer.VERIFIER, user.getMapped());
-        String documentHash = req.getDocument().getMultihash();
+        IPLDObject<Document> document = req.getDocument();
+        String documentHash = document.getMapped().getFirstVersionHash();
+        if (documentHash == null) {
+            documentHash = document.getMultihash();
+        }
         userState.validateRelatedDocument(documentHash, modelState.getReviewTableEntries(documentHash));
     }
 
@@ -669,10 +679,18 @@ public class ValidationContext {
 
     /*
      * verify signature, if review, assert that there is no unrelated (i.e. no previous version) review for the same doc
-     * assert user is not banned, assert previous version exists and is from same user
+     * assert user is not banned
      */
     private void validateDocument(IPLDObject<Document> document, UserState userState, User user) {
         userState.validateRequiredRating();
+        Document doc = document.getMapped();
+        if (doc instanceof Review) {
+            Review review = (Review) doc;
+            if (currentValidLocalState != null && !review.isInvertTruth()
+                    && currentValidLocalState.getMapped().isSealedDocument(review.getDocument().getMultihash())) {
+                throw new ValidationException("reviewing sealed document (no truth inversion)");
+            }
+        }
         context.verifySignature(document, Signer.VERIFIER, user);
     }
 

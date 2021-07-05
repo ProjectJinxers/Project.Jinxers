@@ -395,7 +395,12 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
             else if (ownershipRequests != null) {
                 updated.ownershipRequests = new LinkedHashMap<>();
             }
-            if (reviewTable != null) {
+            if (reviewTable == null) {
+                if (this.reviewTable != null) {
+                    updated.reviewTable = new LinkedHashMap<>(this.reviewTable);
+                }
+            }
+            else {
                 if (this.reviewTable == null) {
                     updated.reviewTable = new LinkedHashMap<>(reviewTable);
                 }
@@ -442,7 +447,11 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         }
         if (sealedDocuments != null) {
             for (IPLDObject<SealedDocument> sealed : sealedDocuments) {
-                updated.sealedDocuments.put(SEALED_DOCUMENT_KEY_PROVIDER.getKey(sealed), sealed);
+                String key = SEALED_DOCUMENT_KEY_PROVIDER.getKey(sealed);
+                updated.sealedDocuments.put(key, sealed);
+                if (updated.settlementRequests != null) { // null happens when sealed is not an original
+                    updated.settlementRequests.remove(key);
+                }
             }
         }
         updated.timestamp = timestamp;
@@ -473,7 +482,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
 
     public Map<String, IPLDObject<SealedDocument>> getNewSealedDocuments(ModelState since, boolean ignoreCached) {
         if (ignoreCached || newSealedDocuments == null) {
-            newSealedDocuments = ModelUtility.getNewLinksMap(sealedDocuments,
+            newSealedDocuments = ModelUtility.getNewForeignKeyLinksMap(sealedDocuments,
                     since == null ? null : since.sealedDocuments);
         }
         return newSealedDocuments;
@@ -546,11 +555,13 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
     }
 
     public void prepareSettlementValidation(SettlementController controller, Set<String> newReviewTableKeys,
-            Map<String, Set<String>> newReviewTableValues, Map<String, UserState> affected) {
+            Map<String, Set<String>> newReviewTableValues, Map<String, Map<String, String>> reviewers,
+            Map<String, UserState> affected) {
         if (userStates != null) {
             for (Entry<String, IPLDObject<UserState>> entry : userStates.entrySet()) {
                 UserState userState = entry.getValue().getMapped();
-                if (userState.prepareSettlementValidation(controller, newReviewTableKeys, newReviewTableValues)) {
+                if (userState.prepareSettlementValidation(controller, newReviewTableKeys, newReviewTableValues,
+                        reviewers)) {
                     affected.put(entry.getKey(), userState);
                 }
             }
@@ -725,7 +736,8 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         return res;
     }
 
-    public void removeObsoleteReviewVersions(Map<String, Set<String>> obsoleteReviewVersions) {
+    public boolean removeObsoleteReviewVersions(Map<String, Set<String>> obsoleteReviewVersions) {
+        boolean res = false;
         for (Entry<String, Set<String>> entry : obsoleteReviewVersions.entrySet()) {
             String key = entry.getKey();
             String[] reviewHashes = reviewTable.get(key);
@@ -736,10 +748,14 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
                     coll.add(reviewHash);
                 }
             }
-            String[] cleaned = new String[0];
-            cleaned = coll.toArray(cleaned);
-            reviewTable.put(key, cleaned);
+            if (reviewHashes.length > coll.size()) {
+                String[] cleaned = new String[0];
+                cleaned = coll.toArray(cleaned);
+                reviewTable.put(key, cleaned);
+                res = true;
+            }
         }
+        return res;
     }
 
     private void mergeStringArrayMaps(Map<String, String[]> map1, Map<String, String[]> map2,
