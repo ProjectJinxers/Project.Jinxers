@@ -294,7 +294,7 @@ class ModelControllerTest {
         final String userHash = hashes[16];
         final String documentHash = hashes[20];
         access.simulateModelStateMessage(config.getIOTAMainAddress(), modelStateHash);
-        String newHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 400);
+        String newHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 800);
         access.simulateModelStateMessage(config.getIOTAMainAddress(), newHash); // confirmed by other node (simulated)
         waitFor(100);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
