@@ -1,18 +1,37 @@
 # Project Jinxers
 
-The goal of this project is to create a decentralized platform for publishing and reviewing Markdown documents. The plan is to provide an importer, which converts HTML pages to Markdown documents, so users can view and review existing web documents in the application. The documents will be stored in IPFS and their multihashes will be saved in the IOTA Tangle utilizing zero-value transactions. There will be users, a rating system and polls, which might even be anonymous. This data will be stored in IPFS, as well. There will be no servers, no databases, no cloud infrastructure, no costs. Just IPFS nodes, and, if there is no public IOTA node, that can be used reliably, IOTA nodes.
+The goal of this project is to create a decentralized platform for publishing and reviewing Markdown (or something else, but not HTML) documents. The plan is to provide importers, which convert HTML pages to (e.g.) Markdown documents, so users can view and review existing web documents in the application. The documents will be stored in IPFS. There will be users, a rating system and polls, which might even be anonymous. This data will be stored in IPFS in so called ModelState instances, which also indirectly reference the documents, as well. Their multihashes will be saved in the IOTA Tangle. There will be no servers, no databases, no cloud infrastructure, no costs. Just IPFS nodes, and, if there is no public IOTA node, that can be used reliably, IOTA nodes.
 
 ## Current state
 
-The project is in its early stages. Currently, there is a UML model containing some class and activity diagrams, as well as some object diagrams for visualizing and studying some more or less complex states. There's also a lot of prose, for which it would be too much effort to convert it to diagrams. The model has been created and edited with [StarUML](https://staruml.io/).
+The project is still in its early stages. Its first artifact was a UML model containing some class and activity diagrams, as well as some object diagrams for visualizing and studying some more or less complex states. There's also a lot of prose, for which it would have been too much effort to convert it to diagrams. The model has been created and edited with [StarUML](https://staruml.io/). That model is already pretty much outdated, and there are currently no plans to update it, as it already has fulfilled its main purpose: getting an overview over the required features and helping to implement them in the prototype application. That prototype application now defines the specification (which is still neither complete nor stable).
 
 ## Next steps
 
-The requirements have been identified and modeled. Almost all problems, that came up, have been solved. At least theoretically. Next up is creating a prototype as a proof of concept. The current plan is to create a Java application, which uses [ipfs-shipyard/java-ipfs-http-client](https://github.com/ipfs-shipyard/java-ipfs-http-client) for communicating with a local IPFS node and [iotaledger/iota-java](https://github.com/iotaledger/iota-java) for communicating with a public IOTA (perma)node. Time is limited, the matter is complex. None of the proposed solutions for the identified problems have been practically evaluated, yet. There will probably be lots and lots of JUnit tests before even thinking about the UI. So please don't expect too much, but we'll try our best :)
+The current plan is to create a JavaFX prototype application as a proof of concept. The business logic, which uses [ipfs-shipyard/java-ipfs-http-client](https://github.com/ipfs-shipyard/java-ipfs-http-client) for communicating with a local IPFS node and will probably use [iotaledger/iota-java](https://github.com/iotaledger/iota-java) for communicating with a public IOTA (perma)node, is currently being implemented. Most of the required features are done. Time is limited, the matter is complex. Apart from unit-testing, none of the proposed solutions for the identified problems have been practically evaluated using IPFS and the IOTA Tangle, yet.
+
+## Validation
+
+One important feature of the business logic is validating incoming model states. The prototype implementation treats validation errors
+as attacks. Model states, that have been created and published by legit nodes, should never cause validation errors in other nodes. As a consequence, the code assumes valid states and throws all kinds of natural runtime exceptions if that assumption is wrong. If a required condition is not met, which again should never happen if the state has been sent by a legit node, a ValidationException is thrown. It provides just enough information for debugging and fixing the problem during development or in unit tests.
+
+### Loading objects
+
+In order to validate model states, their objects (object graphs) have to be loaded. Loading might fail, especially if there aren't many
+nodes. However, in theory this should not be a special problem, since model states are calculated by nodes, which publish their hashes. Receivers of those hashes can ask the publishers for the data. Barring internet connection issues and unless a publisher is shut down right after sending the hash, which can also be treated as some kind of network IO error, the receiver should be able to successfully download the objects from the publisher at least.
+
+### Scaling
+
+Another issue could be scaling. If a (sub)system has many users and contains many documents and other entities, the model state instances grow in size. Currently, model state instances are absolute, i.e. they don't just contain the difference to the previous states. They contain everything. Intuitively, this is best for small (sub)systems. Switching to relative model state instances might be an option for bigger (sub)systems.
+
+### Light nodes
+
+In bigger (sub)systems, it might be useful to introduce the concept of light nodes, which are nodes, that don't perform validation and
+instead trust other nodes. They can still calculate and publish new model states, when the user adds a document for instance. Validator nodes could be rewarded for the work they do. This is not the main focus of this project, so feel free to work on that in your own fork. And if you create a new crypto currency, please consider calling it Jinxers ;)
 
 ## Contributions
 
-Feel free to fork this repo and use the model as a starting point for refinement and for adding your own ideas. Pull Requests will probably not be merged, at least not in the near future. We'll see what happens. No matter who does it, we want to see the ideas come to life!
+Feel free to fork this repo and use it as a starting point for refinement and for adding your own ideas. Pull Requests will probably not be merged, at least not in the near future. We'll see what happens. No matter who does it, we want to see the ideas come to life!
 
 ## License
 
