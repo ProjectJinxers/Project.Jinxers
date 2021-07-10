@@ -44,6 +44,7 @@ public class SettlementController {
 
         private boolean forMainValidation;
         private long requestedAt;
+        private IPLDObject<ModelState> assumedValid;
         private String documentOwner;
         private IPLDObject<Document> document;
         private IPLDObject<Document> invertTruth;
@@ -603,6 +604,7 @@ public class SettlementController {
         return res;
     }
 
+    private ValidationContext validationContext;
     private boolean main;
     private long timestamp;
     private long timestampTolerance;
@@ -627,7 +629,9 @@ public class SettlementController {
 
     private TruthInversionGraph truthInversionGraph;
 
-    SettlementController(ModelState validState, boolean main, long timestamp, long timestampTolerance) {
+    SettlementController(IPLDObject<ModelState> previousState, ModelState commonState,
+            ValidationContext validationContext, boolean main, long timestamp, long timestampTolerance) {
+        this.validationContext = validationContext;
         this.main = main;
         this.timestamp = timestamp;
         if (timestampTolerance > 0) {
@@ -639,12 +643,39 @@ public class SettlementController {
             this.invalidByTimestamp = new TreeSet<>();
             this.removedDocuments = new TreeSet<>();
         }
-        Set<Entry<String, IPLDObject<SettlementRequest>>> requestEntries = validState == null ? null
-                : validState.getAllSettlementRequestEntries();
+        Set<Entry<String, IPLDObject<SettlementRequest>>> requestEntries;
+        if (previousState == null) {
+            requestEntries = null;
+        }
+        else {
+            if (commonState == null) {
+                requestEntries = previousState.getMapped().getAllSettlementRequestEntries();
+            }
+            else {
+                Map<String, IPLDObject<SettlementRequest>> newSettlementRequests = previousState.getMapped()
+                        .getNewSettlementRequests(commonState, true);
+
+                Set<Entry<String, IPLDObject<SettlementRequest>>> oldRequests = commonState
+                        .getAllSettlementRequestEntries();
+                if (newSettlementRequests == null) {
+                    requestEntries = oldRequests;
+                }
+                else if (oldRequests == null) {
+                    requestEntries = newSettlementRequests.entrySet();
+                }
+                else {
+                    requestEntries = new HashSet<>(oldRequests);
+                    requestEntries.addAll(newSettlementRequests.entrySet());
+                }
+            }
+        }
         if (requestEntries != null) {
             for (Entry<String, IPLDObject<SettlementRequest>> entry : requestEntries) {
                 SettlementRequest request = entry.getValue().getMapped();
-                addEligibleSettlement(request.getDocument(), false).requestedAt = request.getTimestamp();
+                SettlementData data = addEligibleSettlement(request.getDocument(), false);
+                data.requestedAt = request.getTimestamp();
+                data.forMainValidation = forMainValidation;
+                data.assumedValid = previousState;
             }
         }
     }
@@ -654,7 +685,7 @@ public class SettlementController {
     }
 
     public boolean checkRequest(IPLDObject<Document> document, boolean sealed, boolean forMainValidation) {
-        if (main && forMainValidation != this.forMainValidation) {
+        if (main && forMainValidation != this.forMainValidation) { // this.forMainValidation starts with value true
             this.timestamp = System.currentTimeMillis();
             this.forMainValidation = forMainValidation;
         }
@@ -677,7 +708,7 @@ public class SettlementController {
             }
             return false;
         }
-        if (diff < REQUEST_THRESHOLD) {
+        if (diff < REQUEST_THRESHOLD && (!(doc instanceof Review) || !((Review) doc).isInvertTruth())) {
             if (validationMode) {
                 throw new ValidationException("settlement request too early");
             }
@@ -687,6 +718,10 @@ public class SettlementController {
         SettlementData data = addEligibleSettlement(document, false);
         if (data.requestedAt == 0) {
             data.requestedAt = timestamp;
+        }
+        else if (validationContext != null && data.assumedValid != null) {
+            validationContext.addMustValidateModelState(data.assumedValid, documentMultihash);
+            data.assumedValid = null;
         }
         if (forMainValidation) {
             data.forMainValidation = true;
@@ -743,33 +778,33 @@ public class SettlementController {
                 return false;
             }
             if (Boolean.FALSE.equals(review.getApprove())) {
-                long time = review.getDate().getTime();
-                long diff = timestamp + timestampTolerance - time;
-                if (diff < REQUEST_THRESHOLD) {
-                    if (validationMode) {
-                        throw new ValidationException("settlement postponed by review");
-                    }
-                    if (main) {
-                        if (removedDocuments.contains(document.getMultihash())) {
-                            return false;
-                        }
-                        invalidByReview.put(document.getMultihash(), documentMultihash);
-                    }
-                    else {
-                        invalidRequests.add(documentMultihash);
-                        eligibleSettlements.remove(documentMultihash);
+                SettlementData settlementData = eligibleSettlements.get(documentMultihash);
+                if (settlementData == null) {
+                    if (needRequest) {
                         return false;
                     }
                 }
                 else {
-                    SettlementData settlementData = eligibleSettlements.get(documentMultihash);
-                    if (settlementData == null) {
-                        if (needRequest) {
+                    long time = review.getDate().getTime();
+                    long diff = settlementData.requestedAt - time;
+                    if (diff > 0 && diff < REQUEST_THRESHOLD) {
+                        if (validationMode) {
+                            throw new ValidationException("settlement postponed by review");
+                        }
+                        if (main) {
+                            if (removedDocuments.contains(document.getMultihash())) {
+                                return false;
+                            }
+                            invalidByReview.put(document.getMultihash(), documentMultihash);
+                        }
+                        else {
+                            invalidRequests.add(documentMultihash);
+                            eligibleSettlements.remove(documentMultihash);
                             return false;
                         }
                     }
                     else {
-                        diff = time + timestampTolerance - settlementData.requestedAt;
+                        diff = timestamp + timestampTolerance - settlementData.requestedAt;
                         if (diff < SETTLEMENT_THRESHOLD) {
                             if (main) {
                                 invalidByReview.put(document.getMultihash(), documentMultihash);
@@ -879,8 +914,14 @@ public class SettlementController {
             documentOwners.add(owner);
             eligibleSettlements.put(documentMultihash, data);
         }
-        else if (needRequest && data.requestedAt == 0) {
-            return null;
+        else if (needRequest) {
+            if (data.requestedAt == 0) {
+                return null;
+            }
+            if (validationContext != null && data.assumedValid != null) {
+                validationContext.addMustValidateModelState(data.assumedValid, documentMultihash);
+                data.assumedValid = null;
+            }
         }
         return data;
     }
@@ -895,7 +936,8 @@ public class SettlementController {
         return documentOwners.contains(userHash);
     }
 
-    public boolean evaluate(Map<String, SealedDocument> sealedDocuments, ModelState modelState) {
+    public boolean evaluate(Map<String, SealedDocument> sealedDocuments, Set<String> invalidSettlementRequests,
+            ModelState modelState) {
         boolean res;
         if (main && validationMode) {
             res = evaluateMainValidation(sealedDocuments, modelState);
@@ -921,22 +963,33 @@ public class SettlementController {
                 String key = entry.getKey();
                 SettlementData data = entry.getValue();
                 if (data.requestedAt != 0 && (invalid == null || !invalid.contains(key)) && data.count()) {
-                    SealedDocument evaluated = data.evaluate(modelState);
-                    if (evaluated != null) {
-                        res = true;
-                        sealedDocuments.put(key, evaluated);
-                        if (data.falseClaim == null && data.invertTruth != null) {
-                            if (truthInversionGraph == null) {
-                                truthInversionGraph = TruthInversionGraph.createGraph(data.invertTruth);
-                            }
-                            else {
-                                truthInversionGraph.addTruthInversion(data.invertTruth);
+                    if (data.reviews.size() < SettlementData.MIN_TOTAL_COUNT) {
+                        if (validationMode) {
+                            throw new ValidationException("settlement request for document with too few reviews");
+                        }
+                        if (invalidSettlementRequests != null) {
+                            invalidSettlementRequests.add(key);
+                        }
+                        toRemove.add(key);
+                    }
+                    else {
+                        SealedDocument evaluated = data.evaluate(modelState);
+                        if (evaluated != null) {
+                            res = true;
+                            sealedDocuments.put(key, evaluated);
+                            if (data.falseClaim == null && data.invertTruth != null) {
+                                if (truthInversionGraph == null) {
+                                    truthInversionGraph = TruthInversionGraph.createGraph(data.invertTruth);
+                                }
+                                else {
+                                    truthInversionGraph.addTruthInversion(data.invertTruth);
+                                }
                             }
                         }
                     }
                 }
                 else {
-                    toRemove.add(entry.getKey());
+                    toRemove.add(key);
                 }
             }
             for (String key : toRemove) {
@@ -994,6 +1047,9 @@ public class SettlementController {
                 if (data.requestedAt != 0 && data.forMainValidation) {
                     String documentHash = entry.getKey();
                     if (!invalid.contains(documentHash)) {
+                        if (data.reviews.size() < SettlementData.MIN_TOTAL_COUNT) {
+                            throw new ValidationException("settlement request for document with too few reviews");
+                        }
                         if (data.count()) {
                             SealedDocument evaluated = data.evaluate(modelState);
                             if (evaluated != null) {
@@ -1074,8 +1130,8 @@ public class SettlementController {
     }
 
     public SettlementController createPreEvaluationSnapshot(long timestamp) {
-        SettlementController res = new SettlementController(null, true, timestamp <= 0 ? this.timestamp : timestamp,
-                timestampTolerance);
+        SettlementController res = new SettlementController(null, null, null, true,
+                timestamp <= 0 ? this.timestamp : timestamp, timestampTolerance);
         res.documentOwners.addAll(documentOwners);
         res.invalidRequests.addAll(invalidRequests);
         for (Entry<String, SettlementData> entry : eligibleSettlements.entrySet()) {
@@ -1109,7 +1165,7 @@ public class SettlementController {
         boolean res = false;
         for (Entry<String, String> entry : invalidByReview.entrySet()) {
             SettlementData settlementData = eligibleSettlements.get(entry.getValue());
-            res = checkRequest(settlementData.document, false, false) || res;
+            res = checkRequest(settlementData.document, false, true) || res;
             IPLDObject<Review> review = settlementData.reviewsByDocumentHash.get(entry.getKey());
             @SuppressWarnings("rawtypes")
             IPLDObject tmp = review;
@@ -1119,7 +1175,7 @@ public class SettlementController {
         }
         for (String key : invalidByTimestamp) {
             SettlementData settlementData = eligibleSettlements.get(key);
-            res = checkRequest(settlementData.document, false, false) || res;
+            res = checkRequest(settlementData.document, false, true) || res;
         }
         return res;
     }

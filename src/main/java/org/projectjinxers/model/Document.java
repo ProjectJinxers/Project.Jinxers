@@ -157,7 +157,7 @@ public class Document implements IPLDSerializable {
         this.links = reader.readLinkObjects(KEY_LINKS, context, validationContext, LoaderFactory.DOCUMENT, false,
                 LINK_KEY_PROVIDER);
         if (validationContext != null) {
-            validationContext.addMustKeepUserState(userState);
+            validationContext.addMustValidateUserState(userState);
         }
     }
 

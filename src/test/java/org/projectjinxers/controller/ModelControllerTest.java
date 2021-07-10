@@ -14,12 +14,15 @@
 package org.projectjinxers.controller;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.projectjinxers.controller.TestIPFSAccessUtil.DEFAULT_SIGNER;
+import static org.projectjinxers.controller.TestIPFSAccessUtil.DEFAULT_SIGNER_SECURITY_LEVEL_1;
 import static org.projectjinxers.controller.TestIPFSAccessUtil.NEW_OWNER_SIGNER;
 
 import java.nio.charset.StandardCharsets;
@@ -33,8 +36,10 @@ import org.projectjinxers.account.Users;
 import org.projectjinxers.config.Config;
 import org.projectjinxers.model.Document;
 import org.projectjinxers.model.DocumentContents;
+import org.projectjinxers.model.DocumentRemoval;
 import org.projectjinxers.model.GrantedOwnership;
 import org.projectjinxers.model.ModelState;
+import org.projectjinxers.model.SealedDocument;
 import org.projectjinxers.model.SettlementRequest;
 import org.projectjinxers.model.User;
 import org.projectjinxers.model.UserState;
@@ -72,14 +77,14 @@ class ModelControllerTest {
     @Test
     void testFirstActionEver() throws Exception {
         ModelController controller = new ModelController(access, null, 0);
-        User user = new User("user", Users.createAccount("user", "pass").getPubKey());
+        User user = new User("user", Users.createAccount("user", "pass", 1).getPubKey());
         UserState userState = new UserState(new IPLDObject<>(user));
         DocumentContents contents = new DocumentContents("Abstract", "Contents");
         Document document = new Document("Title", null, null, null, null, new IPLDObject<>(contents),
                 new IPLDObject<>(userState));
         IPLDObject<Document> documentObject = new IPLDObject<Document>(document);
-        controller.saveDocument(documentObject, DEFAULT_SIGNER);
-        String newHash = access.waitForPublishedMessage(Config.getSharedInstance().getIOTAMainAddress(), 100);
+        controller.saveDocument(documentObject, DEFAULT_SIGNER_SECURITY_LEVEL_1);
+        String newHash = waitForPublishedAndSimulateDirectConfirmation(100, 100);
         IPLDObject<ModelState> firstEverModelState = new IPLDObject<>(newHash, new ModelState(),
                 controller.getContext(), new ValidationContext(controller.getContext(), null, null,
                         System.currentTimeMillis(), ValidationContext.TIMESTAMP_TOLERANCE));
@@ -253,22 +258,35 @@ class ModelControllerTest {
     }
 
     @Test
+    void testDocumentRemoval() throws Exception {
+        String[] hashes = access.readObjects("model/modelController/removeDocument/twoUsers.json");
+        final String modelStateHash = hashes[9];
+        final String userHash = hashes[0];
+        final String documentHash = hashes[2];
+        ModelController controller = new ModelController(access, null, 0);
+        assertNull(validateInitialModelState(modelStateHash, 400));
+        IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
+        ModelState modelState = modelStateObject.getMapped();
+        assertNotNull(modelState);
+        IPLDObject<UserState> userState = modelState.expectUserState(userHash);
+        IPLDObject<Document> document = userState.getMapped().expectDocumentObject(documentHash);
+        controller.requestDocumentRemoval(new IPLDObject<>(new DocumentRemoval(document)), DEFAULT_SIGNER);
+    }
+
+    @Test
     void testEligibleSettlementRequest() throws Exception {
         String[] validHashes = access.readObjects("model/modelController/baseStates/twentyfourUsers.json");
         final String validModelStateHash = validHashes[12];
         Config config = Config.getSharedInstance();
-        access.saveModelStateHash(config.getIOTAMainAddress(), validModelStateHash);
         ModelController controller = new ModelController(access, config, 0);
-
+        assertNull(validateInitialModelState(validModelStateHash, 400));
         String[] hashes = access.readObjects("model/modelController/settlement/eligible.json");
         final String modelStateHash = hashes[27];
         final String userHash = hashes[16];
         final String documentHash = hashes[20];
         access.simulateModelStateMessage(config.getIOTAMainAddress(), modelStateHash);
 
-        String newHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 400);
-        access.simulateModelStateMessage(config.getIOTAMainAddress(), newHash); // confirmed by other node (simulated)
-        waitFor(100);
+        waitForPublishedAndSimulateDirectConfirmation(400, 100);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -286,17 +304,14 @@ class ModelControllerTest {
         String[] validHashes = access.readObjects("model/modelController/baseStates/twentyfourUsers.json");
         final String validModelStateHash = validHashes[12];
         Config config = Config.getSharedInstance();
-        access.saveModelStateHash(config.getIOTAMainAddress(), validModelStateHash);
         ModelController controller = new ModelController(access, config, 0);
-
+        assertNull(validateInitialModelState(validModelStateHash, 400));
         String[] hashes = access.readObjects("model/modelController/settlement/eligible.json");
         final String modelStateHash = hashes[27];
         final String userHash = hashes[16];
         final String documentHash = hashes[20];
         access.simulateModelStateMessage(config.getIOTAMainAddress(), modelStateHash);
-        String newHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 800);
-        access.simulateModelStateMessage(config.getIOTAMainAddress(), newHash); // confirmed by other node (simulated)
-        waitFor(100);
+        String newHash = waitForPublishedAndSimulateDirectConfirmation(800, 100);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -320,17 +335,14 @@ class ModelControllerTest {
         String[] validHashes = access.readObjects("model/modelController/baseStates/twentyfourUsers.json");
         final String validModelStateHash = validHashes[12];
         Config config = Config.getSharedInstance();
-        access.saveModelStateHash(config.getIOTAMainAddress(), validModelStateHash);
         ModelController controller = new ModelController(access, config, 0);
-
+        assertNull(validateInitialModelState(validModelStateHash, 400));
         String[] hashes = access.readObjects("model/modelController/settlement/eligible.json");
         final String modelStateHash = hashes[27];
         final String userHash = hashes[16];
         final String documentHash = hashes[20];
         access.simulateModelStateMessage(config.getIOTAMainAddress(), modelStateHash);
-        String newHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 400);
-        access.simulateModelStateMessage(config.getIOTAMainAddress(), newHash); // confirmed by other node (simulated)
-        waitFor(100);
+        String newHash = waitForPublishedAndSimulateDirectConfirmation(400, 100);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -356,27 +368,17 @@ class ModelControllerTest {
 
     @Test
     void testExecutedSettlementRequest() throws Exception {
-        String[] validHashes = access.readObjects("model/modelController/baseStates/twentyfourUsers.json");
-        final String validModelStateHash = validHashes[12];
-        Config config = Config.getSharedInstance();
-        access.saveModelStateHash(config.getIOTAMainAddress(), validModelStateHash);
-        ModelController controller = new ModelController(access, config, 0);
-
         String[] hashes = access.readObjects("model/modelController/settlement/validRequest.json");
-        String modelStateHash = hashes[13];
-        access.simulateModelStateMessage(config.getIOTAMainAddress(), modelStateHash);
-        String newHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 400);
-        access.simulateModelStateMessage(config.getIOTAMainAddress(), newHash); // confirmed by other node (simulated)
+        final String validModelStateHash = hashes[17];
+        Config config = Config.getSharedInstance();
+        ModelController controller = new ModelController(access, config, 0);
+        validateInitialModelState(validModelStateHash, 400);
 
         hashes = access.readObjects("model/modelController/settlement/sealed_20_3.json");
-        modelStateHash = hashes[63];
-        // final String userHash = hashes[29];
-        final String documentHash = hashes[66];
+        final String modelStateHash = hashes[104];
+        final String documentHash = hashes[69];
         access.simulateModelStateMessage(config.getIOTAMainAddress(), modelStateHash);
-
-        newHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 400);
-        access.simulateModelStateMessage(config.getIOTAMainAddress(), newHash); // confirmed by other node (simulated)
-        waitFor(100);
+        assertNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 400)); // trivial merge
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -384,52 +386,49 @@ class ModelControllerTest {
     }
 
     @Test
-    void testTruthInversion() throws Exception {
-        String[] validHashes = access.readObjects("model/modelController/settlement/sealed_20_3_1.json");
-        final String validModelStateHash = validHashes[58];
+    void testTruthInversion() throws Exception { // 03cc091eab564683138a2134eb19107ba082c4865a36f8d218d0af4c0821e236
+        String[] validHashes = access.readObjects("model/modelController/settlement/validRequest.json");
+        final String validModelStateHash = validHashes[17];
         Config config = Config.getSharedInstance();
-        access.saveModelStateHash(config.getIOTAMainAddress(), validModelStateHash);
         ModelController controller = new ModelController(access, config, 0);
-
-        String[] hashes = access.readObjects("model/modelController/settlement/validTruthInversion.json");
-        String modelStateHash = hashes[89];
+        validateInitialModelState(validModelStateHash, 400);
+        // 1625204576909
+        String[] hashes = access.readObjects("model/modelController/settlement/sealed_20_3_1.json");
+        String modelStateHash = hashes[40];
+        final String documentHash = hashes[72];
         access.simulateModelStateMessage(config.getIOTAMainAddress(), modelStateHash);
-        assertNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 100));
+        assertNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 400)); // trivial merge
+        hashes = access.readObjects("model/modelController/settlement/validTruthInversion.json");
+        modelStateHash = hashes[155];
+        access.simulateModelStateMessage(config.getIOTAMainAddress(), modelStateHash);
+        waitForPublishedAndSimulateDirectConfirmation(400, 0); // obsolete review versions
 
         hashes = access.readObjects("model/modelController/settlement/sealedTruthInversion.json");
-        modelStateHash = hashes[41]; // final String userHash = hashes[29]; final String documentHash = hashes[66];
+        modelStateHash = hashes[161]; // final String userHash = hashes[29]; final String documentHash = hashes[66];
         access.simulateModelStateMessage(config.getIOTAMainAddress(), modelStateHash);
 
         assertNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 400));
 
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
-        assertEquals(modelStateHash, modelStateObject.getMultihash());
+        SealedDocument sealed = modelStateObject.getMapped().expectSealedDocument(documentHash);
+        assertTrue(sealed.isTruthInverted());
     }
 
     @Test
     void testBlockedSettlementRequest() throws Exception {
-        String[] validHashes = access.readObjects("model/modelController/baseStates/twentyfourUsers.json");
-        final String validModelStateHash = validHashes[12];
-        Config config = Config.getSharedInstance();
-        access.saveModelStateHash(config.getIOTAMainAddress(), validModelStateHash);
-        ModelController controller = new ModelController(access, config, 0);
-
         String[] hashes = access.readObjects("model/modelController/settlement/validRequest.json");
-        String modelStateHash = hashes[13];
-        access.simulateModelStateMessage(config.getIOTAMainAddress(), modelStateHash);
-        String newHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 400);
-        access.simulateModelStateMessage(config.getIOTAMainAddress(), newHash); // confirmed by other node (simulated)
+        final String validModelStateHash = hashes[17];
+        Config config = Config.getSharedInstance();
+        ModelController controller = new ModelController(access, config, 0);
+        validateInitialModelState(validModelStateHash, 400);
 
         hashes = access.readObjects("model/modelController/settlement/blocked_20_3_1.json");
-        modelStateHash = hashes[13];
-        // final String userHash = hashes[29];
-        final String documentHash = hashes[70];
+        final String modelStateHash = hashes[4];
+        final String documentHash = hashes[68];
         access.simulateModelStateMessage(config.getIOTAMainAddress(), modelStateHash);
-
-        newHash = access.waitForPublishedMessage(config.getIOTAMainAddress(), 400);
-        access.simulateModelStateMessage(config.getIOTAMainAddress(), newHash); // confirmed by other node (simulated)
-        waitFor(100);
+        assertNull(access.waitForPublishedMessage(config.getIOTAMainAddress(), 400)); // trivial merge
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
+        assertNotEquals(validModelStateHash, modelStateObject.getMultihash());
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
         assertFalse(modelState.isSealedDocument(documentHash));
@@ -910,6 +909,23 @@ class ModelControllerTest {
         catch (InterruptedException e) {
 
         }
+    }
+
+    private String validateInitialModelState(String hash, long waitAfter) {
+        waitFor(100);
+        String address = Config.getSharedInstance().getIOTAMainAddress();
+        access.simulateModelStateMessage(address, hash);
+        return access.waitForPublishedMessage(address, waitAfter);
+    }
+
+    private String waitForPublishedAndSimulateDirectConfirmation(long waitForPublished, long waitAfterConfirmation) {
+        String address = Config.getSharedInstance().getIOTAMainAddress();
+        String newHash = access.waitForPublishedMessage(address, waitForPublished);
+        access.simulateModelStateMessage(address, newHash);
+        if (waitAfterConfirmation > 0) {
+            waitFor(waitAfterConfirmation);
+        }
+        return newHash;
     }
 
 }

@@ -34,7 +34,11 @@ public class ECCSigner implements Signer {
      * @param password the password
      */
     public ECCSigner(String username, String password) {
-        this.key = Users.createAccount(username, password);
+        this(username, password, 0);
+    }
+
+    public ECCSigner(String username, String password, int securityLevel) {
+        this.key = Users.createAccount(username, password, securityLevel);
     }
 
     @Override

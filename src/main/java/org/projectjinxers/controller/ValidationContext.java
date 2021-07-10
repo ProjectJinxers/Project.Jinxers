@@ -14,6 +14,7 @@
 package org.projectjinxers.controller;
 
 import static org.projectjinxers.util.ModelUtility.expectEqual;
+import static org.projectjinxers.util.ModelUtility.isEqual;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -86,10 +87,10 @@ public class ValidationContext {
     private Deque<ModelState> previousStates = new ArrayDeque<>();
     private Map<String, IPLDObject<UserState>> commonUserStates = new HashMap<>();
 
-    private Map<Long, IPLDObject<ModelState>> mustKeepModelStates;
-    private IPLDObject<ModelState> keptModelState;
-    private Map<String, Set<Long>> mustKeepUserStateVersions;
-    private Map<String, IPLDObject<UserState>> keptUserStates;
+    private Map<Long, IPLDObject<ModelState>> mustValidateModelStates;
+    private IPLDObject<ModelState> validatedPreviousState;
+    private Map<String, Set<Long>> mustValidateUserStateVersions;
+    private Map<String, IPLDObject<UserState>> validatedUserStates;
 
     private Set<String> validated = new TreeSet<>();
     private Map<String, Set<String>> obsoleteReviewVersions = new HashMap<>();
@@ -125,16 +126,16 @@ public class ValidationContext {
     }
 
     public IPLDObject<ModelState> getPreviousVersion() {
-        return keptModelState == null ? commonStateObject : keptModelState;
+        return validatedPreviousState == null ? commonStateObject : validatedPreviousState;
     }
 
     public IPLDObject<UserState> getPreviousUserState(String userHash) {
-        IPLDObject<UserState> kept = keptUserStates == null ? null : keptUserStates.get(userHash);
-        return kept == null ? commonUserStates.get(userHash) : kept;
+        IPLDObject<UserState> validated = validatedUserStates == null ? null : validatedUserStates.get(userHash);
+        return validated == null ? commonUserStates.get(userHash) : validated;
     }
 
     public boolean isTrivialMerge() {
-        return commonStateObject == currentValidLocalState;
+        return isEqual(commonStateObject, currentValidLocalState);
     }
 
     public boolean isTrivialMerge(String userHash) {
@@ -145,19 +146,19 @@ public class ValidationContext {
     }
 
     public void validateTimestamp(long timestamp) {
-        if (strict && Math.abs(this.timestamp - timestamp) > timestampTolerance) {
+        if (strict && currentSettlementController == mainSettlementController
+                && Math.abs(this.timestamp - timestamp) > timestampTolerance) {
             throw new ValidationException("timestamp out of range");
         }
     }
 
     public void validateModelState(ModelState modelState) {
-        ModelState validState = currentValidLocalState == null ? null : currentValidLocalState.getMapped();
+        findCommonState(modelState);
         if (mainSettlementController == null) {
-            mainSettlementController = new SettlementController(validState, true, modelState.getTimestamp(),
-                    timestampTolerance);
+            mainSettlementController = new SettlementController(modelState.getPreviousVersion(), commonState, this,
+                    true, modelState.getTimestamp(), timestampTolerance);
             currentSettlementController = mainSettlementController;
         }
-        findCommonState(modelState);
         ModelState.USER_STATE_KEY_COLLECTOR.validateUndeletableEntries(previousStates);
         ModelState.VOTING_KEY_COLLECTOR.validateUndeletableEntries(previousStates);
         ModelState.SETTLEMENT_KEY_COLLECTOR.validateMoveOnceUndeletableEntries(previousStates);
@@ -274,12 +275,13 @@ public class ValidationContext {
         }
         IPLDObject<ModelState> previousVersion = modelState.getPreviousVersion();
         if (previousVersion != null) {
-            validateMustKeepModelStates(previousVersion);
+            validateMustValidateModelStates(previousVersion);
         }
 
         // we already prepare the settlement requests required for merging; in order to prevent them from influencing
         // the outcome of the validation, we don't set the flag, that makes main validation include them
-        if (validState != null && currentSettlementController == mainSettlementController) {
+        if (currentValidLocalState != null && currentSettlementController == mainSettlementController) {
+            ModelState validState = currentValidLocalState.getMapped();
             Map<String, IPLDObject<SettlementRequest>> newSettlementReqs = validState
                     .getNewSettlementRequests(commonState, true);
             if (newSettlementReqs != null) {
@@ -317,7 +319,7 @@ public class ValidationContext {
             }
         }
         Map<String, SealedDocument> sealedDocuments = new HashMap<>();
-        if (currentSettlementController.evaluate(sealedDocuments, modelState)) {
+        if (currentSettlementController.evaluate(sealedDocuments, null, modelState)) {
             currentSettlementController.update(toUpdate,
                     currentValidLocalState == null ? null : currentValidLocalState.getMapped(), sealedDocuments);
         }
@@ -614,8 +616,8 @@ public class ValidationContext {
             newRemovedDocuments = userState.getNewRemovedDocuments(since, false);
         }
         else {
-            newDocuments = userState.getNewDocuments(since, reviewHashes, obsoleteReviewVersions, false);
-            newRemovedDocuments = userState.getNewRemovedDocuments(since, reviewHashes, obsoleteReviewVersions, false);
+            newDocuments = userState.getNewDocuments(since, reviewHashes, obsoleteReviewVersions);
+            newRemovedDocuments = userState.getNewRemovedDocuments(since, reviewHashes, obsoleteReviewVersions);
         }
         if (newDocuments != null) {
             for (IPLDObject<Document> document : newDocuments) {
@@ -627,7 +629,7 @@ public class ValidationContext {
         if (newRemovedDocuments != null) {
             for (IPLDObject<DocumentRemoval> removal : newRemovedDocuments.values()) {
                 if (validated.add(removal.getMultihash())) {
-                    validateDocumentRemoval(removal, userState, user);
+                    validateDocumentRemoval(removal, modelState, userState, user);
                 }
                 currentSettlementController.checkRemovedDocument(removal.getMapped().getDocument(), null);
             }
@@ -694,8 +696,26 @@ public class ValidationContext {
         context.verifySignature(document, Signer.VERIFIER, user);
     }
 
-    private void validateDocumentRemoval(IPLDObject<DocumentRemoval> removal, UserState userState, User user) {
+    /*
+     * verify signature, assert same user, assert no review of settlement-requested document
+     */
+    private void validateDocumentRemoval(IPLDObject<DocumentRemoval> removal, ModelState modelState,
+            UserState userState, User user) {
         userState.validateRequiredRating();
+        DocumentRemoval docRem = removal.getMapped();
+        IPLDObject<Document> document = docRem.getDocument();
+        Document doc = document.getMapped();
+        expectEqual(userState.getUser(), doc.expectUserState().getUser(), "not document owner");
+        if (doc instanceof Review) {
+            Review review = (Review) doc;
+            IPLDObject<Document> reviewedDocument = review.getDocument();
+            IPLDObject<SettlementRequest> settlementRequest = modelState
+                    .getSettlementRequest(reviewedDocument.getMultihash());
+            if (settlementRequest != null) {
+                throw new ValidationException(
+                        "can't remove a review of a document with a valid pending settlement request");
+            }
+        }
         context.verifySignature(removal, Signer.VERIFIER, user);
     }
 
@@ -783,38 +803,77 @@ public class ValidationContext {
         voting.getMapped().expectWinner(Boolean.TRUE);
     }
 
-    public long addMustKeepModelState(IPLDObject<ModelState> modelState) {
+    public long addMustValidateModelState(IPLDObject<ModelState> modelState) {
         long version = modelState.getMapped().getVersion();
         if (commonState == null || commonState.getVersion() < version) {
-            if (mustKeepModelStates == null) {
-                mustKeepModelStates = new HashMap<>();
+            if (mustValidateModelStates == null) {
+                mustValidateModelStates = new HashMap<>();
             }
-            mustKeepModelStates.put(version, modelState);
+            mustValidateModelStates.put(version, modelState);
             return version;
         }
         return -1;
     }
 
-    private boolean validateMustKeepModelStates(IPLDObject<ModelState> mustKeepStart) {
-        if (mustKeepModelStates != null && currentSettlementController == mainSettlementController) {
-            outer: do {
-                integrateMustKeepUserStates(mustKeepStart);
-                List<Long> keys = new ArrayList<>(mustKeepModelStates.keySet());
-                Collections.sort(keys, DESCENDING);
-                ModelState validState = currentValidLocalState == null ? null : currentValidLocalState.getMapped();
-                for (Long key : keys) {
-                    IPLDObject<ModelState> mustKeep = mustKeepModelStates.remove(key);
-                    this.currentSettlementController = new SettlementController(validState, false,
-                            mustKeep.getMapped().getTimestamp(), timestampTolerance);
-                    IPLDObject<ModelState> toValidate = new IPLDObject<>(mustKeep.getMultihash(),
-                            LoaderFactory.MODEL_STATE.createLoader(), context, this);
-                    int count = mustKeepModelStates.size();
-                    toValidate.getMapped();
-                    if (keptModelState == null) { // by design highest version first, must not be replaced with lower
-                                                  // version
-                        keptModelState = mustKeep;
+    public long addMustValidateModelState(IPLDObject<ModelState> modelState, String settlementDocumentHash) {
+        IPLDObject<ModelState> stateObject = modelState;
+        ModelState state = stateObject.getMapped();
+        IPLDObject<SettlementRequest> settlementRequest = state.getSettlementRequest(settlementDocumentHash);
+        long version = state.getVersion();
+        do {
+            IPLDObject<ModelState> prevObject = state.getPreviousVersion();
+            if (prevObject == null) {
+                if (settlementRequest == null) {
+                    throw new ValidationException("expected settlement request");
+                }
+                if (mustValidateModelStates == null) {
+                    mustValidateModelStates = new HashMap<>();
+                }
+                mustValidateModelStates.put(version, stateObject);
+                return version;
+            }
+            else {
+                state = prevObject.getMapped();
+                IPLDObject<SettlementRequest> req = state.getSettlementRequest(settlementDocumentHash);
+                if (req == null) {
+                    if (settlementRequest != null) {
+                        if (mustValidateModelStates == null) {
+                            mustValidateModelStates = new HashMap<>();
+                        }
+                        mustValidateModelStates.put(version, stateObject);
+                        return version;
                     }
-                    if (mustKeepModelStates.size() > count) {
+                }
+                else {
+                    settlementRequest = req;
+                }
+                version = state.getVersion();
+            }
+        }
+        while (commonState == null || commonState.getVersion() < version);
+        return -1;
+    }
+
+    private boolean validateMustValidateModelStates(IPLDObject<ModelState> mustKeepStart) {
+        if (mustValidateModelStates != null && currentSettlementController == mainSettlementController) {
+            outer: do {
+                integrateMustValidateUserStates(mustKeepStart);
+                List<Long> keys = new ArrayList<>(mustValidateModelStates.keySet());
+                Collections.sort(keys, DESCENDING);
+                for (Long key : keys) {
+                    IPLDObject<ModelState> mustValidateState = mustValidateModelStates.remove(key);
+                    ModelState mustValidate = mustValidateState.getMapped();
+                    this.currentSettlementController = new SettlementController(mustValidate.getPreviousVersion(),
+                            commonState, this, false, mustValidate.getTimestamp(), timestampTolerance);
+                    IPLDObject<ModelState> toValidate = new IPLDObject<>(mustValidateState.getMultihash(),
+                            LoaderFactory.MODEL_STATE.createLoader(), context, this);
+                    int count = mustValidateModelStates.size();
+                    toValidate.getMapped();
+                    if (validatedPreviousState == null) { // by design highest version first, must not be replaced with
+                                                          // lower version
+                        validatedPreviousState = mustValidateState;
+                    }
+                    if (mustValidateModelStates.size() > count) {
                         continue outer;
                     }
                 }
@@ -826,11 +885,11 @@ public class ValidationContext {
         return false;
     }
 
-    public long addMustKeepUserState(IPLDObject<UserState> userState) {
-        if (mustKeepUserStateVersions == null) {
-            mustKeepUserStateVersions = new HashMap<>();
-            if (mustKeepModelStates == null) {
-                mustKeepModelStates = new HashMap<>();
+    public long addMustValidateUserState(IPLDObject<UserState> userState) {
+        if (mustValidateUserStateVersions == null) {
+            mustValidateUserStateVersions = new HashMap<>();
+            if (mustValidateModelStates == null) {
+                mustValidateModelStates = new HashMap<>();
             }
         }
         UserState u = userState.getMapped();
@@ -838,10 +897,10 @@ public class ValidationContext {
         String userHash = u.getUser().getMultihash();
         IPLDObject<UserState> commonUserState = commonUserStates.get(userHash);
         if (commonUserState == null || commonUserState.getMapped().getVersion() < version) {
-            Set<Long> set = mustKeepUserStateVersions.get(userHash);
+            Set<Long> set = mustValidateUserStateVersions.get(userHash);
             if (set == null) {
                 set = new TreeSet<>(DESCENDING);
-                mustKeepUserStateVersions.put(userHash, set);
+                mustValidateUserStateVersions.put(userHash, set);
             }
             set.add(version);
             return version;
@@ -849,48 +908,49 @@ public class ValidationContext {
         return -1;
     }
 
-    private void integrateMustKeepUserStates(IPLDObject<ModelState> mustKeepStart) {
-        if (mustKeepUserStateVersions != null) {
+    private void integrateMustValidateUserStates(IPLDObject<ModelState> mustKeepStart) {
+        if (mustValidateUserStateVersions != null) {
             long stop = commonState == null ? -1 : commonState.getVersion();
-            for (Entry<String, Set<Long>> entry : mustKeepUserStateVersions.entrySet()) {
+            for (Entry<String, Set<Long>> entry : mustValidateUserStateVersions.entrySet()) {
                 String userHash = entry.getKey();
                 Set<Long> set = entry.getValue();
                 outer: for (Long version : set) {
-                    for (IPLDObject<ModelState> mustKeep : mustKeepModelStates.values()) {
+                    for (IPLDObject<ModelState> mustKeep : mustValidateModelStates.values()) {
                         IPLDObject<UserState> userState = mustKeep.getMapped().getUserState(userHash);
                         if (userState != null && userState.getMapped().getVersion() == version) {
-                            addKeptUserState(userHash, userState);
+                            addValidatedUserState(userHash, userState);
                             continue outer;
                         }
                     }
                     IPLDObject<ModelState> mustKeep = mustKeepStart;
                     do {
                         ModelState modelState = mustKeep.getMapped();
-                        if (!mustKeepModelStates.containsKey(modelState.getVersion())) {
+                        if (!mustValidateModelStates.containsKey(modelState.getVersion())) {
                             IPLDObject<UserState> userState = modelState.getUserState(userHash);
                             if (userState != null && userState.getMapped().getVersion() == version) {
-                                mustKeepModelStates.put(modelState.getVersion(), mustKeep);
-                                addKeptUserState(userHash, userState);
+                                mustValidateModelStates.put(modelState.getVersion(), mustKeep);
+                                addValidatedUserState(userHash, userState);
                                 continue outer;
                             }
                         }
                         mustKeep = modelState.getPreviousVersion();
                     }
                     while (mustKeep.getMapped().getVersion() > stop);
-                    throw new ValidationException("Did not find model state for must keep user state");
+                    throw new ValidationException("Did not find model state for must validate user state");
                 }
             }
+            mustValidateUserStateVersions.clear();
         }
-        mustKeepUserStateVersions.clear();
     }
 
-    private void addKeptUserState(String userHash, IPLDObject<UserState> userState) {
-        if (keptUserStates == null) {
-            keptUserStates = new HashMap<>();
+    private void addValidatedUserState(String userHash, IPLDObject<UserState> userState) {
+        if (validatedUserStates == null) {
+            validatedUserStates = new HashMap<>();
         }
-        if (!keptUserStates.containsKey(userHash)) { // by design highest version first, must not be replaced with lower
-                                                     // version
-            keptUserStates.put(userHash, userState);
+        if (!validatedUserStates.containsKey(userHash)) { // by design highest version first, must not be replaced with
+                                                          // lower
+            // version
+            validatedUserStates.put(userHash, userState);
         }
     }
 

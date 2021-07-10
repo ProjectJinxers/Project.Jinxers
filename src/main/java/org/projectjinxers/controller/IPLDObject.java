@@ -113,6 +113,7 @@ public class IPLDObject<D extends IPLDSerializable> {
                         this.metadata = fromCache.getMetadata();
                         @SuppressWarnings("unchecked") // obviously correct
                         D mapped = (D) fromCache.getMapped();
+                        mapped.loadedFromCache();
                         this.mapped = mapped;
                     }
                 }

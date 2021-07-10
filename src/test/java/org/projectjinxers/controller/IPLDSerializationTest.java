@@ -289,7 +289,7 @@ class IPLDSerializationTest {
                 new BigInteger("23462658328756911968606588084224614208373614148725659541764927042184603482760"));
         expectedSignature.v = 28;
         assertEquals(jsonString(expectedSignature, "{\"value\":41}"), json);
-        context.verifySignature(object, signer, Users.createAccount("user", "pass").getPubKey());
+        context.verifySignature(object, signer, Users.createAccount("user", "pass", 0).getPubKey());
     }
 
 }

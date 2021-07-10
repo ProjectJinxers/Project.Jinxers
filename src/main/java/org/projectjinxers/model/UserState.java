@@ -427,6 +427,14 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
     private Collection<IPLDObject<GrantedOwnership>> newGrantedOwnerships;
     private Collection<IPLDObject<GrantedUnban>> newGrantedUnbans;
 
+    private long newDocumentsSince;
+    private long newRemovedDocumentsSince;
+    private long newSettlementRequestsSince;
+    private long newOwnershipRequestsSince;
+    private long newUnbanRequestsSince;
+    private long newGrantedOwnershipsSince;
+    private long newGrantedUnbansSince;
+
     private Map<String, IPLDObject<Document>> invertedFalseClaims;
     private Map<String, IPLDObject<Review>> invertedFalseApprovals;
     private Map<String, IPLDObject<Review>> invertedFalseDeclinations;
@@ -723,7 +731,8 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
      * @param transferredOwnershipHashes the hashes of documents that have been transferred to other users
      * @param current                    the current wrapper (should not be null)
      */
-    public UserState updateLinks(Collection<IPLDObject<Document>> docs, Collection<IPLDObject<SettlementRequest>> sreqs,
+    public UserState updateLinks(Collection<IPLDObject<Document>> docs,
+            Collection<IPLDObject<DocumentRemoval>> removals, Collection<IPLDObject<SettlementRequest>> sreqs,
             Collection<IPLDObject<OwnershipRequest>> oreqs, Collection<IPLDObject<GrantedOwnership>> granted,
             Collection<String> transferredOwnershipHashes, Collection<String> sealedDocuments,
             UserState settlementValues, IPLDObject<UserState> current) {
@@ -771,6 +780,16 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             }
             for (IPLDObject<Document> document : docs) {
                 updated.documents.put(DOCUMENT_KEY_PROVIDER.getKey(document), document);
+            }
+        }
+        if (removals != null) {
+            if (updated.removedDocuments == null) {
+                updated.removedDocuments = new LinkedHashMap<>();
+            }
+            for (IPLDObject<DocumentRemoval> removal : removals) {
+                String key = DOCUMENT_REMOVAL_KEY_PROVIDER.getKey(removal);
+                updated.removedDocuments.put(key, removal);
+                updated.documents.remove(key);
             }
         }
         if (sealedDocuments != null) {
@@ -904,7 +923,8 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
     }
 
     public Collection<IPLDObject<Document>> getNewDocuments(UserState since, boolean ignoreCached) {
-        if (ignoreCached || newDocuments == null) {
+        if (ignoreCached || newDocuments == null || since == null && newDocumentsSince >= 0
+                || since != null && since.getVersion() != newDocumentsSince) {
             if (since == null || since.documents == null) {
                 if (documents == null) {
                     newDocuments = null;
@@ -927,96 +947,137 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
                     newDocuments = tmp.values();
                 }
             }
+            newDocumentsSince = since == null ? -1 : since.getVersion();
         }
         return newDocuments;
     }
 
     public Collection<IPLDObject<Document>> getNewDocuments(UserState since, Map<String, Set<String>> reviewHashes,
-            Map<String, Set<String>> obsoleteReviewVersions, boolean ignoreCached) {
-        if (ignoreCached || newDocuments == null) {
-            if (since == null || since.documents == null) {
-                if (documents == null) {
-                    newDocuments = null;
-                }
-                else {
-                    newDocuments = expandDocuments(documents, null, reviewHashes, obsoleteReviewVersions).values();
-                }
+            Map<String, Set<String>> obsoleteReviewVersions) {
+        if (since == null || since.documents == null) {
+            if (documents == null) {
+                newDocuments = null;
             }
             else {
-                Map<String, IPLDObject<Document>> newLinksMap = ModelUtility.getNewForeignKeyLinksMap(documents,
-                        since.documents);
-                if (newLinksMap == null) {
-                    newDocuments = null;
-                }
-                else {
-                    Map<String, IPLDObject<Document>> allCurrentDocuments = new HashMap<>();
-                    expandDocuments(since.documents, null, allCurrentDocuments, null);
-                    newDocuments = expandDocuments(newLinksMap, allCurrentDocuments, reviewHashes,
-                            obsoleteReviewVersions).values();
-                }
+                newDocuments = expandDocuments(documents, null, reviewHashes, obsoleteReviewVersions).values();
             }
         }
+        else {
+            Map<String, IPLDObject<Document>> newLinksMap = ModelUtility.getNewForeignKeyLinksMap(documents,
+                    since.documents);
+            if (newLinksMap == null) {
+                newDocuments = null;
+            }
+            else {
+                Map<String, IPLDObject<Document>> allCurrentDocuments = new HashMap<>();
+                expandDocuments(since.documents, null, allCurrentDocuments, null);
+                newDocuments = expandDocuments(newLinksMap, allCurrentDocuments, reviewHashes, obsoleteReviewVersions)
+                        .values();
+            }
+        }
+        newDocumentsSince = since == null ? -1 : since.getVersion();
         return newDocuments;
     }
 
     public Map<String, IPLDObject<DocumentRemoval>> getNewRemovedDocuments(UserState since, boolean ignoreCached) {
-        if (ignoreCached || newRemovedDocuments == null) {
-            newRemovedDocuments = ModelUtility.getNewForeignKeyLinksMap(removedDocuments,
-                    since == null ? null : since.removedDocuments);
+        if (ignoreCached || newRemovedDocuments == null || since == null && newRemovedDocumentsSince >= 0
+                || since != null && since.getVersion() != newRemovedDocumentsSince) {
+            if (since == null) {
+                newRemovedDocuments = ModelUtility.getNewForeignKeyLinksMap(removedDocuments, null);
+                newRemovedDocumentsSince = -1;
+            }
+            else {
+                newRemovedDocuments = ModelUtility.getNewForeignKeyLinksMap(removedDocuments, since.removedDocuments);
+                newRemovedDocumentsSince = since.getVersion();
+            }
         }
         return newRemovedDocuments;
     }
 
     public Map<String, IPLDObject<DocumentRemoval>> getNewRemovedDocuments(UserState since,
-            Map<String, Set<String>> reviewHashes, Map<String, Set<String>> obsoleteReviewVersions,
-            boolean ignoreCached) {
-        if (ignoreCached || newRemovedDocuments == null) {
-            newRemovedDocuments = ModelUtility.getNewForeignKeyLinksMap(removedDocuments,
-                    since == null ? null : since.removedDocuments);
-            if (newRemovedDocuments != null) {
-                expandRemovedDocuments(newRemovedDocuments, since == null ? null : since.removedDocuments, reviewHashes,
-                        obsoleteReviewVersions);
-            }
+            Map<String, Set<String>> reviewHashes, Map<String, Set<String>> obsoleteReviewVersions) {
+        newRemovedDocuments = ModelUtility.getNewForeignKeyLinksMap(removedDocuments,
+                since == null ? null : since.removedDocuments);
+        if (newRemovedDocuments != null) {
+            expandRemovedDocuments(newRemovedDocuments, since == null ? null : since.removedDocuments, reviewHashes,
+                    obsoleteReviewVersions);
         }
+        newRemovedDocumentsSince = since == null ? -1 : since.getVersion();
         return newRemovedDocuments;
     }
 
     public Collection<IPLDObject<SettlementRequest>> getNewSettlementRequests(UserState since, boolean ignoreCached) {
-        if (ignoreCached || newSettlementRequests == null) {
-            newSettlementRequests = ModelUtility.getNewForeignKeyLinks(settlementRequests,
-                    since == null ? null : since.settlementRequests);
+        if (ignoreCached || newSettlementRequests == null || since == null && newSettlementRequestsSince >= 0
+                || since != null && since.getVersion() != newSettlementRequestsSince) {
+            if (since == null) {
+                newSettlementRequests = ModelUtility.getNewForeignKeyLinks(settlementRequests, null);
+                newSettlementRequestsSince = -1;
+            }
+            else {
+                newSettlementRequests = ModelUtility.getNewForeignKeyLinks(settlementRequests,
+                        since.settlementRequests);
+                newSettlementRequestsSince = since.getVersion();
+            }
         }
         return newSettlementRequests;
     }
 
     public Collection<IPLDObject<OwnershipRequest>> getNewOwnershipRequests(UserState since, boolean ignoreCached) {
-        if (ignoreCached || newOwnershipRequests == null) {
-            newOwnershipRequests = ModelUtility.getNewForeignKeyLinks(ownershipRequests,
-                    since == null ? null : since.ownershipRequests);
+        if (ignoreCached || newOwnershipRequests == null || since == null && newOwnershipRequestsSince >= 0
+                || since != null && since.getVersion() != newOwnershipRequestsSince) {
+            if (since == null) {
+                newOwnershipRequests = ModelUtility.getNewForeignKeyLinks(ownershipRequests, null);
+                newOwnershipRequestsSince = -1;
+            }
+            else {
+                newOwnershipRequests = ModelUtility.getNewForeignKeyLinks(ownershipRequests, since.ownershipRequests);
+                newOwnershipRequestsSince = since.getVersion();
+            }
         }
         return newOwnershipRequests;
     }
 
     public Collection<IPLDObject<UnbanRequest>> getNewUnbanRequests(UserState since, boolean ignoreCached) {
-        if (ignoreCached || newUnbanRequests == null) {
-            newUnbanRequests = ModelUtility.getNewForeignKeyLinks(unbanRequests,
-                    since == null ? null : since.unbanRequests);
+        if (ignoreCached || newUnbanRequests == null || since == null && newUnbanRequestsSince >= 0
+                || since != null && since.getVersion() != newUnbanRequestsSince) {
+            if (since == null) {
+                newUnbanRequests = ModelUtility.getNewForeignKeyLinks(unbanRequests, null);
+                newUnbanRequestsSince = -1;
+            }
+            else {
+                newUnbanRequests = ModelUtility.getNewForeignKeyLinks(unbanRequests, since.unbanRequests);
+                newUnbanRequestsSince = since.getVersion();
+            }
         }
         return newUnbanRequests;
     }
 
     public Collection<IPLDObject<GrantedOwnership>> getNewGrantedOwnerships(UserState since, boolean ignoreCached) {
-        if (ignoreCached || newGrantedOwnerships == null) {
-            newGrantedOwnerships = ModelUtility.getNewForeignKeyLinks(grantedOwnerships,
-                    since == null ? null : since.grantedOwnerships);
+        if (ignoreCached || newGrantedOwnerships == null || since == null && newGrantedOwnershipsSince >= 0
+                || since != null && since.getVersion() != newGrantedOwnershipsSince) {
+            if (since == null) {
+                newGrantedOwnerships = ModelUtility.getNewForeignKeyLinks(grantedOwnerships, null);
+                newGrantedOwnershipsSince = -1;
+            }
+            else {
+                newGrantedOwnerships = ModelUtility.getNewForeignKeyLinks(grantedOwnerships, since.grantedOwnerships);
+                newGrantedOwnershipsSince = since.getVersion();
+            }
         }
         return newGrantedOwnerships;
     }
 
     public Collection<IPLDObject<GrantedUnban>> getNewGrantedUnbans(UserState since, boolean ignoreCached) {
-        if (ignoreCached || newGrantedUnbans == null) {
-            newGrantedUnbans = ModelUtility.getNewForeignKeyLinks(grantedUnbans,
-                    since == null ? null : since.grantedUnbans);
+        if (ignoreCached || newGrantedUnbans == null || since == null && newGrantedUnbansSince >= 0
+                || since != null && since.getVersion() != newGrantedUnbansSince) {
+            if (since == null) {
+                newGrantedUnbans = ModelUtility.getNewForeignKeyLinks(grantedUnbans, null);
+                newGrantedUnbansSince = -1;
+            }
+            else {
+                newGrantedUnbans = ModelUtility.getNewForeignKeyLinks(grantedUnbans, since.grantedUnbans);
+                newGrantedUnbansSince = since.getVersion();
+            }
         }
         return newGrantedUnbans;
     }

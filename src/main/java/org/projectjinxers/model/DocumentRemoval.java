@@ -34,6 +34,14 @@ public class DocumentRemoval implements DocumentAction, Loader<DocumentRemoval> 
 
     private IPLDObject<Document> document;
 
+    DocumentRemoval() {
+
+    }
+
+    public DocumentRemoval(IPLDObject<Document> document) {
+        this.document = document;
+    }
+
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {

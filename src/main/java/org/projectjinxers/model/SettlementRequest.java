@@ -55,7 +55,7 @@ public class SettlementRequest implements DocumentAction, Loader<SettlementReque
         this.userState = reader.readLinkObject(KEY_USER_STATE, context, validationContext, LoaderFactory.USER_STATE,
                 eager);
         if (validationContext != null) {
-            validationContext.addMustKeepUserState(userState);
+            validationContext.addMustValidateUserState(userState);
         }
     }
 

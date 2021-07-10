@@ -58,18 +58,19 @@ import com.google.gson.JsonParser;
 class TestIPFSAccessUtil {
 
     private static final String[] PRINT_HASHES_FILEPATHS = {
-            "model/modelController/settlement/validTruthInversion.json" };
+            "model/modelController/settlement/sealedTruthInversion.json" };
 
     private static final String UPDATE_FILE_CONTENTS_SINGLE_PATH = null;
     private static final String UPDATE_FILE_CONTENTS_MULTIPLE_PATH = "model/modelController/baseStates/twentyfourUsers.json";
     private static final String REPLACE_FILE_CONTENTS_SINGLE_PATH = null;
     private static final String REPLACE_FILE_CONTENTS_MULTIPLE_PATH = "model/modelController/settlement/validTruthInversion.json";
 
+    private static final int USER_SECURITY_LEVEL = 0;
     /**
      * If not null, and this hash is encountered during replacing, the in memory models will be cleared and re-populated
      * by saving the root again (after resetting all multihashes).
      */
-    private static final String REPLACE_ROOT_HASH = "2f4dd65e45ba914d1d4aae62bf86f3d550ffa47051fa03abc0f0b148b75fa984";
+    private static final String REPLACE_ROOT_HASH = "03cc091eab564683138a2134eb19107ba082c4865a36f8d218d0af4c0821e236";
     private static final LoaderFactory<?> ROOT_LOADER_FACTORY = LoaderFactory.MODEL_STATE;
     private static final boolean REPLACE_ALL = false; // set to true to replace all saved objects with new saved
                                                       // objects, regardless of whether or not they or their referenced
@@ -91,12 +92,13 @@ class TestIPFSAccessUtil {
     private static final long REQUIRED_OWNERSHIP_TRANSFER_INACTIVITY = 1000L * 60 * 60 * 24 * 30;
     private static final Date ELIGIBLE_FOR_SETTLEMENT_REQUEST = new Date(
             System.currentTimeMillis() - REQUIRED_SETTLEMENT_REQUEST_AGE);
-    private static final Date ELIGIBLE_FOR_SETTLEMENT_EXECUTION = new Date(
-            ELIGIBLE_FOR_SETTLEMENT_REQUEST.getTime() - REQUIRED_SETTLEMENT_EXECUTION_AGE + 3600000);
+    private static final Date ELIGIBLE_FOR_SETTLEMENT_EXECUTION = new Date(ELIGIBLE_FOR_SETTLEMENT_REQUEST.getTime()
+            - REQUIRED_SETTLEMENT_EXECUTION_AGE + ValidationContext.TIMESTAMP_TOLERANCE + 1000);
     private static final Date ELIGIBLE_FOR_OWNERSHIP_TRANSFER = new Date(
             System.currentTimeMillis() - REQUIRED_OWNERSHIP_TRANSFER_INACTIVITY);
 
     public static final Signer DEFAULT_SIGNER = new ECCSigner("user", "pass");
+    public static final Signer DEFAULT_SIGNER_SECURITY_LEVEL_1 = new ECCSigner("user", "pass", 1);
     public static final Signer NEW_OWNER_SIGNER = new ECCSigner("newOwner", "newpass");
 
     /**
@@ -136,7 +138,7 @@ class TestIPFSAccessUtil {
 
     private static final Map<String, ModelUpdater<?>> UPDATERS = new HashMap<>();
     static {
-        UPDATERS.put("2f4dd65e45ba914d1d4aae62bf86f3d550ffa47051fa03abc0f0b148b75fa984",
+        UPDATERS.put("03cc091eab564683138a2134eb19107ba082c4865a36f8d218d0af4c0821e236",
                 new ModelUpdater<ModelState>() {
 
                     @Override
@@ -159,7 +161,7 @@ class TestIPFSAccessUtil {
                         for (Entry<String, IPLDObject<UserState>> entry : allUserStateEntries) {
                             if (entry.getValue() == userState) {
                                 UserState updatedOwner = entry.getValue().getMapped().updateLinks(null, null, null,
-                                        null, null, null, null, entry.getValue());
+                                        null, null, null, null, null, entry.getValue());
                                 updatedOwner.removeTrueClaim(document);
                                 IPLDObject<UserState> updatedOwnerState = new IPLDObject<>(updatedOwner);
                                 updatedOwnerState.save(context, null);
@@ -171,13 +173,13 @@ class TestIPFSAccessUtil {
                                 if ("second".equals(username)) {
                                     Signer signer = new ECCSigner(username, "pass2");
                                     IPLDObject<Review> review = new IPLDObject<>(
-                                            "478bd50f6195695aaec6d68c41d69764e73449a1e1f0282ac04a1eee4ad4a3af",
+                                            "bc4e784b0e742d1656dcd1cb8285cea5b4afe3086c0c4b92060051fe474c5169",
                                             LoaderFactory.REVIEW.createLoader(), context, null);
 
                                     IPLDObject<Document> toSeal = entry.getValue().getMapped()
-                                            .expectDocumentObject(review.getMultihash());
+                                            .expectDocumentObject(review.getMapped().getFirstVersionHash());
                                     UserState rewarded = entry.getValue().getMapped().updateLinks(null, null, null,
-                                            null, null, Set.of(toSeal.getMultihash()), null, entry.getValue());
+                                            null, null, null, Set.of(toSeal.getMultihash()), null, entry.getValue());
 
                                     rewarded.removeFalseDeclination(review);
 
@@ -200,14 +202,13 @@ class TestIPFSAccessUtil {
                                             ((Review) ((review = allDocuments.values().iterator().next()).getMapped()))
                                                     .getApprove())) {
                                         UserState updatedReviewer = entry.getValue().getMapped().updateLinks(null, null,
-                                                null, null, null, null, null, entry.getValue());
+                                                null, null, null, null, null, null, entry.getValue());
 
                                         updatedReviewer.removeTrueApproval(review);
 
                                         updated.updateUserState(new IPLDObject<>(updatedReviewer), null, null, null,
                                                 null, null, null, timestamp);
                                     }
-
                                 }
                             }
                         }
@@ -348,6 +349,14 @@ class TestIPFSAccessUtil {
         return updater.update(loaded, context, removeHashes);
     }
 
+    private static String getJSONString(byte[] bytes) {
+        String compact = new String(bytes, StandardCharsets.UTF_8);
+        if (PRETTY_PRINTING) {
+            return PRETTY_GSON.toJson(JsonParser.parseString(compact));
+        }
+        return compact;
+    }
+
     public static void makeEligibleForSettlementRequest(Document document)
             throws IllegalArgumentException, IllegalAccessException {
         DOCUMENT_DATE_FIELD.set(document, ELIGIBLE_FOR_SETTLEMENT_REQUEST);
@@ -390,7 +399,7 @@ class TestIPFSAccessUtil {
     void printFileContentsForSingleObject() throws IOException {
         System.out.printf(HEADER, "single");
         ModelState modelState = new ModelState();
-        User user = new User("user", Users.createAccount("user", "pass").getPubKey());
+        User user = new User("user", Users.createAccount("user", "pass", USER_SECURITY_LEVEL).getPubKey());
         IPLDObject<User> userObject = new IPLDObject<>(user);
         UserState userState = new UserState(userObject);
         IPLDObject<UserState> userStateObject = new IPLDObject<>(userState);
@@ -595,14 +604,6 @@ class TestIPFSAccessUtil {
             removeHashes.add(rootHash);
         }
         return updated == null ? loaded : updated;
-    }
-
-    private String getJSONString(byte[] bytes) {
-        String compact = new String(bytes, StandardCharsets.UTF_8);
-        if (PRETTY_PRINTING) {
-            return PRETTY_GSON.toJson(JsonParser.parseString(compact));
-        }
-        return compact;
     }
 
 }

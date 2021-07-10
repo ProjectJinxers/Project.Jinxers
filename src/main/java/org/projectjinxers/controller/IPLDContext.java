@@ -154,7 +154,7 @@ public class IPLDContext {
             user.verifySignature(signature, hashBase, verifier);
         }
         catch (IOException e) {
-            throw new ValidationException("Failed to verify signature", e);
+            throw new ValidationException("failed to verify signature", e);
         }
     }
 
@@ -176,7 +176,7 @@ public class IPLDContext {
             verifier.verifySignature(signature, hashBase, publicKey);
         }
         catch (IOException e) {
-            throw new ValidationException("Failed to verify signature", e);
+            throw new ValidationException("failed to verify signature", e);
         }
     }
 

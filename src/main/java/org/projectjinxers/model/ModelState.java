@@ -20,6 +20,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -153,6 +154,13 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
     private Map<String, IPLDObject<OwnershipRequest>[]> newOwnershipRequests;
     private Map<String, String[]> newReviewTableEntries;
 
+    private long newUserStatesSince;
+    private long newVotingsSince;
+    private long newSettlementRequestsSince;
+    private long newSealedDocumentsSince;
+    private long newOwnershipRequestsSince;
+    private long newReviewTableEntriesSince;
+
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {
@@ -249,6 +257,37 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         return userStates.get(userHash);
     }
 
+    public IPLDObject<Voting> getVoting(String key) {
+        return votings == null ? null : votings.get(key);
+    }
+
+    /**
+     * @param documentHash the hash of the document to check
+     * @return the voting for transfer of ownership of the document with the given hash, if any
+     */
+    public IPLDObject<Voting> getVotingForOwnershipTransfer(String documentHash) {
+        if (votings != null) {
+            for (IPLDObject<Voting> voting : votings.values()) {
+                Votable votable = voting.getMapped().getSubject().getMapped();
+                if (votable instanceof OwnershipSelection) {
+                    OwnershipSelection ownershipSelection = (OwnershipSelection) votable;
+                    if (documentHash.equals(ownershipSelection.getDocument().getMultihash())) {
+                        return voting;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    public IPLDObject<Voting> expectVotingForUnbanRequest(String unbanRequestHash) {
+        return votings.get(unbanRequestHash);
+    }
+
+    public IPLDObject<SettlementRequest> getSettlementRequest(String documentHash) {
+        return settlementRequests == null ? null : settlementRequests.get(documentHash);
+    }
+
     /**
      * Checks if the document with the given hash has been sealed.
      * 
@@ -275,33 +314,6 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
      */
     public SealedDocument expectSealedDocument(String documentHash) {
         return sealedDocuments.get(documentHash).getMapped();
-    }
-
-    public IPLDObject<Voting> getVoting(String key) {
-        return votings == null ? null : votings.get(key);
-    }
-
-    /**
-     * @param documentHash the hash of the document to check
-     * @return the voting for transfer of ownership of the document with the given hash, if any
-     */
-    public IPLDObject<Voting> getVotingForOwnershipTransfer(String documentHash) {
-        if (votings != null) {
-            for (IPLDObject<Voting> voting : votings.values()) {
-                Votable votable = voting.getMapped().getSubject().getMapped();
-                if (votable instanceof OwnershipSelection) {
-                    OwnershipSelection ownershipSelection = (OwnershipSelection) votable;
-                    if (documentHash.equals(ownershipSelection.getDocument().getMultihash())) {
-                        return voting;
-                    }
-                }
-            }
-        }
-        return null;
-    }
-
-    public IPLDObject<Voting> expectVotingForUnbanRequest(String unbanRequestHash) {
-        return votings.get(unbanRequestHash);
     }
 
     /**
@@ -459,47 +471,92 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
     }
 
     public Map<String, IPLDObject<UserState>> getNewUserStates(ModelState since, boolean ignoreCached) {
-        if (ignoreCached || newUserStates == null) {
-            newUserStates = ModelUtility.getNewForeignKeyLinksMap(userStates, since == null ? null : since.userStates);
+        if (ignoreCached || newUserStates == null || since == null && newUserStatesSince >= 0
+                || since != null && since.getVersion() != newUserStatesSince) {
+            if (since == null) {
+                newUserStates = ModelUtility.getNewForeignKeyLinksMap(userStates, null);
+                newUserStatesSince = -1;
+            }
+            else {
+                newUserStates = ModelUtility.getNewForeignKeyLinksMap(userStates, since.userStates);
+                newUserStatesSince = since.getVersion();
+            }
         }
         return newUserStates;
     }
 
     public Map<String, IPLDObject<Voting>> getNewVotings(ModelState since, boolean ignoreCached) {
-        if (ignoreCached || newVotings == null) {
-            newVotings = ModelUtility.getNewForeignKeyLinksMap(votings, since == null ? null : since.votings);
+        if (ignoreCached || newVotings == null || since == null && newVotingsSince >= 0
+                || since != null && since.getVersion() != newVotingsSince) {
+            if (since == null) {
+                newVotings = ModelUtility.getNewForeignKeyLinksMap(votings, null);
+                newVotingsSince = -1;
+            }
+            else {
+                newVotings = ModelUtility.getNewForeignKeyLinksMap(votings, since.votings);
+                newVotingsSince = since.getVersion();
+            }
         }
         return newVotings;
     }
 
     public Map<String, IPLDObject<SettlementRequest>> getNewSettlementRequests(ModelState since, boolean ignoreCached) {
-        if (ignoreCached || newSettlementRequests == null) {
-            newSettlementRequests = ModelUtility.getNewForeignKeyLinksMap(settlementRequests,
-                    since == null ? null : since.settlementRequests);
+        if (ignoreCached || newSettlementRequests == null || since == null && newSettlementRequestsSince >= 0
+                || since != null && since.getVersion() != newSettlementRequestsSince) {
+            if (since == null) {
+                newSettlementRequests = ModelUtility.getNewForeignKeyLinksMap(settlementRequests, null);
+                newSettlementRequestsSince = -1;
+            }
+            else {
+                newSettlementRequests = ModelUtility.getNewForeignKeyLinksMap(settlementRequests,
+                        since.settlementRequests);
+                newSettlementRequestsSince = since.getVersion();
+            }
         }
         return newSettlementRequests;
     }
 
     public Map<String, IPLDObject<SealedDocument>> getNewSealedDocuments(ModelState since, boolean ignoreCached) {
-        if (ignoreCached || newSealedDocuments == null) {
-            newSealedDocuments = ModelUtility.getNewForeignKeyLinksMap(sealedDocuments,
-                    since == null ? null : since.sealedDocuments);
+        if (ignoreCached || newSealedDocuments == null || since == null && newSealedDocumentsSince >= 0
+                || since != null && since.getVersion() != newSealedDocumentsSince) {
+            if (since == null) {
+                newSealedDocuments = ModelUtility.getNewForeignKeyLinksMap(sealedDocuments, null);
+                newSealedDocumentsSince = -1;
+            }
+            else {
+                newSealedDocuments = ModelUtility.getNewForeignKeyLinksMap(sealedDocuments, since.sealedDocuments);
+                newSealedDocumentsSince = since.getVersion();
+            }
         }
         return newSealedDocuments;
     }
 
     public Map<String, IPLDObject<OwnershipRequest>[]> getNewOwnershipRequests(ModelState since, boolean ignoreCached) {
-        if (ignoreCached || newOwnershipRequests == null) {
-            newOwnershipRequests = ModelUtility.getNewLinkArraysMap(ownershipRequests,
-                    since == null ? null : since.ownershipRequests);
+        if (ignoreCached || newOwnershipRequests == null || since == null && newOwnershipRequestsSince >= 0
+                || since != null && since.getVersion() != newOwnershipRequestsSince) {
+            if (since == null) {
+                newOwnershipRequests = ModelUtility.getNewLinkArraysMap(ownershipRequests, null);
+                newOwnershipRequestsSince = -1;
+            }
+            else {
+                newOwnershipRequests = ModelUtility.getNewLinkArraysMap(ownershipRequests, since.ownershipRequests);
+                newOwnershipRequestsSince = since.getVersion();
+            }
         }
         return newOwnershipRequests;
     }
 
     public Map<String, String[]> getNewReviewTableEntries(ModelState since, boolean ignoreCached) {
-        if (ignoreCached || newReviewTableEntries == null) {
-            newReviewTableEntries = ModelUtility.getNewLinksArraysMap(reviewTable,
-                    since == null ? null : since.reviewTable);
+        if (ignoreCached || newReviewTableEntries == null || since == null && newReviewTableEntriesSince >= 0
+                || since != null && since.getVersion() != newReviewTableEntriesSince) {
+            if (since == null) {
+                newReviewTableEntries = ModelUtility.getNewLinksArraysMap(reviewTable, null);
+                newReviewTableEntriesSince = -1;
+            }
+            else {
+                newReviewTableEntries = ModelUtility.getNewLinksArraysMap(reviewTable, since.reviewTable);
+                newReviewTableEntriesSince = since.getVersion();
+            }
         }
         return newReviewTableEntries;
     }
@@ -711,7 +768,8 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         if (mergedUserStates.size() > 0) {
             SettlementController mainSettlementController = validationContext.getMainSettlementController();
             Map<String, SealedDocument> sealedDocuments = new HashMap<>();
-            if (mainSettlementController.evaluate(sealedDocuments, res)) {
+            Set<String> invalidSettlementRequests = new HashSet<>();
+            if (mainSettlementController.evaluate(sealedDocuments, invalidSettlementRequests, res)) {
                 mainSettlementController.update(mergedUserStates, res, sealedDocuments);
                 if (sealedDocuments.size() > 0) {
                     if (res.sealedDocuments == null) {
@@ -728,6 +786,11 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
                         UserState current = res.expectUserState(key).getMapped();
                         current.applySettlement(entry.getValue());
                     }
+                }
+            }
+            if (invalidSettlementRequests.size() > 0) {
+                for (String key : invalidSettlementRequests) {
+                    res.settlementRequests.remove(key);
                 }
             }
         }

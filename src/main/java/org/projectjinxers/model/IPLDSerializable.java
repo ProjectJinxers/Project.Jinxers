@@ -166,6 +166,10 @@ public interface IPLDSerializable {
         return false;
     }
 
+    default void loadedFromCache() {
+
+    }
+
     /**
      * Reads (deserializes) the single properties.
      * 

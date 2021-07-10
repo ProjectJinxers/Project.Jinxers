@@ -47,6 +47,9 @@ public class ModelUtility {
         if (o1 == o2) {
             return true;
         }
+        if (o1 == null || o2 == null) {
+            return false;
+        }
         D mapped1 = o1.getMapped();
         D mapped2 = o2.getMapped();
         if (mapped1 == mapped2) {

@@ -13,11 +13,11 @@
  */
 package org.projectjinxers.account;
 
+import static org.ethereum.crypto.HashUtil.sha3;
+
 import java.io.UnsupportedEncodingException;
 
 import org.ethereum.crypto.ECKey;
-
-import static org.ethereum.crypto.HashUtil.sha3;
 
 /**
  * Utility class for handling user accounts.
@@ -33,10 +33,15 @@ public class Users {
      * @param password the password
      * @return the created key
      */
-    public static ECKey createAccount(String username, String password) {
+    public static ECKey createAccount(String username, String password, int securityLevel) {
         try {
             byte[] privKeyBytes = (username + "#" + password).getBytes("UTF-8");
             privKeyBytes = sha3(privKeyBytes);
+            if (securityLevel > 0) {
+                for (int i = 0, n = password.length(); i < n; i++) {
+                    privKeyBytes = sha3(privKeyBytes);
+                }
+            }
             return ECKey.fromPrivate(privKeyBytes);
         }
         catch (UnsupportedEncodingException e) {
