@@ -344,7 +344,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
      */
     public ModelState updateUserState(IPLDObject<UserState> userState,
             Collection<IPLDObject<SettlementRequest>> settlementRequests,
-            Collection<IPLDObject<OwnershipRequest>> ownershipRequests, Collection<IPLDObject<Voting>> votings,
+            Collection<IPLDObject<OwnershipRequest>> ownershipRequests, Map<String, IPLDObject<Voting>> votings,
             Collection<IPLDObject<SealedDocument>> sealedDocuments, Map<String, String[]> reviewTable,
             IPLDObject<ModelState> current, long timestamp) {
         ModelState updated;
@@ -453,9 +453,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
             }
         }
         if (votings != null) {
-            for (IPLDObject<Voting> voting : votings) {
-                updated.votings.put(VOTING_KEY_PROVIDER.getKey(voting), voting);
-            }
+            updated.votings.putAll(votings);
         }
         if (sealedDocuments != null) {
             for (IPLDObject<SealedDocument> sealed : sealedDocuments) {

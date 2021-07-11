@@ -43,6 +43,7 @@ import org.projectjinxers.model.OwnershipRequest;
 import org.projectjinxers.model.Review;
 import org.projectjinxers.model.SealedDocument;
 import org.projectjinxers.model.SettlementRequest;
+import org.projectjinxers.model.UnbanRequest;
 import org.projectjinxers.model.UserState;
 import org.projectjinxers.model.Voting;
 import org.spongycastle.util.encoders.Base64;
@@ -89,12 +90,13 @@ public class ModelController {
     private Map<String, String[]> pendingNewReviewTableEntries;
     private Map<String, Queue<IPLDObject<Document>>> queuedDocuments;
     private Map<String, Queue<IPLDObject<DocumentRemoval>>> queuedDocumentRemovals;
+    private Map<String, Queue<IPLDObject<SettlementRequest>>> queuedSettlementRequests;
+    private Map<String, Queue<IPLDObject<UnbanRequest>>> queuedUnbanRequests;
     private Map<String, Queue<IPLDObject<OwnershipRequest>>> queuedOwnershipRequests;
     private Map<String, Queue<IPLDObject<GrantedOwnership>>> queuedGrantedOwnerships;
     private Map<String, Queue<String>> queuedTransferredDocumentHashes;
     private Queue<OwnershipTransferController> queuedOwnershipTransferControllers;
-    private Queue<IPLDObject<Voting>> queuedVotings;
-    private Queue<IPLDObject<SettlementRequest>> queuedSettlementRequests;
+    private Map<String, IPLDObject<Voting>> queuedVotings;
     private boolean abortLocalChanges;
 
     /**
@@ -272,7 +274,7 @@ public class ModelController {
                 context, signature, timestamp);
         if (controller.process()) {
             try {
-                saveLocalChanges(null, null, null, controller);
+                saveLocalChanges(null, null, null, null, controller, null, System.currentTimeMillis());
             }
             catch (IOException e) {
                 e.printStackTrace();
@@ -308,18 +310,18 @@ public class ModelController {
      */
     public void saveDocument(IPLDObject<Document> document, Signer signer) throws IOException {
         document.save(context, signer);
-        saveLocalChanges(document, null, null, null);
+        saveLocalChanges(document, null, null, null, null, null, System.currentTimeMillis());
     }
 
     public void requestDocumentRemoval(IPLDObject<DocumentRemoval> removal, Signer signer) throws IOException {
         removal.save(context, signer);
-        saveLocalChanges(null, removal, null, null);
+        saveLocalChanges(null, removal, null, null, null, null, System.currentTimeMillis());
     }
 
     public void issueSettlementRequest(IPLDObject<SettlementRequest> settlementRequest, Signer signer)
             throws IOException {
         settlementRequest.save(context, signer);
-        saveLocalChanges(null, null, settlementRequest, null);
+        saveLocalChanges(null, null, settlementRequest, null, null, null, settlementRequest.getMapped().getTimestamp());
     }
 
     /**
@@ -345,6 +347,41 @@ public class ModelController {
         catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    public void issueUnbanRequest(IPLDObject<UnbanRequest> unbanRequest, Signer signer) throws IOException {
+        unbanRequest.save(context, signer);
+        saveLocalChanges(null, null, null, unbanRequest, null, null, System.currentTimeMillis());
+    }
+
+    public void addVoting(IPLDObject<Voting> voting, Signer signer) throws IOException {
+        voting.save(context, signer);
+        saveLocalChanges(null, null, null, null, null, voting, System.currentTimeMillis());
+    }
+
+    public boolean addVote(IPLDObject<Voting> voting, String userHash, int valueIndex, long seed, Signer signer)
+            throws IOException {
+        long timestamp = System.currentTimeMillis();
+        Voting updated = voting.getMapped().addVote(userHash, valueIndex, seed, timestamp, timestampTolerance);
+        if (updated != null) {
+            IPLDObject<Voting> updatedObject = new IPLDObject<>(updated);
+            updatedObject.save(context, signer);
+            saveLocalChanges(null, null, null, null, null, updatedObject, timestamp);
+            return true;
+        }
+        return false;
+    }
+
+    public boolean tally(IPLDObject<Voting> voting) throws IOException {
+        long timestamp = System.currentTimeMillis();
+        Voting updated = voting.getMapped().tally(timestamp, timestampTolerance);
+        if (updated != null) {
+            IPLDObject<Voting> updatedObject = new IPLDObject<>(updated);
+            updatedObject.save(context, null);
+            saveLocalChanges(null, null, null, null, null, updatedObject, timestamp);
+            return true;
+        }
+        return false;
     }
 
     private IPLDObject<UserState> getInstanceToSave(IPLDObject<UserState> local) {
@@ -373,14 +410,10 @@ public class ModelController {
         return local;
     }
 
-    /*
-     * TODO: unban requests
-     */
     private boolean saveLocalChanges(IPLDObject<Document> document, IPLDObject<DocumentRemoval> documentRemoval,
-            IPLDObject<SettlementRequest> settlementRequest, OwnershipTransferController ownershipTransferController)
+            IPLDObject<SettlementRequest> settlementRequest, IPLDObject<UnbanRequest> unbanRequest,
+            OwnershipTransferController ownershipTransferController, IPLDObject<Voting> voting, long timestamp)
             throws IOException {
-        long timestamp = settlementRequest == null ? System.currentTimeMillis()
-                : settlementRequest.getMapped().getTimestamp();
         IPLDObject<ModelState> currentModelState = currentValidatedState;
         ModelState currentState;
         ModelState modelState;
@@ -421,7 +454,7 @@ public class ModelController {
         }
         SettlementController settlementController = currentSnapshot == null ? null
                 : currentSnapshot.createPreEvaluationSnapshot(timestamp);
-        Queue<IPLDObject<SettlementRequest>> settlementRequests = null;
+        Map<String, Queue<IPLDObject<SettlementRequest>>> settlementRequests = new HashMap<>();
         if (settlementController != null) {
             for (Queue<IPLDObject<DocumentRemoval>> removals : documentRemovals.values()) {
                 for (IPLDObject<DocumentRemoval> removal : removals) {
@@ -432,32 +465,41 @@ public class ModelController {
             if (queuedSettlementRequests != null) {
                 synchronized (queuedSettlementRequests) {
                     if (queuedSettlementRequests.size() > 0) {
-                        SettlementRequest sameTimestamp = settlementRequest == null ? null
-                                : settlementRequest.getMapped();
-                        settlementRequests = new ArrayDeque<>();
-                        for (IPLDObject<SettlementRequest> request : queuedSettlementRequests) {
-                            SettlementRequest req = request.getMapped();
-                            req.synchronizeTimestamp(sameTimestamp);
-                            sameTimestamp = req;
-                            settlementRequests.add(request);
+                        for (Entry<String, Queue<IPLDObject<SettlementRequest>>> entry : queuedSettlementRequests
+                                .entrySet()) {
+                            String key = entry.getKey();
+                            userHashes.add(key);
+                            Queue<IPLDObject<SettlementRequest>> reqs = new ArrayDeque<>(entry.getValue());
+                            settlementRequests.put(key, reqs);
                         }
                     }
                 }
-                if (settlementRequests != null) {
-                    for (IPLDObject<SettlementRequest> request : settlementRequests) {
-                        settlementChanged = settlementController.checkRequest(request.getMapped().getDocument(), false,
-                                true) || settlementChanged;
+                if (settlementRequests.size() > 0) {
+                    SettlementRequest sameTimestamp = settlementRequest == null ? null : settlementRequest.getMapped();
+                    for (Queue<IPLDObject<SettlementRequest>> queue : settlementRequests.values()) {
+                        for (IPLDObject<SettlementRequest> request : queue) {
+                            SettlementRequest req = request.getMapped();
+                            req.synchronizeTimestamp(sameTimestamp);
+                            sameTimestamp = req;
+                            settlementChanged = settlementController.checkRequest(req.getDocument(), false, true)
+                                    || settlementChanged;
+                        }
                     }
                 }
             }
             if (settlementRequest != null) {
-                if (settlementController.checkRequest(settlementRequest.getMapped().getDocument(), false, true)) {
+                SettlementRequest req = settlementRequest.getMapped();
+                if (settlementController.checkRequest(req.getDocument(), false, true)) {
                     settlementChanged = true;
                 }
-                if (settlementRequests == null) {
-                    settlementRequests = new ArrayDeque<>();
+                String userHash = req.getUserState().getMapped().getUser().getMultihash();
+                userHashes.add(userHash);
+                Queue<IPLDObject<SettlementRequest>> queue = settlementRequests.get(userHash);
+                if (queue == null) {
+                    queue = new ArrayDeque<>();
+                    settlementRequests.put(userHash, queue);
                 }
-                settlementRequests.add(settlementRequest);
+                queue.add(settlementRequest);
             }
             settlementChanged = settlementController.applyNewTimestamp() || settlementChanged;
             if (settlementChanged) {
@@ -468,11 +510,12 @@ public class ModelController {
             }
         }
         Map<String, Queue<IPLDObject<Document>>> documents = new HashMap<>();
+        Map<String, Queue<IPLDObject<UnbanRequest>>> unbanRequests = new HashMap<>();
         Map<String, Queue<IPLDObject<OwnershipRequest>>> ownershipRequests = new HashMap<>();
         Map<String, Queue<IPLDObject<GrantedOwnership>>> grantedOwnerships = new HashMap<>();
         Map<String, Queue<String>> transferredDocumentHashes = new HashMap<>();
         Collection<OwnershipTransferController> transferControllers = new ArrayList<>();
-        Collection<IPLDObject<Voting>> votings = null;
+        Map<String, IPLDObject<Voting>> votings = null;
         Map<String, String[]> newReviewTableEntries = null;
         if (queuedOwnershipTransferControllers != null) {
             synchronized (queuedOwnershipTransferControllers) {
@@ -482,9 +525,15 @@ public class ModelController {
         if (queuedVotings != null) {
             synchronized (queuedVotings) {
                 if (queuedVotings.size() > 0) {
-                    votings = new ArrayList<>(queuedVotings);
+                    votings = new HashMap<>(queuedVotings);
                 }
             }
+        }
+        if (voting != null) {
+            if (votings == null) {
+                votings = new HashMap<>();
+            }
+            votings.put(voting.getMapped().getSubject().getMultihash(), voting);
         }
         if (ownershipTransferController != null) {
             transferControllers.add(ownershipTransferController);
@@ -498,19 +547,19 @@ public class ModelController {
                 if (ownershipRequest == null) {
                     IPLDObject<Document> transferredDocument = controller.getDocument();
                     if (transferredDocument == null) {
-                        IPLDObject<Voting> voting = controller.getVoting();
+                        IPLDObject<Voting> ownershipVoting = controller.getVoting();
                         try {
-                            voting.save(context, null);
+                            ownershipVoting.save(context, null);
                         }
                         catch (Exception e) {
                             handleOwnershipTransferControllerException(e, ownershipTransferController, document,
-                                    documentRemoval, settlementRequest);
+                                    documentRemoval, settlementRequest, unbanRequest, voting);
                             return false;
                         }
                         if (votings == null) {
-                            votings = new ArrayList<>();
+                            votings = new HashMap<>();
                         }
-                        votings.add(voting);
+                        votings.put(ownershipVoting.getMapped().getSubject().getMultihash(), ownershipVoting);
                     }
                     else {
                         Document transferredDoc = transferredDocument.getMapped();
@@ -554,7 +603,7 @@ public class ModelController {
                         }
                         catch (Exception e) {
                             handleOwnershipTransferControllerException(e, ownershipTransferController, document,
-                                    documentRemoval, settlementRequest);
+                                    documentRemoval, settlementRequest, unbanRequest, voting);
                             return false;
                         }
                         Queue<IPLDObject<GrantedOwnership>> granted = grantedOwnerships.get(key);
@@ -579,7 +628,7 @@ public class ModelController {
                     }
                     catch (Exception e) {
                         handleOwnershipTransferControllerException(e, ownershipTransferController, document,
-                                documentRemoval, settlementRequest);
+                                documentRemoval, settlementRequest, unbanRequest, voting);
                         return false;
                     }
                 }
@@ -654,7 +703,8 @@ public class ModelController {
             }
             else {
                 if (invalidSettlementRequests.size() > 0) {
-                    handleNoUserStatesSaved(document, documentRemoval, settlementRequest, ownershipTransferController);
+                    handleNoUserStatesSaved(document, documentRemoval, settlementRequest, unbanRequest,
+                            ownershipTransferController, voting);
                     // TODO: replace exception with client notification and return false (idea: client can set delete
                     // flag on queued objects which is checked when objects are dequeued)
                     throw new ValidationException("settlement request for document with too few reviews");
@@ -729,13 +779,14 @@ public class ModelController {
                 }
             }
         }
-        String ownerHash;
-        if (settlementRequests == null) {
-            ownerHash = null;
-        }
-        else {
-            ownerHash = settlementRequests.peek().getMapped().getUserState().getMapped().getUser().getMultihash();
-            userHashes.add(ownerHash);
+        if (queuedUnbanRequests != null) {
+            synchronized (queuedUnbanRequests) {
+                for (Entry<String, Queue<IPLDObject<UnbanRequest>>> entry : queuedUnbanRequests.entrySet()) {
+                    String key = entry.getKey();
+                    userHashes.add(key);
+                    unbanRequests.put(key, new ArrayDeque<>(entry.getValue()));
+                }
+            }
         }
         for (String userHash : userHashes) {
             IPLDObject<UserState> userState = modelState.getUserState(userHash);
@@ -772,31 +823,40 @@ public class ModelController {
                     queuedTransferredDocumentHashes.remove(userHash);
                 }
             }
-            Queue<IPLDObject<SettlementRequest>> sreqs = settlementRequests != null && userHash.equals(ownerHash)
-                    ? settlementRequests
-                    : null;
+            Queue<IPLDObject<SettlementRequest>> sreqs = settlementRequests.get(userHash);
+            if (queuedSettlementRequests != null) {
+                synchronized (queuedSettlementRequests) {
+                    queuedSettlementRequests.remove(userHash);
+                }
+            }
+            Queue<IPLDObject<UnbanRequest>> unbans = unbanRequests.get(userHash);
+            if (queuedUnbanRequests != null) {
+                synchronized (queuedUnbanRequests) {
+                    queuedUnbanRequests.remove(userHash);
+                }
+            }
             UserState settlementValues = settlementStates == null ? null : settlementStates.get(userHash);
             if (abortLocalChanges) {
-                requeue(userHash, null, docs, removals, settlementRequests, oreqs, granted, hashes, votings);
-                handleUserStateUnsaved(updatedUserStates, settlementStates, document, documentRemoval,
+                requeue(userHash, null, docs, removals, sreqs, oreqs, granted, hashes, unbans, votings);
+                handleUserStateUnsaved(updatedUserStates, settlementStates, document, documentRemoval, unbanRequest,
                         newReviewTableEntries);
                 return false;
             }
             IPLDObject<UserState> toSave = getInstanceToSave(userState);
             if (docs != null || sreqs != null || oreqs != null || granted != null || hashes != null
-                    || settlementValues != null) {
+                    || settlementValues != null || unbans != null) {
                 try {
                     UserState updated = toSave.getMapped().updateLinks(docs, removals, sreqs, oreqs, granted, hashes,
-                            sealedDocumentHashes, settlementValues, toSave);
+                            sealedDocumentHashes, settlementValues, unbans, toSave);
                     IPLDObject<UserState> updatedObject = new IPLDObject<>(updated);
                     updatedObject.save(context, null);
                     updatedUserStates.put(userHash, updatedObject);
                 }
                 catch (Exception e) {
                     e.printStackTrace();
-                    requeue(userHash, toSave == userState ? null : toSave, docs, removals, settlementRequests, oreqs,
-                            granted, hashes, votings);
-                    handleUserStateUnsaved(updatedUserStates, settlementStates, document, documentRemoval,
+                    requeue(userHash, toSave == userState ? null : toSave, docs, removals, sreqs, oreqs, granted,
+                            hashes, unbans, votings);
+                    handleUserStateUnsaved(updatedUserStates, settlementStates, document, documentRemoval, unbanRequest,
                             newReviewTableEntries);
                     return false;
                 }
@@ -808,8 +868,7 @@ public class ModelController {
             }
         }
         if (abortLocalChanges) {
-            handleLocalModelStateUnsaved(updatedUserStates, votings, settlementRequests, settlementStates,
-                    newReviewTableEntries);
+            handleLocalModelStateUnsaved(updatedUserStates, votings, settlementStates, newReviewTableEntries);
             return false;
         }
         if (updatedUserStates.isEmpty()) {
@@ -824,22 +883,20 @@ public class ModelController {
             for (Entry<String, IPLDObject<UserState>> entry : updatedUserStates.entrySet()) {
                 String key = entry.getKey();
                 if (first) {
-                    modelState = modelState.updateUserState(entry.getValue(),
-                            key.equals(ownerHash) ? settlementRequests : null, ownershipRequests.get(key), votings,
-                            sealedDocuments, newReviewTableEntries, currentModelState, timestamp);
+                    modelState = modelState.updateUserState(entry.getValue(), settlementRequests.get(key),
+                            ownershipRequests.get(key), votings, sealedDocuments, newReviewTableEntries,
+                            currentModelState, timestamp);
                     first = false;
                 }
                 else {
-                    modelState = modelState.updateUserState(entry.getValue(),
-                            key.equals(ownerHash) ? settlementRequests : null, ownershipRequests.get(key), null, null,
-                            null, null, timestamp);
+                    modelState = modelState.updateUserState(entry.getValue(), settlementRequests.get(key),
+                            ownershipRequests.get(key), null, null, null, null, timestamp);
                 }
             }
         }
         IPLDObject<ModelState> newLocalState = new IPLDObject<ModelState>(modelState);
         if (abortLocalChanges) {
-            handleLocalModelStateUnsaved(updatedUserStates, votings, settlementRequests, settlementStates,
-                    newReviewTableEntries);
+            handleLocalModelStateUnsaved(updatedUserStates, votings, settlementStates, newReviewTableEntries);
             return false;
         }
         try {
@@ -847,8 +904,7 @@ public class ModelController {
         }
         catch (Exception e) {
             e.printStackTrace();
-            handleLocalModelStateUnsaved(updatedUserStates, votings, settlementRequests, settlementStates,
-                    newReviewTableEntries);
+            handleLocalModelStateUnsaved(updatedUserStates, votings, settlementStates, newReviewTableEntries);
             return false;
         }
         publishLocalState(newLocalState);
@@ -857,13 +913,15 @@ public class ModelController {
 
     private void handleOwnershipTransferControllerException(Exception e, OwnershipTransferController controller,
             IPLDObject<Document> document, IPLDObject<DocumentRemoval> documentRemoval,
-            IPLDObject<SettlementRequest> settlementRequest) {
+            IPLDObject<SettlementRequest> settlementRequest, IPLDObject<UnbanRequest> unbanRequest,
+            IPLDObject<Voting> voting) {
         e.printStackTrace();
-        handleNoUserStatesSaved(document, documentRemoval, settlementRequest, controller);
+        handleNoUserStatesSaved(document, documentRemoval, settlementRequest, unbanRequest, controller, voting);
     }
 
     private void handleNoUserStatesSaved(IPLDObject<Document> document, IPLDObject<DocumentRemoval> documentRemoval,
-            IPLDObject<SettlementRequest> settlementRequest, OwnershipTransferController controller) {
+            IPLDObject<SettlementRequest> settlementRequest, IPLDObject<UnbanRequest> unbanRequest,
+            OwnershipTransferController controller, IPLDObject<Voting> voting) {
         if (document != null) {
             enqueueDocument(document);
         }
@@ -873,8 +931,14 @@ public class ModelController {
         if (settlementRequest != null) {
             enqueueSettlementRequest(settlementRequest);
         }
+        if (unbanRequest != null) {
+            enqueueUnbanRequest(unbanRequest);
+        }
         if (controller != null) {
             enqueueOwnershipTransferController(controller);
+        }
+        if (voting != null) {
+            enqueueVoting(voting);
         }
     }
 
@@ -918,7 +982,7 @@ public class ModelController {
 
     private void handleUserStateUnsaved(Map<String, IPLDObject<UserState>> updatedUserStates,
             Map<String, UserState> settlementStates, IPLDObject<Document> document, IPLDObject<DocumentRemoval> removal,
-            Map<String, String[]> newReviewTableEntries) {
+            IPLDObject<UnbanRequest> unbanRequest, Map<String, String[]> newReviewTableEntries) {
         if (updatedUserStates.size() > 0) {
             if (pendingUserStates == null) {
                 pendingUserStates = new LinkedHashMap<>();
@@ -941,6 +1005,12 @@ public class ModelController {
             if (pendingUserStates == null || !pendingUserStates.containsKey(
                     removal.getMapped().getDocument().getMapped().expectUserState().getUser().getMultihash())) {
                 enqueueDocumentRemoval(removal);
+            }
+        }
+        if (unbanRequest != null) {
+            if (pendingUserStates == null || !pendingUserStates
+                    .containsKey(unbanRequest.getMapped().getUserState().getMapped().getUser().getMultihash())) {
+                enqueueUnbanRequest(unbanRequest);
             }
         }
     }
@@ -970,8 +1040,8 @@ public class ModelController {
     }
 
     private void handleLocalModelStateUnsaved(Map<String, IPLDObject<UserState>> updatedUserStates,
-            Collection<IPLDObject<Voting>> votings, Collection<IPLDObject<SettlementRequest>> settlementRequests,
-            Map<String, UserState> settlementStates, Map<String, String[]> newReviewTableEntries) {
+            Map<String, IPLDObject<Voting>> votings, Map<String, UserState> settlementStates,
+            Map<String, String[]> newReviewTableEntries) {
         if (updatedUserStates.size() > 0) {
             if (pendingUserStates == null) {
                 pendingUserStates = new LinkedHashMap<>();
@@ -982,15 +1052,9 @@ public class ModelController {
         }
         if (votings != null) {
             if (queuedVotings == null) {
-                queuedVotings = new ArrayDeque<>();
+                queuedVotings = new HashMap<>();
             }
-            queuedVotings.addAll(votings);
-        }
-        if (settlementRequests != null) {
-            if (queuedSettlementRequests == null) {
-                queuedSettlementRequests = new ArrayDeque<>();
-            }
-            queuedSettlementRequests.addAll(settlementRequests);
+            queuedVotings.putAll(votings);
         }
         updateAppliedSettlementData(settlementStates, updatedUserStates);
         this.pendingNewReviewTableEntries = newReviewTableEntries;
@@ -1046,10 +1110,31 @@ public class ModelController {
 
     private void enqueueSettlementRequest(IPLDObject<SettlementRequest> settlementRequest) {
         if (queuedSettlementRequests == null) {
-            queuedSettlementRequests = new ArrayDeque<>();
+            queuedSettlementRequests = new HashMap<>();
         }
+        String key = settlementRequest.getMapped().getUserState().getMapped().getUser().getMultihash();
         synchronized (queuedSettlementRequests) {
-            queuedSettlementRequests.add(settlementRequest);
+            Queue<IPLDObject<SettlementRequest>> queue = queuedSettlementRequests.get(key);
+            if (queue == null) {
+                queue = new ArrayDeque<>();
+                queuedSettlementRequests.put(key, queue);
+            }
+            queue.add(settlementRequest);
+        }
+    }
+
+    private void enqueueUnbanRequest(IPLDObject<UnbanRequest> unbanRequest) {
+        if (queuedUnbanRequests == null) {
+            queuedUnbanRequests = new HashMap<>();
+        }
+        String key = unbanRequest.getMapped().getUserState().getMapped().getUser().getMultihash();
+        synchronized (queuedUnbanRequests) {
+            Queue<IPLDObject<UnbanRequest>> queue = queuedUnbanRequests.get(key);
+            if (queue == null) {
+                queue = new ArrayDeque<>();
+                queuedUnbanRequests.put(key, queue);
+            }
+            queue.add(unbanRequest);
         }
     }
 
@@ -1062,10 +1147,20 @@ public class ModelController {
         }
     }
 
+    private void enqueueVoting(IPLDObject<Voting> voting) {
+        if (queuedVotings == null) {
+            queuedVotings = new HashMap<String, IPLDObject<Voting>>();
+        }
+        synchronized (queuedVotings) {
+            queuedVotings.put(voting.getMapped().getSubject().getMultihash(), voting);
+        }
+    }
+
     private void requeue(String userHash, IPLDObject<UserState> pending, Queue<IPLDObject<Document>> documents,
             Queue<IPLDObject<DocumentRemoval>> removals, Queue<IPLDObject<SettlementRequest>> sreqs,
             Queue<IPLDObject<OwnershipRequest>> oreqs, Queue<IPLDObject<GrantedOwnership>> granted,
-            Queue<String> transferredOwnershipHashes, Collection<IPLDObject<Voting>> votings) {
+            Queue<String> transferredOwnershipHashes, Queue<IPLDObject<UnbanRequest>> unbans,
+            Map<String, IPLDObject<Voting>> votings) {
         if (documents != null) {
             if (queuedDocuments == null) {
                 queuedDocuments = new HashMap<>();
@@ -1096,10 +1191,16 @@ public class ModelController {
         }
         if (sreqs != null) {
             if (queuedSettlementRequests == null) {
-                queuedSettlementRequests = new ArrayDeque<>();
+                queuedSettlementRequests = new HashMap<>();
             }
             synchronized (queuedSettlementRequests) {
-                queuedSettlementRequests.addAll(sreqs);
+                Queue<IPLDObject<SettlementRequest>> queue = queuedSettlementRequests.get(userHash);
+                if (queue == null) {
+                    queuedSettlementRequests.put(userHash, sreqs);
+                }
+                else {
+                    queue.addAll(sreqs);
+                }
             }
         }
         if (oreqs != null) {
@@ -1144,12 +1245,26 @@ public class ModelController {
                 }
             }
         }
+        if (unbans != null) {
+            if (queuedUnbanRequests == null) {
+                queuedUnbanRequests = new HashMap<>();
+            }
+            synchronized (queuedUnbanRequests) {
+                Queue<IPLDObject<UnbanRequest>> queue = queuedUnbanRequests.get(userHash);
+                if (queue == null) {
+                    queuedUnbanRequests.put(userHash, unbans);
+                }
+                else {
+                    queue.addAll(unbans);
+                }
+            }
+        }
         if (votings != null) {
             if (queuedVotings == null) {
-                queuedVotings = new ArrayDeque<>();
+                queuedVotings = new HashMap<>();
             }
             synchronized (queuedVotings) {
-                queuedVotings.addAll(votings);
+                queuedVotings.putAll(votings);
             }
         }
         if (pending != null) {
@@ -1168,8 +1283,9 @@ public class ModelController {
                 || queuedTransferredDocumentHashes != null && queuedTransferredDocumentHashes.size() > 0
                 || queuedOwnershipTransferControllers != null && queuedOwnershipTransferControllers.size() > 0
                 || queuedVotings != null && queuedVotings.size() > 0
-                || queuedSettlementRequests != null && queuedSettlementRequests.size() > 0) {
-            return saveLocalChanges(null, null, null, null);
+                || queuedSettlementRequests != null && queuedSettlementRequests.size() > 0
+                || queuedUnbanRequests != null && queuedUnbanRequests.size() > 0) {
+            return saveLocalChanges(null, null, null, null, null, null, System.currentTimeMillis());
         }
         return false;
     }

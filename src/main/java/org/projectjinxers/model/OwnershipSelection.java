@@ -56,7 +56,7 @@ public class OwnershipSelection implements Votable {
     };
 
     private boolean anonymous;
-    private int hashSeed;
+    private long hashSeed;
     private Date deadline;
     private IPLDObject<Document> document;
     private Map<String, IPLDObject<OwnershipRequest>> selection;
@@ -85,7 +85,7 @@ public class OwnershipSelection implements Votable {
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {
         this.anonymous = Boolean.TRUE.equals(reader.readBoolean(KEY_ANONYMOUS));
-        this.hashSeed = reader.readNumber(KEY_HASH_SEED).intValue();
+        this.hashSeed = reader.readNumber(KEY_HASH_SEED).longValue();
         this.deadline = new Date(reader.readNumber(KEY_DEADLINE).longValue());
         this.document = reader.readLinkObject(KEY_DOCUMENT, context, validationContext, LoaderFactory.DOCUMENT, eager);
         this.selection = reader.readLinkObjects(KEY_SELECTION, context, validationContext,
@@ -107,7 +107,7 @@ public class OwnershipSelection implements Votable {
     }
 
     @Override
-    public int getHashSeed() {
+    public long getHashSeed() {
         return hashSeed;
     }
 
@@ -124,7 +124,7 @@ public class OwnershipSelection implements Votable {
     }
 
     @Override
-    public Vote createVote(byte[] invitationKey, int valueIndex, int seed, int obfuscationVersion) {
+    public Vote createVote(byte[] invitationKey, int valueIndex, long seed, int obfuscationVersion) {
         if (anonymous) {
 
         }

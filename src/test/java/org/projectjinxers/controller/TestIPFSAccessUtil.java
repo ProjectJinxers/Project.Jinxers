@@ -161,7 +161,7 @@ class TestIPFSAccessUtil {
                         for (Entry<String, IPLDObject<UserState>> entry : allUserStateEntries) {
                             if (entry.getValue() == userState) {
                                 UserState updatedOwner = entry.getValue().getMapped().updateLinks(null, null, null,
-                                        null, null, null, null, null, entry.getValue());
+                                        null, null, null, null, null, null, entry.getValue());
                                 updatedOwner.removeTrueClaim(document);
                                 IPLDObject<UserState> updatedOwnerState = new IPLDObject<>(updatedOwner);
                                 updatedOwnerState.save(context, null);
@@ -179,7 +179,8 @@ class TestIPFSAccessUtil {
                                     IPLDObject<Document> toSeal = entry.getValue().getMapped()
                                             .expectDocumentObject(review.getMapped().getFirstVersionHash());
                                     UserState rewarded = entry.getValue().getMapped().updateLinks(null, null, null,
-                                            null, null, null, Set.of(toSeal.getMultihash()), null, entry.getValue());
+                                            null, null, null, Set.of(toSeal.getMultihash()), null, null,
+                                            entry.getValue());
 
                                     rewarded.removeFalseDeclination(review);
 
@@ -202,7 +203,7 @@ class TestIPFSAccessUtil {
                                             ((Review) ((review = allDocuments.values().iterator().next()).getMapped()))
                                                     .getApprove())) {
                                         UserState updatedReviewer = entry.getValue().getMapped().updateLinks(null, null,
-                                                null, null, null, null, null, null, entry.getValue());
+                                                null, null, null, null, null, null, null, entry.getValue());
 
                                         updatedReviewer.removeTrueApproval(review);
 

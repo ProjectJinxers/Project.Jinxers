@@ -44,7 +44,7 @@ public class UnbanRequest extends ToggleRequest implements DocumentAction, Votab
             "false".getBytes(StandardCharsets.UTF_8), "null".getBytes(StandardCharsets.UTF_8) };
 
     private boolean anonymous;
-    private int hashSeed;
+    private long hashSeed;
     private Date deadline;
     private IPLDObject<Document> document;
 
@@ -53,7 +53,7 @@ public class UnbanRequest extends ToggleRequest implements DocumentAction, Votab
             Metadata metadata) {
         super.read(reader, context, validationContext, eager, metadata);
         this.anonymous = Boolean.TRUE.equals(reader.readBoolean(KEY_ANONYMOUS));
-        this.hashSeed = reader.readNumber(KEY_HASH_SEED).intValue();
+        this.hashSeed = reader.readNumber(KEY_HASH_SEED).longValue();
         this.deadline = new Date(reader.readNumber(KEY_DEADLINE).longValue());
         this.document = reader.readLinkObject(KEY_DOCUMENT, context, validationContext, LoaderFactory.DOCUMENT, eager);
     }
@@ -73,7 +73,7 @@ public class UnbanRequest extends ToggleRequest implements DocumentAction, Votab
     }
 
     @Override
-    public int getHashSeed() {
+    public long getHashSeed() {
         return hashSeed;
     }
 
@@ -83,7 +83,7 @@ public class UnbanRequest extends ToggleRequest implements DocumentAction, Votab
     }
 
     @Override
-    public Vote createVote(byte[] invitationKey, int valueIndex, int seed, int obfuscationVersion) {
+    public Vote createVote(byte[] invitationKey, int valueIndex, long seed, int obfuscationVersion) {
         if (anonymous) {
             int valueHashObfuscation;
             do {

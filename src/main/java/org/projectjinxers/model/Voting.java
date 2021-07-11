@@ -19,6 +19,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -125,6 +126,10 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
         writer.writeLinkObjects(KEY_VOTES, votes, null, null);
     }
 
+    public int getObfuscationVersion() {
+        return obfuscationVersion;
+    }
+
     /**
      * @return the subject of the voting
      */
@@ -171,13 +176,44 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
      * @param modelState the model state
      * @return the invitation key for the user or null, if the user is not eligible to vote
      */
-    public byte[] getInvitationKey(String userHash, ModelState modelState) {
-        if (modelState.containsUserState(userHash)) {
+    public byte[] getInvitationKey(String userHash) {
+        if (initialModelState.getMapped().containsUserState(userHash)) {
             byte[] toHash = userHash.getBytes(StandardCharsets.UTF_8);
             if (isAnonymous()) {
                 return ModelUtility.obfuscateHash(toHash, seed, obfuscationVersion, 0);
             }
             return toHash;
+        }
+        return null;
+    }
+
+    public Voting addVote(String userHash, int valueIndex, long seed, long timestamp, long timestampTolerance) {
+        if (tally != null || subject.getMapped().getDeadline().getTime() < timestamp + timestampTolerance) {
+            return null;
+        }
+        byte[] invitationKey = getInvitationKey(userHash);
+        if (invitationKey != null) {
+            String check = getInvitationKeyString(invitationKey);
+            if (!votes.containsKey(check)) {
+                Vote vote = subject.getMapped().createVote(invitationKey, valueIndex, seed, obfuscationVersion);
+                IPLDObject<Vote> voteObject = new IPLDObject<Vote>(vote);
+                Voting copy = copy();
+                if (copy.votes == null) {
+                    copy.votes = new LinkedHashMap<>();
+                }
+                copy.votes.put(check, voteObject);
+                return copy;
+            }
+        }
+        return null;
+    }
+
+    public Voting tally(long timestamp, long timestampTolerance) {
+        if (tally != null && subject.getMapped().getDeadline().getTime() < timestamp + timestampTolerance) {
+            int[] counts = tally();
+            Voting res = copy();
+            res.tally = new IPLDObject<>(new Tally(counts));
+            return res;
         }
         return null;
     }
@@ -216,7 +252,7 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
                                 validVersion);
                         for (Entry<String, User> userEntry : entrySet) {
                             String userHash = userEntry.getKey();
-                            String invitationKey = getInvitationKey(userHash);
+                            String invitationKey = getInvitationKeyString(userHash);
                             if (key.equals(invitationKey)) {
                                 context.verifySignature(value, Signer.VERIFIER, userEntry.getValue());
                                 continue outer;
@@ -245,12 +281,52 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
 
     public void validateTally() {
         int[] expectedCounts = tally.getMapped().getCounts();
+        int[] counts = tally();
+        if (!Arrays.equals(expectedCounts, counts)) {
+            throw new ValidationException("unexpected tally counts");
+        }
+    }
+
+    @Override
+    public Voting getOrCreateDataInstance(IPLDReader reader, Metadata metadata) {
+        return this;
+    }
+
+    @Override
+    public Voting getLoaded() {
+        return this;
+    }
+
+    private String getInvitationKeyString(String userHash) {
+        byte[] hashBytes = userHash.getBytes(StandardCharsets.UTF_8);
+        byte[] invitationKeyBytes = ModelUtility.obfuscateHash(hashBytes, seed, obfuscationVersion, 0);
+        return getInvitationKeyString(invitationKeyBytes);
+    }
+
+    private String getInvitationKeyString(byte[] invitationKey) {
+        return Base64.encodeBase64String(invitationKey);
+    }
+
+    private Voting copy() {
+        Voting res = new Voting();
+        res.seed = seed;
+        res.obfuscationVersion = obfuscationVersion;
+        res.subject = subject;
+        res.initialModelState = initialModelState;
+        if (votes != null) {
+            res.votes = new LinkedHashMap<>(votes);
+        }
+        res.tally = tally;
+        return res;
+    }
+
+    private int[] tally() {
+        int[] counts = new int[votes.size()];
         Votable subject = this.subject.getMapped();
-        int[] counts = new int[expectedCounts.length];
         if (subject.isAnonymous()) {
             byte[][] allValueHashBases = subject.getAllValueHashBases();
             for (String userHash : initialModelState.getMapped().expectAllUserHashes()) {
-                String invitationKey = getInvitationKey(userHash);
+                String invitationKey = getInvitationKeyString(userHash);
                 IPLDObject<Vote> voteObject = votes.get(invitationKey);
                 if (voteObject != null) {
                     Vote vote = voteObject.getMapped();
@@ -280,25 +356,7 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
                 }
             }
         }
-        if (!Arrays.equals(expectedCounts, counts)) {
-            throw new ValidationException("unexpected tally counts");
-        }
-    }
-
-    @Override
-    public Voting getOrCreateDataInstance(IPLDReader reader, Metadata metadata) {
-        return this;
-    }
-
-    @Override
-    public Voting getLoaded() {
-        return this;
-    }
-
-    private String getInvitationKey(String userHash) {
-        byte[] hashBytes = userHash.getBytes(StandardCharsets.UTF_8);
-        byte[] invitationKeyBytes = ModelUtility.obfuscateHash(hashBytes, seed, obfuscationVersion, 0);
-        return Base64.encodeBase64String(invitationKeyBytes);
+        return counts;
     }
 
 }

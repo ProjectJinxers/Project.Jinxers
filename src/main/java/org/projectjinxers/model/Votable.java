@@ -33,7 +33,7 @@ public interface Votable extends IPLDSerializable {
     /**
      * @return the seed for generating hashes (input for a public algorithm with secret inputs)
      */
-    int getHashSeed();
+    long getHashSeed();
 
     /**
      * @return the deadline for the voting
@@ -43,7 +43,7 @@ public interface Votable extends IPLDSerializable {
     /**
      * @return a new empty Vote instance (provisional method, will be changed)
      */
-    Vote createVote(byte[] invitationKey, int valueIndex, int seed, int obfuscationVersion);
+    Vote createVote(byte[] invitationKey, int valueIndex, long seed, int obfuscationVersion);
 
     /**
      * @param forDisplay indicates whether or not the values will be displayed to select from (true) or will be used

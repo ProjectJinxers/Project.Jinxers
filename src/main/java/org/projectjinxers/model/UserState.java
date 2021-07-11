@@ -735,7 +735,8 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             Collection<IPLDObject<DocumentRemoval>> removals, Collection<IPLDObject<SettlementRequest>> sreqs,
             Collection<IPLDObject<OwnershipRequest>> oreqs, Collection<IPLDObject<GrantedOwnership>> granted,
             Collection<String> transferredOwnershipHashes, Collection<String> sealedDocuments,
-            UserState settlementValues, IPLDObject<UserState> current) {
+            UserState settlementValues, Collection<IPLDObject<UnbanRequest>> unbanRequests,
+            IPLDObject<UserState> current) {
         UserState updated = copy();
         updated.version = this.version + 1;
         updated.previousVersion = current;
@@ -800,6 +801,15 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             }
             if (settlementValues != null) {
                 updated.applySettlement(settlementValues);
+            }
+        }
+        if (unbanRequests != null) {
+            if (updated.unbanRequests == null) {
+                updated.unbanRequests = new LinkedHashMap<>();
+            }
+            for (IPLDObject<UnbanRequest> request : unbanRequests) {
+                String key = UNBAN_REQUEST_KEY_PROVIDER.getKey(request);
+                updated.unbanRequests.put(key, request);
             }
         }
         return updated;
