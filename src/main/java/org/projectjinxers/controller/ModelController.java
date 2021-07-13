@@ -116,11 +116,17 @@ public class ModelController {
 
         @Override
         public boolean dequeued() {
-            boolean res = true;
             for (ProgressListener listener : listeners) {
-                res = listener.dequeued() && res;
+                if (!listener.dequeued()) {
+                    for (ProgressListener other : listeners) {
+                        if (other != listener) {
+                            other.obsoleted();
+                        }
+                    }
+                    return false;
+                }
             }
-            return res;
+            return true;
         }
 
         @Override
@@ -134,6 +140,11 @@ public class ModelController {
         public boolean isCanceled() {
             for (ProgressListener listener : listeners) {
                 if (listener.isCanceled()) {
+                    for (ProgressListener other : listeners) {
+                        if (other != listener) {
+                            other.obsoleted();
+                        }
+                    }
                     return true;
                 }
             }
@@ -457,12 +468,18 @@ public class ModelController {
 
     public boolean addVote(IPLDObject<Voting> voting, String userHash, int valueIndex, long seed, Signer signer)
             throws IOException {
+        ProgressListener progressListener = voting.getProgressListener();
+        if (progressListener != null) {
+            progressListener.startedTask(ProgressTask.INIT, 0);
+        }
         long timestamp = System.currentTimeMillis();
         Voting updated = voting.getMapped().addVote(userHash, valueIndex, seed, timestamp, timestampTolerance,
                 secretConfig);
+        if (progressListener != null) {
+            progressListener.finishedTask(ProgressTask.INIT);
+        }
         if (updated != null) {
             IPLDObject<Voting> updatedObject = new IPLDObject<>(updated);
-            ProgressListener progressListener = voting.getProgressListener();
             if (progressListener != null) {
                 updatedObject.setProgressListener(progressListener);
             }
@@ -474,11 +491,17 @@ public class ModelController {
     }
 
     public boolean tally(IPLDObject<Voting> voting) throws IOException {
+        ProgressListener progressListener = voting.getProgressListener();
+        if (progressListener != null) {
+            progressListener.startedTask(ProgressTask.INIT, voting.getMapped().getProgressSteps());
+        }
         long timestamp = System.currentTimeMillis();
-        Voting updated = voting.getMapped().tally(timestamp, timestampTolerance, secretConfig);
+        Voting updated = voting.getMapped().tally(timestamp, timestampTolerance, secretConfig, progressListener);
+        if (progressListener != null) {
+            progressListener.finishedTask(ProgressTask.INIT);
+        }
         if (updated != null) {
             IPLDObject<Voting> updatedObject = new IPLDObject<>(updated);
-            ProgressListener progressListener = voting.getProgressListener();
             if (progressListener != null) {
                 updatedObject.setProgressListener(progressListener);
             }
@@ -883,14 +906,13 @@ public class ModelController {
             synchronized (pendingUserStates) {
                 updatedUserStates.putAll(pendingUserStates);
             }
-            for (Entry<String, IPLDObject<UserState>> entry : updatedUserStates.entrySet()) {
+            Iterator<Entry<String, IPLDObject<UserState>>> it = updatedUserStates.entrySet().iterator();
+            while (it.hasNext()) {
+                Entry<String, IPLDObject<UserState>> entry = it.next();
                 ProgressListener progressListener = entry.getValue().getProgressListener();
                 if (progressListener != null && !progressListener.dequeued()) {
-                    String key = entry.getKey();
-                    updatedUserStates.remove(key);
-                    synchronized (pendingUserStates) {
-                        pendingUserStates.remove(key);
-                    }
+                    checkPendingUserStatesAndQueues(null);
+                    return false;
                 }
             }
         }
@@ -1059,6 +1081,9 @@ public class ModelController {
             if (pendingUserStates != null) {
                 synchronized (pendingUserStates) {
                     pendingUserStates.clear();
+                    if (appliedSettlementData != null) {
+                        appliedSettlementData.clear();
+                    }
                 }
             }
         }
@@ -1066,6 +1091,9 @@ public class ModelController {
             e.printStackTrace();
             handleLocalModelStateUnsaved(updatedUserStates, votings, settlementStates, newReviewTableEntries);
             return false;
+        }
+        for (ProgressListener progressListener : modelStateProgressListeners) {
+            progressListener.finishedTask(ProgressTask.LINK_MODEL);
         }
         publishLocalState(newLocalState);
         return true;
@@ -1199,7 +1227,14 @@ public class ModelController {
             Map<String, UserState> settlementStates, IPLDObject<Document> document, IPLDObject<DocumentRemoval> removal,
             IPLDObject<UnbanRequest> unbanRequest, Map<String, String[]> newReviewTableEntries) {
         if (updatedUserStates.size() > 0) {
-            enqueue(updatedUserStates, pendingUserStates);
+            Map<String, IPLDObject<UserState>> queue = enqueue(updatedUserStates, pendingUserStates, true);
+            if (queue == null) {
+                checkPendingUserStatesAndQueues(null);
+                return;
+            }
+            if (pendingUserStates == null) {
+                pendingUserStates = queue;
+            }
             updateAppliedSettlementData(settlementStates, updatedUserStates);
         }
         this.pendingNewReviewTableEntries = newReviewTableEntries;
@@ -1236,13 +1271,7 @@ public class ModelController {
                     String key = entry.getKey();
                     UserState update = settlementStates.get(key);
                     if (update != null) {
-                        UserState applied = appliedSettlementData.get(key);
-                        if (applied == null) {
-                            appliedSettlementData.put(key, update);
-                        }
-                        else {
-                            applied.applySettlement(update);
-                        }
+                        appliedSettlementData.put(key, update);
                     }
                 }
             }
@@ -1253,11 +1282,18 @@ public class ModelController {
             Map<String, IPLDObject<Voting>> votings, Map<String, UserState> settlementStates,
             Map<String, String[]> newReviewTableEntries) {
         if (updatedUserStates.size() > 0) {
-            pendingUserStates = enqueue(updatedUserStates, pendingUserStates);
+            Map<String, IPLDObject<UserState>> queue = enqueue(updatedUserStates, pendingUserStates, true);
+            if (queue == null) {
+                checkPendingUserStatesAndQueues(null);
+                return;
+            }
+            if (pendingUserStates == null) {
+                pendingUserStates = queue;
+            }
             updateAppliedSettlementData(settlementStates, updatedUserStates);
         }
         if (votings != null) {
-            queuedVotings = enqueue(votings, queuedVotings);
+            queuedVotings = enqueue(votings, queuedVotings, false);
         }
         this.pendingNewReviewTableEntries = newReviewTableEntries;
     }
@@ -1330,6 +1366,22 @@ public class ModelController {
             Queue<IPLDObject<OwnershipRequest>> oreqs, Map<String, IPLDObject<GrantedOwnership>> granted,
             Queue<String> transferredOwnershipHashes, Map<String, IPLDObject<UnbanRequest>> unbans,
             Map<String, IPLDObject<Voting>> votings) {
+        if (pending != null) {
+            synchronized (pendingUserStates) {
+                ProgressListener progressListener = pending.getProgressListener();
+                if (progressListener == null) {
+                    pendingUserStates.put(userHash, pending);
+                }
+                else if (progressListener.isCanceled()) {
+                    checkPendingUserStatesAndQueues(null);
+                    return;
+                }
+                else {
+                    pendingUserStates.put(userHash, pending);
+                    progressListener.enqueued();
+                }
+            }
+        }
         if (documents != null) {
             queuedDocuments = enqueue(documents, queuedDocuments, userHash);
         }
@@ -1402,18 +1454,6 @@ public class ModelController {
                 }
             }
         }
-        if (pending != null) {
-            synchronized (pendingUserStates) {
-                ProgressListener progressListener = pending.getProgressListener();
-                if (progressListener == null) {
-                    pendingUserStates.put(userHash, pending);
-                }
-                else if (!progressListener.isCanceled()) {
-                    pendingUserStates.put(userHash, pending);
-                    progressListener.enqueued();
-                }
-            }
-        }
     }
 
     private boolean executePendingChanges() throws IOException {
@@ -1446,6 +1486,7 @@ public class ModelController {
                 nextValidatedState = validated;
                 this.currentValidatedState = nextValidatedState;
                 this.currentSnapshot = snapshot;
+                checkPendingUserStatesAndQueues(localRoot);
                 return true;
             }
             localMergeBase = localRoot;
@@ -1471,10 +1512,29 @@ public class ModelController {
     }
 
     private void checkPendingUserStatesAndQueues(ModelState localRoot) {
-        // TODO: check local instances and adjust or remove accordingly
-        // idea: get new documents, settlement requests, ownership requests and granted ownerships and re-queue valid
-        // instances, drop everything else (especially locally computed voting results, settlements etc.)
-        // better idea: let client code handle it (it knows which documents etc. it sent to this controller)
+        if (pendingUserStates != null) {
+            synchronized (pendingUserStates) {
+                for (IPLDObject<UserState> userState : pendingUserStates.values()) {
+                    ProgressListener progressListener = userState.getProgressListener();
+                    if (progressListener != null) {
+                        progressListener.obsoleted();
+                    }
+                }
+                pendingUserStates.clear();
+            }
+            if (appliedSettlementData != null) {
+                appliedSettlementData.clear();
+            }
+        }
+        if (pendingNewReviewTableEntries != null) {
+            synchronized (pendingNewReviewTableEntries) {
+                pendingNewReviewTableEntries.clear();
+            }
+        }
+        // TODO: check queued single instances (and check if localRoot has to be non-null)
+        if (localRoot != null) {
+
+        }
     }
 
     private void processPendingModelStates() {

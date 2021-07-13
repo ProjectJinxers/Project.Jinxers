@@ -166,6 +166,10 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
         return votes != null;
     }
 
+    public int getProgressSteps() {
+        return votes != null && isAnonymous() ? votes.size() : 0;
+    }
+
     public IPLDObject<Vote> getVote(String key) {
         return votes == null ? null : votes.get(key);
     }
@@ -217,9 +221,10 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
         return null;
     }
 
-    public Voting tally(long timestamp, long timestampTolerance, SecretConfig secretConfig) {
+    public Voting tally(long timestamp, long timestampTolerance, SecretConfig secretConfig,
+            ProgressListener progressListener) {
         if (tally != null && subject.getMapped().getDeadline().getTime() < timestamp + timestampTolerance) {
-            int[] counts = tally(secretConfig);
+            int[] counts = tally(secretConfig, progressListener);
             Voting res = copy();
             res.tally = new IPLDObject<>(new Tally(counts));
             return res;
@@ -291,7 +296,7 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
 
     public void validateTally(SecretConfig secretConfig) {
         int[] expectedCounts = tally.getMapped().getCounts();
-        int[] counts = tally(secretConfig);
+        int[] counts = tally(secretConfig, null);
         if (!Arrays.equals(expectedCounts, counts)) {
             throw new ValidationException("unexpected tally counts");
         }
@@ -330,7 +335,7 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
         return res;
     }
 
-    private int[] tally(SecretConfig secretConfig) {
+    private int[] tally(SecretConfig secretConfig, ProgressListener progressListener) {
         int[] counts = new int[votes.size()];
         Votable subject = this.subject.getMapped();
         if (subject.isAnonymous()) {
@@ -351,6 +356,9 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
                         }
                         i++;
                     }
+                }
+                if (progressListener != null) {
+                    progressListener.nextStep();
                 }
             }
         }

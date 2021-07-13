@@ -213,17 +213,12 @@ class ModelControllerTest {
         // prepare for next simulated message
         newHashes = access.readObjects("model/modelController/saveDocument/simple_rec2.json");
         access.simulateModelStateMessage(config.getIOTAAddress(), newHashes[0]);
-        do { // the model controller publishes the merged model state first; if we're too slow, the hash will be the
-             // merged model state's hash
-            String hash = access.waitForPublishedMessage(config.getIOTAAddress(), 100);
-            IPLDObject<ModelState> nextModelState = new IPLDObject<>(hash, new ModelState(), controller.getContext(),
-                    null);
-            nextUserState = nextModelState.getMapped().getUserState(userHash);
-        }
-        while (nextUserState.getMapped().getDocument(documentObject.getMultihash()) == null);
-        assertNotSame(nextUserState, userState); // copy of pending user state from first attempt
-        Document doc = nextUserState.getMapped().expectDocument(documentObject.getMultihash());
-        assertEquals("Title", doc.getTitle());
+        String hash = access.waitForPublishedMessage(config.getIOTAAddress(), 100);
+        IPLDObject<ModelState> nextModelState = new IPLDObject<>(hash, new ModelState(), controller.getContext(), null);
+        nextUserState = nextModelState.getMapped().getUserState(userHash);
+        assertNull(nextUserState.getMapped().getDocument(documentObject.getMultihash())); // merge state without local
+                                                                                          // changes
+        assertNull(access.waitForPublishedMessage(config.getIOTAAddress(), 400)); // pending cleared after merge
     }
 
     @Test
@@ -781,7 +776,7 @@ class ModelControllerTest {
         assertNull(access.waitForPublishedMessage(config.getIOTAAddress(), 100));
 
         access.clearNoSaveFailures();
-        access.failSaveIn(4); // should be model state
+        access.failSaveIn(6); // should be model state
 
         access.simulateOwnershipRequestMessage(config.getIOTAAddress(), userHash, documentHash, false,
                 NEW_OWNER_SIGNER);

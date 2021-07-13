@@ -450,7 +450,7 @@ public class ModelUtility {
     }
 
     public static <T extends IPLDSerializable> Map<String, IPLDObject<T>> enqueue(Map<String, IPLDObject<T>> source,
-            Map<String, IPLDObject<T>> dest) {
+            Map<String, IPLDObject<T>> dest, boolean abortIfCanceled) {
         Map<String, IPLDObject<T>> res = dest;
         if (res == null) {
             res = new LinkedHashMap<>();
@@ -465,6 +465,9 @@ public class ModelUtility {
                     res.put(entry.getKey(), value);
                 }
                 else if (progressListener.isCanceled()) {
+                    if (abortIfCanceled) {
+                        return null;
+                    }
                     it.remove();
                 }
                 else {

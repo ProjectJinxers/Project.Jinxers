@@ -197,8 +197,10 @@ public class IPLDObject<D extends IPLDSerializable> {
     String save(IPLDContext context, Signer signer, ProgressListener progressListener) throws IOException {
         if (this.progressListener != null) {
             if (this.progressListener.isDeterminate()) {
+                this.progressListener.startedTask(ProgressTask.INIT, 0);
                 SaveStepCounter counter = new SaveStepCounter();
                 counter.write(context, this, signer, progressListener);
+                this.progressListener.finishedTask(ProgressTask.INIT);
                 int totalSteps = counter.getSteps();
                 this.progressListener.startedTask(ProgressTask.SAVE, totalSteps);
             }
