@@ -27,6 +27,7 @@ import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 import org.projectjinxers.account.Signer;
+import org.projectjinxers.controller.IPLDObject.ProgressListener;
 import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.Loader;
 import org.projectjinxers.model.LoaderFactory;
@@ -52,7 +53,8 @@ class IPLDDeserializationTest {
         }
 
         @Override
-        default void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+        default void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+                throws IOException {
 
         }
 

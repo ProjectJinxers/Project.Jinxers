@@ -27,6 +27,10 @@ public class YamlConfig<Y> {
 
     public final Y root;
 
+    protected YamlConfig(Y root) {
+        this.root = root;
+    }
+
     /**
      * Constructor.
      * 

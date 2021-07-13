@@ -1,0 +1,11 @@
+ipfs:
+   node: 
+      host: localhost
+      port: 5001
+   
+iota:
+   main:
+      address: blah
+      
+validationParams:
+   timestampTolerance: 0

@@ -13,6 +13,7 @@
  */
 package org.projectjinxers.model;
 
+import static org.projectjinxers.util.ModelUtility.addProgressListeners;
 import static org.projectjinxers.util.ModelUtility.isEqual;
 
 import java.io.IOException;
@@ -31,6 +32,7 @@ import java.util.TreeSet;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.controller.IPLDObject.ProgressListener;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDReader.KeyProvider;
 import org.projectjinxers.controller.IPLDWriter;
@@ -70,7 +72,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
     private static final String KEY_GRANTED_OWNERSHIPS = "g";
     private static final String KEY_GRANTED_UNBANS = "b";
 
-    private static final KeyProvider<Document> DOCUMENT_KEY_PROVIDER = new KeyProvider<>() {
+    public static final KeyProvider<Document> DOCUMENT_KEY_PROVIDER = new KeyProvider<>() {
 
         @Override
         public String getKey(IPLDObject<Document> object) {
@@ -88,7 +90,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         }
 
     };
-    private static final KeyProvider<DocumentRemoval> DOCUMENT_REMOVAL_KEY_PROVIDER = new KeyProvider<>() {
+    public static final KeyProvider<DocumentRemoval> DOCUMENT_REMOVAL_KEY_PROVIDER = new KeyProvider<>() {
 
         @Override
         public String getKey(IPLDObject<DocumentRemoval> object) {
@@ -98,7 +100,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         }
 
     };
-    static final KeyProvider<SettlementRequest> SETTLEMENT_REQUEST_KEY_PROVIDER = new KeyProvider<>() {
+    public static final KeyProvider<SettlementRequest> SETTLEMENT_REQUEST_KEY_PROVIDER = new KeyProvider<>() {
 
         @Override
         public String getKey(IPLDObject<SettlementRequest> object) {
@@ -114,7 +116,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         }
 
     };
-    private static final KeyProvider<UnbanRequest> UNBAN_REQUEST_KEY_PROVIDER = new KeyProvider<>() {
+    public static final KeyProvider<UnbanRequest> UNBAN_REQUEST_KEY_PROVIDER = new KeyProvider<>() {
 
         @Override
         public String getKey(IPLDObject<UnbanRequest> object) {
@@ -482,21 +484,22 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
     }
 
     @Override
-    public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+    public void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+            throws IOException {
         writer.writeNumber(KEY_VERSION, version);
         writer.writeNumber(KEY_RATING, rating);
-        writer.writeLink(KEY_USER, user, signer, context);
-        writer.writeLink(KEY_PREVIOUS_VERSION, previousVersion, signer, context);
-        writer.writeLinkObjects(KEY_DOCUMENTS, documents, signer, context);
-        writer.writeLinkObjects(KEY_REMOVED_DOCUMENTS, removedDocuments, null, null);
-        writer.writeLinkObjects(KEY_FALSE_CLAIMS, falseClaims, null, null);
-        writer.writeLinkObjects(KEY_FALSE_APPROVALS, falseApprovals, null, null);
-        writer.writeLinkObjects(KEY_FALSE_DECLINATIONS, falseDeclinations, null, null);
-        writer.writeLinkObjects(KEY_SETTLEMENT_REQUESTS, settlementRequests, signer, context);
-        writer.writeLinkObjects(KEY_OWNERSHIP_REQUESTS, ownershipRequests, signer, context);
-        writer.writeLinkObjects(KEY_UNBAN_REQUESTS, unbanRequests, signer, context);
-        writer.writeLinkObjects(KEY_GRANTED_OWNERSHIPS, grantedOwnerships, signer, context);
-        writer.writeLinkObjects(KEY_GRANTED_UNBANS, grantedUnbans, signer, context);
+        writer.writeLink(KEY_USER, user, signer, context, null);
+        writer.writeLink(KEY_PREVIOUS_VERSION, previousVersion, signer, context, null);
+        writer.writeLinkObjects(KEY_DOCUMENTS, documents, null, null, null);
+        writer.writeLinkObjects(KEY_REMOVED_DOCUMENTS, removedDocuments, null, null, null);
+        writer.writeLinkObjects(KEY_FALSE_CLAIMS, falseClaims, null, null, null);
+        writer.writeLinkObjects(KEY_FALSE_APPROVALS, falseApprovals, null, null, null);
+        writer.writeLinkObjects(KEY_FALSE_DECLINATIONS, falseDeclinations, null, null, null);
+        writer.writeLinkObjects(KEY_SETTLEMENT_REQUESTS, settlementRequests, null, null, null);
+        writer.writeLinkObjects(KEY_OWNERSHIP_REQUESTS, ownershipRequests, null, null, null);
+        writer.writeLinkObjects(KEY_UNBAN_REQUESTS, unbanRequests, null, null, null);
+        writer.writeLinkObjects(KEY_GRANTED_OWNERSHIPS, grantedOwnerships, signer, context, progressListener);
+        writer.writeLinkObjects(KEY_GRANTED_UNBANS, grantedUnbans, signer, context, progressListener);
     }
 
     public long getVersion() {
@@ -731,12 +734,13 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
      * @param transferredOwnershipHashes the hashes of documents that have been transferred to other users
      * @param current                    the current wrapper (should not be null)
      */
-    public UserState updateLinks(Collection<IPLDObject<Document>> docs,
-            Collection<IPLDObject<DocumentRemoval>> removals, Collection<IPLDObject<SettlementRequest>> sreqs,
-            Collection<IPLDObject<OwnershipRequest>> oreqs, Collection<IPLDObject<GrantedOwnership>> granted,
+    public UserState updateLinks(Map<String, IPLDObject<Document>> docs,
+            Map<String, IPLDObject<DocumentRemoval>> removals, Map<String, IPLDObject<SettlementRequest>> sreqs,
+            Collection<IPLDObject<OwnershipRequest>> oreqs, Map<String, IPLDObject<GrantedOwnership>> granted,
             Collection<String> transferredOwnershipHashes, Collection<String> sealedDocuments,
-            UserState settlementValues, Collection<IPLDObject<UnbanRequest>> unbanRequests,
-            IPLDObject<UserState> current) {
+            UserState settlementValues, Map<String, IPLDObject<UnbanRequest>> unbanRequests,
+            Collection<IPLDObject<GrantedUnban>> unbans, IPLDObject<UserState> current,
+            Collection<ProgressListener> progressListeners) {
         UserState updated = copy();
         updated.version = this.version + 1;
         updated.previousVersion = current;
@@ -746,13 +750,8 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             }
         }
         if (sreqs != null) {
-            if (updated.settlementRequests == null) {
-                updated.settlementRequests = new LinkedHashMap<>();
-            }
-            for (IPLDObject<SettlementRequest> settlementRequest : sreqs) {
-                updated.settlementRequests.put(SETTLEMENT_REQUEST_KEY_PROVIDER.getKey(settlementRequest),
-                        settlementRequest);
-            }
+            updated.settlementRequests = addProgressListeners(sreqs, updated.settlementRequests, null,
+                    progressListeners);
         }
         if (oreqs != null) {
             if (updated.ownershipRequests == null) {
@@ -767,7 +766,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             if (updated.grantedOwnerships == null) {
                 updated.grantedOwnerships = new LinkedHashMap<>();
             }
-            for (IPLDObject<GrantedOwnership> grantedOwnership : granted) {
+            for (IPLDObject<GrantedOwnership> grantedOwnership : granted.values()) {
                 String key = GRANTED_OWNERSHIP_KEY_PROVIDER.getKey(grantedOwnership);
                 updated.grantedOwnerships.put(key, grantedOwnership);
                 if (updated.ownershipRequests != null) { // might be OP reclaim
@@ -776,22 +775,11 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             }
         }
         if (docs != null) {
-            if (updated.documents == null) {
-                updated.documents = new LinkedHashMap<>();
-            }
-            for (IPLDObject<Document> document : docs) {
-                updated.documents.put(DOCUMENT_KEY_PROVIDER.getKey(document), document);
-            }
+            updated.documents = addProgressListeners(docs, updated.documents, null, progressListeners);
         }
         if (removals != null) {
-            if (updated.removedDocuments == null) {
-                updated.removedDocuments = new LinkedHashMap<>();
-            }
-            for (IPLDObject<DocumentRemoval> removal : removals) {
-                String key = DOCUMENT_REMOVAL_KEY_PROVIDER.getKey(removal);
-                updated.removedDocuments.put(key, removal);
-                updated.documents.remove(key);
-            }
+            updated.removedDocuments = addProgressListeners(removals, updated.removedDocuments, updated.documents,
+                    progressListeners);
         }
         if (sealedDocuments != null) {
             if (updated.settlementRequests != null) { // null happens when sealed document is not an original
@@ -804,12 +792,16 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             }
         }
         if (unbanRequests != null) {
-            if (updated.unbanRequests == null) {
-                updated.unbanRequests = new LinkedHashMap<>();
+            updated.unbanRequests = addProgressListeners(unbanRequests, updated.unbanRequests, null, progressListeners);
+        }
+        if (unbans != null) {
+            if (updated.grantedUnbans == null) {
+                updated.grantedUnbans = new LinkedHashMap<>();
             }
-            for (IPLDObject<UnbanRequest> request : unbanRequests) {
-                String key = UNBAN_REQUEST_KEY_PROVIDER.getKey(request);
-                updated.unbanRequests.put(key, request);
+            for (IPLDObject<GrantedUnban> unban : unbans) {
+                String key = GRANTED_UNBAN_KEY_PROVIDER.getKey(unban);
+                updated.grantedUnbans.put(key, unban);
+                updated.unbanRequests.remove(key);
             }
         }
         return updated;

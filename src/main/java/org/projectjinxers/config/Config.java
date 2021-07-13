@@ -24,6 +24,7 @@ public class Config extends YamlConfig<Config.Root> {
 
         public IPFS ipfs;
         public IOTA iota;
+        public ValidationParams validationParams;
 
     }
 
@@ -63,6 +64,16 @@ public class Config extends YamlConfig<Config.Root> {
 
     }
 
+    static class ValidationParams {
+
+        public Long timestampTolerance;
+
+    }
+
+    // if changed in a running system, all affected model meta versions must be changed as well and validation must be
+    // adjusted
+    public static final long DEFAULT_TIMESTAMP_TOLERANCE = 1000L * 60 * 2;
+
     private static Config sharedInstance;
 
     /**
@@ -70,13 +81,16 @@ public class Config extends YamlConfig<Config.Root> {
      */
     public static Config getSharedInstance() {
         if (sharedInstance == null) {
-            sharedInstance = new Config();
+            sharedInstance = new Config("config.yml");
         }
         return sharedInstance;
     }
 
-    private Config() {
-        super("config.yml", Root.class);
+    private String iotaAddress;
+    private Long timestampTolerance;
+
+    private Config(Root root) {
+        super(root);
     }
 
     /**
@@ -147,8 +161,27 @@ public class Config extends YamlConfig<Config.Root> {
     /**
      * @return the main IOTA address (defines a subnet)
      */
-    public String getIOTAMainAddress() {
-        return root.iota.main.address;
+    public String getIOTAAddress() {
+        if (iotaAddress == null) {
+            iotaAddress = root.iota.main.address;
+        }
+        return iotaAddress;
+    }
+
+    public long getTimestampTolerance() {
+        if (timestampTolerance == null) {
+            ValidationParams params = root.validationParams;
+            Long res = params == null ? null : params.timestampTolerance;
+            timestampTolerance = res == null ? DEFAULT_TIMESTAMP_TOLERANCE : res;
+        }
+        return timestampTolerance;
+    }
+
+    public Config subConfig(String iotaAddress, long timestampTolerance) {
+        Config res = new Config(root);
+        res.iotaAddress = iotaAddress;
+        res.timestampTolerance = timestampTolerance;
+        return res;
     }
 
 }

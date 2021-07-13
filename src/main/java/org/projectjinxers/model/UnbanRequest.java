@@ -18,8 +18,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
 import org.projectjinxers.account.Signer;
+import org.projectjinxers.config.SecretConfig;
 import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.controller.IPLDObject.ProgressListener;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.ValidationContext;
@@ -59,12 +61,13 @@ public class UnbanRequest extends ToggleRequest implements DocumentAction, Votab
     }
 
     @Override
-    public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
-        super.write(writer, signer, context);
+    public void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+            throws IOException {
+        super.write(writer, signer, context, progressListener);
         writer.writeBoolean(KEY_ANONYMOUS, anonymous);
         writer.writeNumber(KEY_HASH_SEED, hashSeed);
         writer.writeNumber(KEY_DEADLINE, deadline.getTime());
-        writer.writeLink(KEY_DOCUMENT, document, null, null);
+        writer.writeLink(KEY_DOCUMENT, document, null, null, null);
     }
 
     @Override
@@ -83,7 +86,8 @@ public class UnbanRequest extends ToggleRequest implements DocumentAction, Votab
     }
 
     @Override
-    public Vote createVote(byte[] invitationKey, int valueIndex, long seed, int obfuscationVersion) {
+    public Vote createVote(byte[] invitationKey, int valueIndex, long seed, int obfuscationVersion,
+            SecretConfig secretConfig) {
         if (anonymous) {
             int valueHashObfuscation;
             do {
@@ -91,7 +95,7 @@ public class UnbanRequest extends ToggleRequest implements DocumentAction, Votab
             }
             while (valueHashObfuscation == 0);
             return new ValueVote(invitationKey, ModelUtility.obfuscateHash(ALL_VALUE_HASH_BASES[valueIndex], seed,
-                    obfuscationVersion, valueHashObfuscation), false, valueHashObfuscation);
+                    obfuscationVersion, valueHashObfuscation, secretConfig), false, valueHashObfuscation);
         }
         return new YesNoMaybeVote(invitationKey, ALL_VALUES[valueIndex]);
     }
@@ -116,7 +120,7 @@ public class UnbanRequest extends ToggleRequest implements DocumentAction, Votab
 
     @Override
     public void expectWinner(Object value, int[] counts, long seed) {
-        if (counts[0] <= counts[1]) {
+        if (!isGranted(counts)) {
             throw new ValidationException("expected yes count to be greater than no count");
         }
     }
@@ -163,6 +167,10 @@ public class UnbanRequest extends ToggleRequest implements DocumentAction, Votab
         if (!unbanRequest.isActive()) {
             throw new ValidationException("created voting from inactive unban request");
         }
+    }
+
+    public boolean isGranted(int[] counts) {
+        return counts[0] > counts[1];
     }
 
 }

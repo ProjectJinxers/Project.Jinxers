@@ -30,6 +30,32 @@ import org.projectjinxers.model.Metadata;
  */
 public class IPLDObject<D extends IPLDSerializable> {
 
+    public enum ProgressTask {
+
+        INIT, SAVE, SIGN, LINK_USER, LINK_MODEL
+
+    }
+
+    public static interface ProgressListener {
+
+        boolean isDeterminate();
+
+        void startedTask(ProgressTask task, int steps);
+
+        void nextStep();
+
+        void finishedTask(ProgressTask task);
+
+        void enqueued();
+
+        boolean dequeued();
+
+        void obsoleted();
+
+        boolean isCanceled();
+
+    }
+
     private String multihash;
     private D mapped;
     private IPLDContext context;
@@ -37,6 +63,8 @@ public class IPLDObject<D extends IPLDSerializable> {
     private Loader<D> loader;
     private Metadata metadata;
     private ECDSASignature foreignSignature;
+
+    private ProgressListener progressListener;
 
     /**
      * Constructor for locally created objects. Usually the instance will be written to IPFS.
@@ -143,6 +171,18 @@ public class IPLDObject<D extends IPLDSerializable> {
         return metadata;
     }
 
+    public ECDSASignature getForeignSignature() {
+        return foreignSignature;
+    }
+
+    public void setProgressListener(ProgressListener listener) {
+        this.progressListener = listener;
+    }
+
+    public ProgressListener getProgressListener() {
+        return progressListener;
+    }
+
     /**
      * Stores this instance in IPFS. This is a recursive operation. Referenced objects, that have not been saved, yet,
      * will also be saved automatically by calling this method. If one child save operation fails, the root save
@@ -154,8 +194,22 @@ public class IPLDObject<D extends IPLDSerializable> {
      * @return the multihash with which the object can be retrieved
      * @throws IOException if saving fails
      */
-    String save(IPLDContext context, Signer signer) throws IOException {
-        this.multihash = context.saveObject(this, signer);
+    String save(IPLDContext context, Signer signer, ProgressListener progressListener) throws IOException {
+        if (this.progressListener != null) {
+            if (this.progressListener.isDeterminate()) {
+                SaveStepCounter counter = new SaveStepCounter();
+                counter.write(context, this, signer, progressListener);
+                int totalSteps = counter.getSteps();
+                this.progressListener.startedTask(ProgressTask.SAVE, totalSteps);
+            }
+            else {
+                this.progressListener.startedTask(ProgressTask.SAVE, -1);
+            }
+        }
+        this.multihash = context.saveObject(this, signer, progressListener);
+        if (this.progressListener != null) {
+            this.progressListener.finishedTask(ProgressTask.SAVE);
+        }
         return multihash;
     }
 
@@ -164,13 +218,15 @@ public class IPLDObject<D extends IPLDSerializable> {
      * saved automatically by calling this method. If one child save operation fails, the root save operation fails, as
      * well. Of course, if you retry with this exact instance, the successfully saved children won't be saved again.
      * 
-     * @param writer  takes the single properties by key
-     * @param signer  the signer for recursion
-     * @param context the context
+     * @param writer           takes the single properties by key
+     * @param signer           the signer for recursion
+     * @param context          the context
+     * @param progressListener TODO
      * @throws IOException if writing a single property fails
      */
-    void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
-        mapped.write(writer, signer, context);
+    void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+            throws IOException {
+        mapped.write(writer, signer, context, progressListener);
     }
 
     /**
@@ -185,7 +241,13 @@ public class IPLDObject<D extends IPLDSerializable> {
     Metadata signIfMandatory(Signer signer, byte[] hashBase) {
         ECDSASignature signature = foreignSignature;
         if (signature == null && getMapped().isSignatureMandatory()) {
+            if (progressListener != null) {
+                progressListener.startedTask(ProgressTask.SIGN, 0);
+            }
             signature = signer.sign(hashBase);
+            if (progressListener != null) {
+                progressListener.finishedTask(ProgressTask.SIGN);
+            }
         }
         this.metadata = new Metadata(mapped.getMetaVersion(), signature);
         return metadata;

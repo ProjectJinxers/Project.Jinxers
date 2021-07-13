@@ -19,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.controller.IPLDObject.ProgressListener;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.OwnershipTransferController;
@@ -70,12 +71,13 @@ public class OwnershipRequest extends ToggleRequest implements DocumentAction, L
     }
 
     @Override
-    public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
-        super.write(writer, signer, context);
+    public void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+            throws IOException {
+        super.write(writer, signer, context, progressListener);
         writer.writeIfTrue(KEY_ANONYMOUS_VOTING, anonymousVoting);
         writer.writeNumber(KEY_VOTING_HASH_SEED, votingHashSeed);
         writer.writeNumber(KEY_TIMESTAMP, timestamp);
-        writer.writeLink(KEY_DOCUMENT, document, null, null);
+        writer.writeLink(KEY_DOCUMENT, document, null, null, null);
     }
 
     /**

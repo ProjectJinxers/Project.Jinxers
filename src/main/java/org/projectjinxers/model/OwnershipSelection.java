@@ -19,21 +19,26 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
 
 import org.projectjinxers.account.Signer;
+import org.projectjinxers.config.SecretConfig;
 import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.controller.IPLDObject.ProgressListener;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDReader.KeyProvider;
 import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.OwnershipTransferController;
 import org.projectjinxers.controller.ValidationContext;
 import org.projectjinxers.controller.ValidationException;
+import org.projectjinxers.util.ModelUtility;
 
 /**
  * OwnershipSelection instances can be voted for if more than one user requests ownership of an abandoned document.
@@ -93,12 +98,13 @@ public class OwnershipSelection implements Votable {
     }
 
     @Override
-    public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+    public void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+            throws IOException {
         writer.writeIfTrue(KEY_ANONYMOUS, anonymous);
         writer.writeNumber(KEY_HASH_SEED, hashSeed);
         writer.writeNumber(KEY_DEADLINE, deadline.getTime());
-        writer.writeLink(KEY_DOCUMENT, document, null, null);
-        writer.writeLinkObjects(KEY_SELECTION, selection, null, null);
+        writer.writeLink(KEY_DOCUMENT, document, null, null, null);
+        writer.writeLinkObjects(KEY_SELECTION, selection, null, null, null);
     }
 
     @Override
@@ -124,11 +130,20 @@ public class OwnershipSelection implements Votable {
     }
 
     @Override
-    public Vote createVote(byte[] invitationKey, int valueIndex, long seed, int obfuscationVersion) {
+    public Vote createVote(byte[] invitationKey, int valueIndex, long seed, int obfuscationVersion,
+            SecretConfig secretConfig) {
         if (anonymous) {
-
+            int valueHashObfuscation;
+            do {
+                valueHashObfuscation = (int) (Math.random() * Integer.MAX_VALUE);
+            }
+            while (valueHashObfuscation == 0);
+            return new ValueVote(invitationKey,
+                    ModelUtility.obfuscateHash(String.valueOf(valueIndex).getBytes(StandardCharsets.UTF_8), seed,
+                            obfuscationVersion, valueHashObfuscation, secretConfig),
+                    false, valueHashObfuscation);
         }
-        return null;
+        return new ValueVote(invitationKey, valueIndex, false, 0);
     }
 
     @Override
@@ -172,6 +187,43 @@ public class OwnershipSelection implements Votable {
 
     @Override
     public void expectWinner(Object value, int[] counts, long seed) {
+        int maxIndex = getMaxIndex(counts, seed);
+        if (((Integer) value).intValue() != maxIndex) {
+            throw new ValidationException("expected count for " + value + " to be the max");
+        }
+    }
+
+    @Override
+    public void validate(Voting voting, ValidationContext validationContext) {
+        // TODO: can voting.initialModelState be invalid?!?
+        OwnershipTransferController checkController = new OwnershipTransferController(this,
+                voting.getInitialModelState());
+        Voting reconstructedVoting = checkController.getVoting().getMapped();
+        OwnershipSelection reconstructed = (OwnershipSelection) reconstructedVoting.getSubject().getMapped();
+        if (selection.size() != reconstructed.selection.size()) {
+            throw new ValidationException("expected same selection size");
+        }
+        Set<String> reconstructedHashes = new HashSet<>();
+        for (IPLDObject<OwnershipRequest> request : reconstructed.selection.values()) {
+            reconstructedHashes.add(request.getMultihash());
+        }
+        for (IPLDObject<OwnershipRequest> request : selection.values()) {
+            if (!reconstructedHashes.contains(request.getMultihash())) {
+                throw new ValidationException("expected same ownership requests");
+            }
+        }
+    }
+
+    public IPLDObject<OwnershipRequest> getWinner(int[] counts, long seed) {
+        int maxIndex = getMaxIndex(counts, seed);
+        Iterator<Entry<String, IPLDObject<OwnershipRequest>>> iterator = selection.entrySet().iterator();
+        for (int i = 0; i < maxIndex; i++) {
+            iterator.next();
+        }
+        return iterator.next().getValue();
+    }
+
+    private int getMaxIndex(int[] counts, long seed) {
         int max = 0;
         int maxIndex = -1;
         List<Integer> sameCount = null;
@@ -200,30 +252,7 @@ public class OwnershipSelection implements Votable {
             int randomIndex = rnd.nextInt(sameCount.size());
             maxIndex = sameCount.get(randomIndex);
         }
-        if (((Integer) value).intValue() != maxIndex) {
-            throw new ValidationException("expected count for " + value + " to be the max");
-        }
-    }
-
-    @Override
-    public void validate(Voting voting, ValidationContext validationContext) {
-        // TODO: can voting.initialModelState be invalid?!?
-        OwnershipTransferController checkController = new OwnershipTransferController(this,
-                voting.getInitialModelState());
-        Voting reconstructedVoting = checkController.getVoting().getMapped();
-        OwnershipSelection reconstructed = (OwnershipSelection) reconstructedVoting.getSubject().getMapped();
-        if (selection.size() != reconstructed.selection.size()) {
-            throw new ValidationException("expected same selection size");
-        }
-        Set<String> reconstructedHashes = new HashSet<>();
-        for (IPLDObject<OwnershipRequest> request : reconstructed.selection.values()) {
-            reconstructedHashes.add(request.getMultihash());
-        }
-        for (IPLDObject<OwnershipRequest> request : selection.values()) {
-            if (!reconstructedHashes.contains(request.getMultihash())) {
-                throw new ValidationException("expected same ownership requests");
-            }
-        }
+        return maxIndex;
     }
 
 }

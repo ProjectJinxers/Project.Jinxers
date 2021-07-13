@@ -20,6 +20,7 @@ import org.ethereum.crypto.ECKey.ECDSASignature;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.ByteCodec;
 import org.projectjinxers.controller.IPLDContext;
+import org.projectjinxers.controller.IPLDObject.ProgressListener;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.ValidationContext;
@@ -65,7 +66,8 @@ public class User implements IPLDSerializable, Loader<User> {
     }
 
     @Override
-    public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+    public void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+            throws IOException {
         writer.writeString(KEY_USERNAME, username);
         writer.writeNumber(KEY_CREATED_AT, createdAt.getTime());
         writer.writeByteArray(KEY_PUBLIC_KEY, publicKey, ByteCodec.DEFAULT);

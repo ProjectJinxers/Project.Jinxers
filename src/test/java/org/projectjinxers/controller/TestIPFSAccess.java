@@ -21,11 +21,13 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.BlockingQueue;
@@ -60,7 +62,7 @@ public class TestIPFSAccess extends IPFSAccess {
     private Map<String, BlockingQueue<Map<String, Object>>> messageQueues = new HashMap<>();
 
     private Set<String> availableStreams = new HashSet<>();
-    private Map<String, String> publishedMessages = new HashMap<>();
+    private Map<String, Queue<String>> publishedMessages = new HashMap<>();
     private String publishedMessageTopic;
 
     private Set<String> saveFailures = new HashSet<>();
@@ -106,7 +108,12 @@ public class TestIPFSAccess extends IPFSAccess {
     @Override
     public void publish(String topic, String message) throws Exception {
         synchronized (publishedMessages) {
-            publishedMessages.put(topic, message);
+            Queue<String> queue = publishedMessages.get(topic);
+            if (queue == null) {
+                queue = new ArrayDeque<>();
+                publishedMessages.put(topic, queue);
+            }
+            queue.add(message);
             publishedMessageTopic = topic;
             publishedMessages.notifyAll();
         }
@@ -204,7 +211,7 @@ public class TestIPFSAccess extends IPFSAccess {
      */
     public String getHash(IPLDObject<?> object, IPLDContext context, Signer signer) throws IOException {
         calculatingHashOnly = true;
-        String hash = object.save(context, signer);
+        String hash = object.save(context, signer, null);
         calculatingHashOnly = false;
         return hash;
     }
@@ -337,7 +344,8 @@ public class TestIPFSAccess extends IPFSAccess {
      * @return the most recent published message for the given topic
      */
     public String getPublishedMessage(String topic) {
-        return publishedMessages.get(topic);
+        Queue<String> queue = publishedMessages.get(topic);
+        return queue == null ? null : queue.peek();
     }
 
     /**
@@ -354,7 +362,11 @@ public class TestIPFSAccess extends IPFSAccess {
         do {
             synchronized (publishedMessages) {
                 if (topic.equals(publishedMessageTopic)) {
-                    String msg = publishedMessages.remove(topic);
+                    Queue<String> queue = publishedMessages.get(topic);
+                    String msg = queue == null ? null : queue.poll();
+                    if (queue != null && queue.isEmpty()) {
+                        publishedMessageTopic = null;
+                    }
                     if (msg != null) {
                         return msg;
                     }
@@ -370,7 +382,12 @@ public class TestIPFSAccess extends IPFSAccess {
                     return null;
                 }
                 if (topic.equals(publishedMessageTopic)) {
-                    return publishedMessages.remove(topic);
+                    Queue<String> queue = publishedMessages.get(topic);
+                    String msg = queue == null ? null : queue.poll();
+                    if (queue != null && queue.isEmpty()) {
+                        publishedMessageTopic = null;
+                    }
+                    return msg;
                 }
             }
         }

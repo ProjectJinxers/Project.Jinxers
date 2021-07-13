@@ -23,6 +23,7 @@ import org.ethereum.crypto.ECKey.ECDSASignature;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.controller.IPLDObject.ProgressListener;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDReader.KeyProvider;
 import org.projectjinxers.controller.IPLDWriter;
@@ -162,18 +163,19 @@ public class Document implements IPLDSerializable {
     }
 
     @Override
-    public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+    public void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+            throws IOException {
         writer.writeString(KEY_TITLE, title);
         writer.writeString(KEY_SUBTITLE, subtitle);
         writer.writeString(KEY_VERSION, version);
         writer.writeString(KEY_TAGS, tags);
         writer.writeNumber(KEY_DATE, date.getTime());
         writer.writeString(KEY_SOURCE, source);
-        writer.writeLink(KEY_CONTENTS, contents, signer, context);
-        writer.writeLink(KEY_USER_STATE, userState, signer, context);
-        writer.writeLink(KEY_PREVIOUS_VERSION, previousVersion, null, null);
-        writer.writeLink(KEY_FIRST_VERSION, firstVersion, null, null);
-        writer.writeLinkObjects(KEY_LINKS, links, signer, context);
+        writer.writeLink(KEY_CONTENTS, contents, signer, context, progressListener);
+        writer.writeLink(KEY_USER_STATE, userState, signer, context, progressListener);
+        writer.writeLink(KEY_PREVIOUS_VERSION, previousVersion, null, null, null);
+        writer.writeLink(KEY_FIRST_VERSION, firstVersion, null, null, null);
+        writer.writeLinkObjects(KEY_LINKS, links, signer, context, progressListener);
     }
 
     protected void handleMissingContents() {

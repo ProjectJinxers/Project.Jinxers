@@ -13,6 +13,9 @@
  */
 package org.projectjinxers.controller;
 
+import static org.projectjinxers.util.ModelUtility.addProgressListener;
+import static org.projectjinxers.util.ModelUtility.dequeue;
+import static org.projectjinxers.util.ModelUtility.enqueue;
 import static org.projectjinxers.util.ModelUtility.indexOfNonNullEntry;
 
 import java.io.FileNotFoundException;
@@ -25,8 +28,8 @@ import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Queue;
@@ -35,16 +38,23 @@ import java.util.Set;
 import org.ethereum.crypto.ECKey.ECDSASignature;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.config.Config;
+import org.projectjinxers.config.SecretConfig;
+import org.projectjinxers.controller.IPLDObject.ProgressListener;
+import org.projectjinxers.controller.IPLDObject.ProgressTask;
 import org.projectjinxers.model.Document;
 import org.projectjinxers.model.DocumentRemoval;
 import org.projectjinxers.model.GrantedOwnership;
+import org.projectjinxers.model.GrantedUnban;
 import org.projectjinxers.model.ModelState;
 import org.projectjinxers.model.OwnershipRequest;
+import org.projectjinxers.model.OwnershipSelection;
 import org.projectjinxers.model.Review;
 import org.projectjinxers.model.SealedDocument;
 import org.projectjinxers.model.SettlementRequest;
+import org.projectjinxers.model.Tally;
 import org.projectjinxers.model.UnbanRequest;
 import org.projectjinxers.model.UserState;
+import org.projectjinxers.model.Votable;
 import org.projectjinxers.model.Voting;
 import org.spongycastle.util.encoders.Base64;
 
@@ -67,14 +77,100 @@ public class ModelController {
         }
     }
 
+    // Currently this is a container for progress listeners only. Could be used as a real progress listener in the
+    // future (with subclasses UserStateProgressListener and ModelStateProgressListener).
+    private static class ForwardingProgressListener implements ProgressListener {
+
+        private Collection<ProgressListener> listeners;
+
+        @Override
+        public boolean isDeterminate() {
+            return false;
+        }
+
+        @Override
+        public void startedTask(ProgressTask task, int steps) {
+            for (ProgressListener listener : listeners) {
+                listener.startedTask(task, steps);
+            }
+        }
+
+        @Override
+        public void nextStep() {
+
+        }
+
+        @Override
+        public void finishedTask(ProgressTask task) {
+            for (ProgressListener listener : listeners) {
+                listener.finishedTask(task);
+            }
+        }
+
+        @Override
+        public void enqueued() {
+            for (ProgressListener listener : listeners) {
+                listener.enqueued();
+            }
+        }
+
+        @Override
+        public boolean dequeued() {
+            boolean res = true;
+            for (ProgressListener listener : listeners) {
+                res = listener.dequeued() && res;
+            }
+            return res;
+        }
+
+        @Override
+        public void obsoleted() {
+            for (ProgressListener listener : listeners) {
+                listener.obsoleted();
+            }
+        }
+
+        @Override
+        public boolean isCanceled() {
+            for (ProgressListener listener : listeners) {
+                if (listener.isCanceled()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+    }
+
     private static final String PUBSUB_SUB_KEY_DATA = "data";
     private static final String PUBSUB_TOPIC_PREFIX_OWNERSHIP_REQUEST = "or";
 
+    private static final Map<String, ModelController> MODEL_CONTROLLERS = new HashMap<>();
+
+    public static ModelController getModelController(IPFSAccess access, Config config) throws Exception {
+        return getModelController(access, config, null);
+    }
+
+    public static ModelController getModelController(IPFSAccess access, Config config, SecretConfig secretConfig)
+            throws Exception {
+        Config cfg = config == null ? Config.getSharedInstance() : config;
+        String address = cfg.getIOTAAddress();
+        synchronized (MODEL_CONTROLLERS) {
+            ModelController modelController = MODEL_CONTROLLERS.get(address);
+            if (modelController == null) {
+                modelController = new ModelController(access, cfg, secretConfig, cfg.getTimestampTolerance());
+                MODEL_CONTROLLERS.put(address, modelController);
+            }
+            return modelController;
+        }
+    }
+
     private final IPFSAccess access;
+    private final SecretConfig secretConfig;
     private final IPLDContext context;
     private long timestampTolerance;
 
-    private final String mainIOTAAddress;
+    private final String address;
     private IPLDObject<ModelState> currentValidatedState;
     private Map<String, SettlementController> currentLocalHashes = new HashMap<>();
 
@@ -110,30 +206,30 @@ public class ModelController {
      *                           negative disables timestamp validation, does not affect validating relative durations)
      * @throws Exception if initialization failed and the application should not continue running.
      */
-    public ModelController(IPFSAccess access, Config config, long timestampTolerance) throws Exception {
+    private ModelController(IPFSAccess access, Config config, SecretConfig secretConfig, long timestampTolerance)
+            throws Exception {
         this.access = access;
-        if (config == null) {
-            config = Config.getSharedInstance();
-        }
+        Config cfg = config == null ? Config.getSharedInstance() : config;
+        this.secretConfig = secretConfig == null ? SecretConfig.getSharedInstance() : secretConfig;
         this.context = new IPLDContext(access, IPLDEncoding.JSON, IPLDEncoding.CBOR, false);
         this.timestampTolerance = timestampTolerance;
-        mainIOTAAddress = config.getIOTAMainAddress();
+        address = cfg.getIOTAAddress();
         String currentModelStateHash;
         try {
-            currentModelStateHash = access.readModelStateHash(mainIOTAAddress);
+            currentModelStateHash = access.readModelStateHash(address);
             if (currentModelStateHash != null) {
                 this.currentValidatedState = loadModelState(currentModelStateHash, false);
             }
         }
         catch (FileNotFoundException e) {
             do {
-                currentModelStateHash = readNextModelStateHashFromTangle(mainIOTAAddress);
+                currentModelStateHash = readNextModelStateHashFromTangle(address);
                 if (currentModelStateHash != null) {
                     try {
                         this.currentValidationContext = new ValidationContext(context, null, null,
-                                System.currentTimeMillis() + timestampTolerance, 0);
+                                System.currentTimeMillis() + timestampTolerance, 0, this.secretConfig);
                         this.currentValidatedState = loadModelState(currentModelStateHash, true);
-                        access.saveModelStateHash(mainIOTAAddress, currentModelStateHash);
+                        access.saveModelStateHash(address, currentModelStateHash);
                         break;
                     }
                     catch (Exception e2) {
@@ -152,7 +248,7 @@ public class ModelController {
             @Override
             public void run() {
                 try {
-                    access.subscribe(mainIOTAAddress).forEach(map -> {
+                    access.subscribe(address).forEach(map -> {
                         try {
                             String pubSubData = (String) map.get(PUBSUB_SUB_KEY_DATA);
                             handleIncomingModelState(pubSubData, System.currentTimeMillis());
@@ -175,7 +271,7 @@ public class ModelController {
             @Override
             public void run() {
                 try {
-                    access.subscribe(PUBSUB_TOPIC_PREFIX_OWNERSHIP_REQUEST + mainIOTAAddress).forEach(map -> {
+                    access.subscribe(PUBSUB_TOPIC_PREFIX_OWNERSHIP_REQUEST + address).forEach(map -> {
                         try {
                             String pubSubData = (String) map.get(PUBSUB_SUB_KEY_DATA);
                             handleIncomingOwnershipRequest(pubSubData, System.currentTimeMillis() + timestampTolerance);
@@ -237,13 +333,13 @@ public class ModelController {
             }
             else {
                 currentValidationContext = new ValidationContext(context, currentValidatedState,
-                        currentLocalHashes.keySet(), timestamp, timestampTolerance);
+                        currentLocalHashes.keySet(), timestamp, timestampTolerance, secretConfig);
                 IPLDObject<ModelState> loaded = loadModelState(multihash, true);
                 mergeWithValidated(loaded);
             }
         }
         catch (Exception e) {
-            // ignore
+            e.printStackTrace();
         }
         finally {
             validatingModelState = false;
@@ -309,18 +405,18 @@ public class ModelController {
      * @throws IOException if writing the properties fails
      */
     public void saveDocument(IPLDObject<Document> document, Signer signer) throws IOException {
-        document.save(context, signer);
+        document.save(context, signer, document.getProgressListener());
         saveLocalChanges(document, null, null, null, null, null, System.currentTimeMillis());
     }
 
     public void requestDocumentRemoval(IPLDObject<DocumentRemoval> removal, Signer signer) throws IOException {
-        removal.save(context, signer);
+        removal.save(context, signer, removal.getProgressListener());
         saveLocalChanges(null, removal, null, null, null, null, System.currentTimeMillis());
     }
 
     public void issueSettlementRequest(IPLDObject<SettlementRequest> settlementRequest, Signer signer)
             throws IOException {
-        settlementRequest.save(context, signer);
+        settlementRequest.save(context, signer, settlementRequest.getProgressListener());
         saveLocalChanges(null, null, settlementRequest, null, null, null, settlementRequest.getMapped().getTimestamp());
     }
 
@@ -337,7 +433,7 @@ public class ModelController {
      */
     public void issueOwnershipRequest(String documentHash, String userHash, boolean anonymousVoting, Signer signer)
             throws IOException {
-        String topic = PUBSUB_TOPIC_PREFIX_OWNERSHIP_REQUEST + mainIOTAAddress;
+        String topic = PUBSUB_TOPIC_PREFIX_OWNERSHIP_REQUEST + address;
         String request = OwnershipTransferController.composePubMessageRequest(anonymousVoting, userHash, documentHash);
         byte[] requestBytes = request.getBytes(StandardCharsets.UTF_8);
         ECDSASignature signature = signer.sign(requestBytes);
@@ -350,22 +446,27 @@ public class ModelController {
     }
 
     public void issueUnbanRequest(IPLDObject<UnbanRequest> unbanRequest, Signer signer) throws IOException {
-        unbanRequest.save(context, signer);
+        unbanRequest.save(context, signer, unbanRequest.getProgressListener());
         saveLocalChanges(null, null, null, unbanRequest, null, null, System.currentTimeMillis());
     }
 
     public void addVoting(IPLDObject<Voting> voting, Signer signer) throws IOException {
-        voting.save(context, signer);
+        voting.save(context, signer, voting.getProgressListener());
         saveLocalChanges(null, null, null, null, null, voting, System.currentTimeMillis());
     }
 
     public boolean addVote(IPLDObject<Voting> voting, String userHash, int valueIndex, long seed, Signer signer)
             throws IOException {
         long timestamp = System.currentTimeMillis();
-        Voting updated = voting.getMapped().addVote(userHash, valueIndex, seed, timestamp, timestampTolerance);
+        Voting updated = voting.getMapped().addVote(userHash, valueIndex, seed, timestamp, timestampTolerance,
+                secretConfig);
         if (updated != null) {
             IPLDObject<Voting> updatedObject = new IPLDObject<>(updated);
-            updatedObject.save(context, signer);
+            ProgressListener progressListener = voting.getProgressListener();
+            if (progressListener != null) {
+                updatedObject.setProgressListener(progressListener);
+            }
+            updatedObject.save(context, signer, progressListener);
             saveLocalChanges(null, null, null, null, null, updatedObject, timestamp);
             return true;
         }
@@ -374,10 +475,14 @@ public class ModelController {
 
     public boolean tally(IPLDObject<Voting> voting) throws IOException {
         long timestamp = System.currentTimeMillis();
-        Voting updated = voting.getMapped().tally(timestamp, timestampTolerance);
+        Voting updated = voting.getMapped().tally(timestamp, timestampTolerance, secretConfig);
         if (updated != null) {
             IPLDObject<Voting> updatedObject = new IPLDObject<>(updated);
-            updatedObject.save(context, null);
+            ProgressListener progressListener = voting.getProgressListener();
+            if (progressListener != null) {
+                updatedObject.setProgressListener(progressListener);
+            }
+            updatedObject.save(context, null, progressListener);
             saveLocalChanges(null, null, null, null, null, updatedObject, timestamp);
             return true;
         }
@@ -425,59 +530,37 @@ public class ModelController {
             currentState = currentModelState.getMapped();
             modelState = currentState;
         }
-        Set<String> userHashes = new LinkedHashSet<>();
-        Map<String, Queue<IPLDObject<DocumentRemoval>>> documentRemovals = new HashMap<>();
+        Map<String, Collection<ProgressListener>> userHashes = new LinkedHashMap<>();
+        Map<String, Map<String, IPLDObject<DocumentRemoval>>> documentRemovals = new HashMap<>();
         if (queuedDocumentRemovals != null) {
-            synchronized (queuedDocumentRemovals) {
-                for (Entry<String, Queue<IPLDObject<DocumentRemoval>>> entry : queuedDocumentRemovals.entrySet()) {
-                    String key = entry.getKey();
-                    userHashes.add(key);
-                    Queue<IPLDObject<DocumentRemoval>> removals = documentRemovals.get(key);
-                    if (removals == null) {
-                        removals = new ArrayDeque<>();
-                        documentRemovals.put(key, removals);
-                    }
-                    removals.addAll(entry.getValue());
-                }
-            }
+            dequeue(queuedDocumentRemovals, documentRemovals, UserState.DOCUMENT_REMOVAL_KEY_PROVIDER, userHashes,
+                    false);
         }
         if (documentRemoval != null) {
             String userHash = documentRemoval.getMapped().getDocument().getMapped().expectUserState().getUser()
                     .getMultihash();
-            userHashes.add(userHash);
-            Queue<IPLDObject<DocumentRemoval>> queue = documentRemovals.get(userHash);
-            if (queue == null) {
-                queue = new ArrayDeque<>();
-                documentRemovals.put(userHash, queue);
+            if (!addProgressListener(documentRemoval, userHash, userHashes, documentRemovals,
+                    UserState.DOCUMENT_REMOVAL_KEY_PROVIDER)) {
+                documentRemoval = null;
             }
-            queue.add(documentRemoval);
         }
         SettlementController settlementController = currentSnapshot == null ? null
                 : currentSnapshot.createPreEvaluationSnapshot(timestamp);
-        Map<String, Queue<IPLDObject<SettlementRequest>>> settlementRequests = new HashMap<>();
+        Map<String, Map<String, IPLDObject<SettlementRequest>>> settlementRequests = new HashMap<>();
         if (settlementController != null) {
-            for (Queue<IPLDObject<DocumentRemoval>> removals : documentRemovals.values()) {
-                for (IPLDObject<DocumentRemoval> removal : removals) {
+            for (Map<String, IPLDObject<DocumentRemoval>> removals : documentRemovals.values()) {
+                for (IPLDObject<DocumentRemoval> removal : removals.values()) {
                     settlementController.checkRemovedDocument(removal.getMapped().getDocument(), currentState);
                 }
             }
             boolean settlementChanged = false;
             if (queuedSettlementRequests != null) {
-                synchronized (queuedSettlementRequests) {
-                    if (queuedSettlementRequests.size() > 0) {
-                        for (Entry<String, Queue<IPLDObject<SettlementRequest>>> entry : queuedSettlementRequests
-                                .entrySet()) {
-                            String key = entry.getKey();
-                            userHashes.add(key);
-                            Queue<IPLDObject<SettlementRequest>> reqs = new ArrayDeque<>(entry.getValue());
-                            settlementRequests.put(key, reqs);
-                        }
-                    }
-                }
+                dequeue(queuedSettlementRequests, settlementRequests, UserState.SETTLEMENT_REQUEST_KEY_PROVIDER,
+                        userHashes, false);
                 if (settlementRequests.size() > 0) {
                     SettlementRequest sameTimestamp = settlementRequest == null ? null : settlementRequest.getMapped();
-                    for (Queue<IPLDObject<SettlementRequest>> queue : settlementRequests.values()) {
-                        for (IPLDObject<SettlementRequest> request : queue) {
+                    for (Map<String, IPLDObject<SettlementRequest>> queue : settlementRequests.values()) {
+                        for (IPLDObject<SettlementRequest> request : queue.values()) {
                             SettlementRequest req = request.getMapped();
                             req.synchronizeTimestamp(sameTimestamp);
                             sameTimestamp = req;
@@ -489,17 +572,16 @@ public class ModelController {
             }
             if (settlementRequest != null) {
                 SettlementRequest req = settlementRequest.getMapped();
-                if (settlementController.checkRequest(req.getDocument(), false, true)) {
-                    settlementChanged = true;
-                }
                 String userHash = req.getUserState().getMapped().getUser().getMultihash();
-                userHashes.add(userHash);
-                Queue<IPLDObject<SettlementRequest>> queue = settlementRequests.get(userHash);
-                if (queue == null) {
-                    queue = new ArrayDeque<>();
-                    settlementRequests.put(userHash, queue);
+                if (addProgressListener(settlementRequest, userHash, userHashes, settlementRequests,
+                        UserState.SETTLEMENT_REQUEST_KEY_PROVIDER)) {
+                    if (settlementController.checkRequest(req.getDocument(), false, true)) {
+                        settlementChanged = true;
+                    }
                 }
-                queue.add(settlementRequest);
+                else {
+                    settlementRequest = null;
+                }
             }
             settlementChanged = settlementController.applyNewTimestamp() || settlementChanged;
             if (settlementChanged) {
@@ -509,10 +591,11 @@ public class ModelController {
                 settlementController = null;
             }
         }
-        Map<String, Queue<IPLDObject<Document>>> documents = new HashMap<>();
-        Map<String, Queue<IPLDObject<UnbanRequest>>> unbanRequests = new HashMap<>();
+        Map<String, Map<String, IPLDObject<Document>>> documents = new HashMap<>();
+        Map<String, Map<String, IPLDObject<UnbanRequest>>> unbanRequests = new HashMap<>();
+        Map<String, Queue<IPLDObject<GrantedUnban>>> grantedUnbans = new HashMap<>();
         Map<String, Queue<IPLDObject<OwnershipRequest>>> ownershipRequests = new HashMap<>();
-        Map<String, Queue<IPLDObject<GrantedOwnership>>> grantedOwnerships = new HashMap<>();
+        Map<String, Map<String, IPLDObject<GrantedOwnership>>> grantedOwnerships = new HashMap<>();
         Map<String, Queue<String>> transferredDocumentHashes = new HashMap<>();
         Collection<OwnershipTransferController> transferControllers = new ArrayList<>();
         Map<String, IPLDObject<Voting>> votings = null;
@@ -522,18 +605,44 @@ public class ModelController {
                 transferControllers.addAll(queuedOwnershipTransferControllers);
             }
         }
+        Collection<ProgressListener> modelStateProgressListeners = new ArrayList<>();
         if (queuedVotings != null) {
             synchronized (queuedVotings) {
                 if (queuedVotings.size() > 0) {
-                    votings = new HashMap<>(queuedVotings);
+                    votings = new HashMap<>();
+                    Iterator<Entry<String, IPLDObject<Voting>>> it = queuedVotings.entrySet().iterator();
+                    while (it.hasNext()) {
+                        Entry<String, IPLDObject<Voting>> entry = it.next();
+                        String key = entry.getKey();
+                        IPLDObject<Voting> value = entry.getValue();
+                        ProgressListener progressListener = value.getProgressListener();
+                        if (progressListener == null) {
+                            votings.put(key, value);
+                        }
+                        else if (progressListener.dequeued()) {
+                            modelStateProgressListeners.add(progressListener);
+                            votings.put(key, value);
+                        }
+                        else {
+                            it.remove();
+                        }
+                    }
+                    if (votings.isEmpty()) {
+                        votings = null;
+                    }
                 }
             }
         }
         if (voting != null) {
-            if (votings == null) {
-                votings = new HashMap<>();
+            if (addProgressListener(voting, modelStateProgressListeners, false)) {
+                if (votings == null) {
+                    votings = new HashMap<>();
+                }
+                votings.put(ModelState.VOTING_KEY_PROVIDER.getKey(voting), voting);
             }
-            votings.put(voting.getMapped().getSubject().getMultihash(), voting);
+            else {
+                voting = null;
+            }
         }
         if (ownershipTransferController != null) {
             transferControllers.add(ownershipTransferController);
@@ -549,7 +658,7 @@ public class ModelController {
                     if (transferredDocument == null) {
                         IPLDObject<Voting> ownershipVoting = controller.getVoting();
                         try {
-                            ownershipVoting.save(context, null);
+                            ownershipVoting.save(context, null, null);
                         }
                         catch (Exception e) {
                             handleOwnershipTransferControllerException(e, ownershipTransferController, document,
@@ -559,72 +668,35 @@ public class ModelController {
                         if (votings == null) {
                             votings = new HashMap<>();
                         }
-                        votings.put(ownershipVoting.getMapped().getSubject().getMultihash(), ownershipVoting);
+                        votings.put(ModelState.VOTING_KEY_PROVIDER.getKey(ownershipVoting), ownershipVoting);
                     }
                     else {
-                        Document transferredDoc = transferredDocument.getMapped();
-                        IPLDObject<UserState> previousOwner = controller.getPreviousOwner();
-                        String key = previousOwner.getMapped().getUser().getMultihash();
-                        Queue<String> transferredDocHashes = transferredDocumentHashes.get(key);
-                        if (transferredDocHashes == null) {
-                            transferredDocHashes = new ArrayDeque<>();
-                            transferredDocumentHashes.put(key, transferredDocHashes);
-                        }
-                        String firstVersionHash = transferredDocument.getMapped().getFirstVersionHash();
-                        if (firstVersionHash == null) {
-                            firstVersionHash = transferredDocument.getMultihash();
-                        }
-                        transferredDocHashes.add(firstVersionHash);
-                        userHashes.add(key);
-                        IPLDObject<UserState> newOwner = controller.getNewOwner();
-                        IPLDObject<Document> transferred = transferredDoc.transferTo(newOwner, transferredDocument,
-                                controller.getSignature());
                         try {
-                            String transferredHash = transferred.save(context, null);
-                            String[] reviewTableEntries = modelState
-                                    .getReviewTableEntries(transferredDocument.getMultihash());
-                            if (reviewTableEntries != null) {
-                                if (newReviewTableEntries == null) {
-                                    newReviewTableEntries = new LinkedHashMap<>();
-                                }
-                                newReviewTableEntries.put(transferredHash, reviewTableEntries);
-                            }
-                            key = newOwner.getMapped().getUser().getMultihash();
-                            Queue<IPLDObject<Document>> docs = documents.get(key);
-                            if (docs == null) {
-                                docs = new ArrayDeque<>();
-                                documents.put(key, docs);
-                            }
-                            docs.add(transferred);
-                            if (settlementController != null) {
-                                settlementController.checkDocument(transferredDocument, true, null, null, null);
-                            }
-                            userHashes.add(key);
+                            newReviewTableEntries = transferDocument(transferredDocument, controller.getPreviousOwner(),
+                                    controller.getNewOwner(), controller.getSignature(), documents,
+                                    transferredDocumentHashes, grantedOwnerships, userHashes, newReviewTableEntries,
+                                    currentModelState, settlementController);
                         }
                         catch (Exception e) {
                             handleOwnershipTransferControllerException(e, ownershipTransferController, document,
                                     documentRemoval, settlementRequest, unbanRequest, voting);
                             return false;
                         }
-                        Queue<IPLDObject<GrantedOwnership>> granted = grantedOwnerships.get(key);
-                        if (granted == null) {
-                            granted = new ArrayDeque<>();
-                            grantedOwnerships.put(key, granted);
-                        }
-                        granted.add(new IPLDObject<>(new GrantedOwnership(transferred, currentModelState)));
                     }
                 }
                 else {
                     String key = ownershipRequest.getMapped().expectUserHash();
                     try {
-                        ownershipRequest.save(context, null);
+                        ownershipRequest.save(context, null, null);
                         Queue<IPLDObject<OwnershipRequest>> ownershipReqs = ownershipRequests.get(key);
                         if (ownershipReqs == null) {
                             ownershipReqs = new ArrayDeque<>();
                             ownershipRequests.put(key, ownershipReqs);
                         }
                         ownershipReqs.add(ownershipRequest);
-                        userHashes.add(key);
+                        if (!userHashes.containsKey(key)) {
+                            userHashes.put(key, null);
+                        }
                     }
                     catch (Exception e) {
                         handleOwnershipTransferControllerException(e, ownershipTransferController, document,
@@ -640,38 +712,70 @@ public class ModelController {
             }
         }
         if (queuedDocuments != null) {
-            synchronized (queuedDocuments) {
-                for (Entry<String, Queue<IPLDObject<Document>>> entry : queuedDocuments.entrySet()) {
-                    String key = entry.getKey();
-                    userHashes.add(key);
-                    Queue<IPLDObject<Document>> docs = documents.get(key);
-                    if (docs == null) {
-                        docs = new ArrayDeque<>();
-                        documents.put(key, docs);
-                    }
-                    if (settlementController == null) {
-                        docs.addAll(entry.getValue());
-                    }
-                    else {
-                        for (IPLDObject<Document> doc : entry.getValue()) {
-                            docs.add(doc);
-                            settlementController.checkDocument(doc, true, null, null, null);
-                        }
-                    }
+            Collection<IPLDObject<Document>> docs = dequeue(queuedDocuments, documents, UserState.DOCUMENT_KEY_PROVIDER,
+                    userHashes, settlementController != null);
+            if (docs != null) {
+                for (IPLDObject<Document> doc : docs) {
+                    settlementController.checkDocument(doc, true, null, null, null);
                 }
             }
         }
         if (document != null) {
             String userHash = document.getMapped().expectUserState().getUser().getMultihash();
-            userHashes.add(userHash);
-            Queue<IPLDObject<Document>> queue = documents.get(userHash);
-            if (queue == null) {
-                queue = new ArrayDeque<>();
-                documents.put(userHash, queue);
+            if (addProgressListener(document, userHash, userHashes, documents, UserState.DOCUMENT_KEY_PROVIDER)) {
+                if (settlementController != null) {
+                    settlementController.checkDocument(document, true, null, null, null);
+                }
             }
-            queue.add(document);
-            if (settlementController != null) {
-                settlementController.checkDocument(document, true, null, null, null);
+            else {
+                document = null;
+            }
+        }
+        if (votings != null) {
+            for (IPLDObject<Voting> votingObject : votings.values()) {
+                Voting vot = votingObject.getMapped();
+                IPLDObject<Tally> tally = vot.getTally();
+                if (tally != null) {
+                    int[] counts = tally.getMapped().getCounts();
+                    IPLDObject<Votable> subjectObject = vot.getSubject();
+                    Votable subject = subjectObject.getMapped();
+                    if (subject instanceof UnbanRequest) {
+                        UnbanRequest ureq = (UnbanRequest) subject;
+                        if (ureq.isGranted(counts)) {
+                            String userHash = ureq.getUserState().getMapped().getUser().getMultihash();
+                            @SuppressWarnings("unchecked")
+                            GrantedUnban grantedUnban = new GrantedUnban((IPLDObject<UnbanRequest>) subject);
+                            Queue<IPLDObject<GrantedUnban>> granted = grantedUnbans.get(userHash);
+                            if (granted == null) {
+                                granted = new ArrayDeque<>();
+                                grantedUnbans.put(userHash, granted);
+                            }
+                            granted.add(new IPLDObject<>(grantedUnban));
+                        }
+                    }
+                    else if (subject instanceof OwnershipSelection) {
+                        OwnershipSelection selection = (OwnershipSelection) subject;
+                        IPLDObject<OwnershipRequest> winnerObject = selection.getWinner(counts, vot.getSeed());
+                        OwnershipRequest winner = winnerObject.getMapped();
+                        String userHash = winner.getUserState().getMapped().getUser().getMultihash();
+                        IPLDObject<Document> docObj = winner.getDocument();
+                        Document doc = docObj.getMapped();
+                        Map<String, IPLDObject<GrantedOwnership>> granted = grantedOwnerships.get(userHash);
+                        if (granted == null || !granted.containsKey(docObj.getMultihash())) {
+                            try {
+                                newReviewTableEntries = transferDocument(docObj, doc.getUserState(),
+                                        modelState.expectUserState(userHash), winnerObject.getForeignSignature(),
+                                        documents, transferredDocumentHashes, grantedOwnerships, userHashes,
+                                        newReviewTableEntries, currentModelState, settlementController);
+                            }
+                            catch (Exception e) {
+                                handleNoUserStatesSaved(document, documentRemoval, settlementRequest, unbanRequest,
+                                        ownershipTransferController, voting);
+                                throw e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(e);
+                            }
+                        }
+                    }
+                }
             }
         }
         Map<String, UserState> settlementStates;
@@ -694,7 +798,11 @@ public class ModelController {
                     sealedDocuments.add(new IPLDObject<>(doc));
                     sealedDocumentHashes.add(doc.getDocument().getMultihash());
                 }
-                userHashes.addAll(settlementStates.keySet());
+                for (String userHash : settlementStates.keySet()) {
+                    if (!userHashes.containsKey(userHash)) {
+                        userHashes.put(userHash, null);
+                    }
+                }
                 if (queuedSettlementRequests != null) {
                     synchronized (queuedSettlementRequests) {
                         queuedSettlementRequests.clear();
@@ -718,7 +826,9 @@ public class ModelController {
             synchronized (queuedOwnershipRequests) {
                 for (Entry<String, Queue<IPLDObject<OwnershipRequest>>> entry : queuedOwnershipRequests.entrySet()) {
                     String key = entry.getKey();
-                    userHashes.add(key);
+                    if (!userHashes.containsKey(key)) {
+                        userHashes.put(key, null);
+                    }
                     Queue<IPLDObject<OwnershipRequest>> reqs = ownershipRequests.get(key);
                     if (reqs == null) {
                         reqs = new ArrayDeque<>();
@@ -732,13 +842,18 @@ public class ModelController {
             synchronized (queuedGrantedOwnerships) {
                 for (Entry<String, Queue<IPLDObject<GrantedOwnership>>> entry : queuedGrantedOwnerships.entrySet()) {
                     String key = entry.getKey();
-                    userHashes.add(key);
-                    Queue<IPLDObject<GrantedOwnership>> granted = grantedOwnerships.get(key);
+                    if (!userHashes.containsKey(key)) {
+                        userHashes.put(key, null);
+                    }
+                    Map<String, IPLDObject<GrantedOwnership>> granted = grantedOwnerships.get(key);
                     if (granted == null) {
-                        granted = new ArrayDeque<>();
+                        granted = new LinkedHashMap<>();
                         grantedOwnerships.put(key, granted);
                     }
-                    granted.addAll(entry.getValue());
+                    for (IPLDObject<GrantedOwnership> grantedOwnership : entry.getValue()) {
+                        IPLDObject<Document> doc = grantedOwnership.getMapped().getDocument();
+                        granted.put(doc.getMapped().getPreviousVersionHash(), grantedOwnership);
+                    }
                 }
             }
         }
@@ -746,7 +861,9 @@ public class ModelController {
             synchronized (queuedTransferredDocumentHashes) {
                 for (Entry<String, Queue<String>> entry : queuedTransferredDocumentHashes.entrySet()) {
                     String key = entry.getKey();
-                    userHashes.add(key);
+                    if (!userHashes.containsKey(key)) {
+                        userHashes.put(key, null);
+                    }
                     Queue<String> hashes = transferredDocumentHashes.get(key);
                     if (hashes == null) {
                         hashes = new ArrayDeque<>();
@@ -766,6 +883,16 @@ public class ModelController {
             synchronized (pendingUserStates) {
                 updatedUserStates.putAll(pendingUserStates);
             }
+            for (Entry<String, IPLDObject<UserState>> entry : updatedUserStates.entrySet()) {
+                ProgressListener progressListener = entry.getValue().getProgressListener();
+                if (progressListener != null && !progressListener.dequeued()) {
+                    String key = entry.getKey();
+                    updatedUserStates.remove(key);
+                    synchronized (pendingUserStates) {
+                        pendingUserStates.remove(key);
+                    }
+                }
+            }
         }
         if (pendingNewReviewTableEntries != null) {
             synchronized (pendingNewReviewTableEntries) {
@@ -780,26 +907,25 @@ public class ModelController {
             }
         }
         if (queuedUnbanRequests != null) {
-            synchronized (queuedUnbanRequests) {
-                for (Entry<String, Queue<IPLDObject<UnbanRequest>>> entry : queuedUnbanRequests.entrySet()) {
-                    String key = entry.getKey();
-                    userHashes.add(key);
-                    unbanRequests.put(key, new ArrayDeque<>(entry.getValue()));
-                }
-            }
+            dequeue(queuedUnbanRequests, unbanRequests, UserState.UNBAN_REQUEST_KEY_PROVIDER, userHashes, false);
         }
-        for (String userHash : userHashes) {
+        for (Entry<String, Collection<ProgressListener>> entry : userHashes.entrySet()) {
+            String userHash = entry.getKey();
+            Collection<ProgressListener> userProgressListeners = entry.getValue();
+            if (userProgressListeners == null) {
+                userProgressListeners = new ArrayList<>();
+            }
             IPLDObject<UserState> userState = modelState.getUserState(userHash);
             if (userState == null && document != null) {
                 userState = document.getMapped().getUserState();
             }
-            Queue<IPLDObject<Document>> docs = documents.get(userHash);
+            Map<String, IPLDObject<Document>> docs = documents.get(userHash);
             if (queuedDocuments != null) {
                 synchronized (queuedDocuments) {
                     queuedDocuments.remove(userHash);
                 }
             }
-            Queue<IPLDObject<DocumentRemoval>> removals = documentRemovals.get(userHash);
+            Map<String, IPLDObject<DocumentRemoval>> removals = documentRemovals.get(userHash);
             if (queuedDocumentRemovals != null) {
                 synchronized (queuedDocumentRemovals) {
                     queuedDocumentRemovals.remove(userHash);
@@ -811,7 +937,7 @@ public class ModelController {
                     queuedOwnershipRequests.remove(userHash);
                 }
             }
-            Queue<IPLDObject<GrantedOwnership>> granted = grantedOwnerships.get(userHash);
+            Map<String, IPLDObject<GrantedOwnership>> granted = grantedOwnerships.get(userHash);
             if (queuedGrantedOwnerships != null) {
                 synchronized (queuedGrantedOwnerships) {
                     queuedGrantedOwnerships.remove(userHash);
@@ -823,45 +949,71 @@ public class ModelController {
                     queuedTransferredDocumentHashes.remove(userHash);
                 }
             }
-            Queue<IPLDObject<SettlementRequest>> sreqs = settlementRequests.get(userHash);
+            Map<String, IPLDObject<SettlementRequest>> sreqs = settlementRequests.get(userHash);
             if (queuedSettlementRequests != null) {
                 synchronized (queuedSettlementRequests) {
                     queuedSettlementRequests.remove(userHash);
                 }
             }
-            Queue<IPLDObject<UnbanRequest>> unbans = unbanRequests.get(userHash);
+            Map<String, IPLDObject<UnbanRequest>> ureqs = unbanRequests.get(userHash);
             if (queuedUnbanRequests != null) {
                 synchronized (queuedUnbanRequests) {
                     queuedUnbanRequests.remove(userHash);
                 }
             }
+            Queue<IPLDObject<GrantedUnban>> unbans = grantedUnbans.get(userHash);
+
             UserState settlementValues = settlementStates == null ? null : settlementStates.get(userHash);
             if (abortLocalChanges) {
-                requeue(userHash, null, docs, removals, sreqs, oreqs, granted, hashes, unbans, votings);
+                requeue(userHash, null, docs, removals, sreqs, oreqs, granted, hashes, ureqs, votings);
                 handleUserStateUnsaved(updatedUserStates, settlementStates, document, documentRemoval, unbanRequest,
                         newReviewTableEntries);
                 return false;
             }
             IPLDObject<UserState> toSave = getInstanceToSave(userState);
             if (docs != null || sreqs != null || oreqs != null || granted != null || hashes != null
-                    || settlementValues != null || unbans != null) {
+                    || settlementValues != null || ureqs != null || unbans != null) {
                 try {
+                    if (toSave != userState) {
+                        ProgressListener progressListener = toSave.getProgressListener();
+                        if (progressListener instanceof ForwardingProgressListener) {
+                            userProgressListeners.addAll(((ForwardingProgressListener) progressListener).listeners);
+                        }
+                    }
+                    for (ProgressListener listener : userProgressListeners) {
+                        listener.startedTask(ProgressTask.LINK_USER, 0); // could check determinate flag and count?
+                    }
                     UserState updated = toSave.getMapped().updateLinks(docs, removals, sreqs, oreqs, granted, hashes,
-                            sealedDocumentHashes, settlementValues, unbans, toSave);
+                            sealedDocumentHashes, settlementValues, ureqs, unbans, toSave, userProgressListeners);
                     IPLDObject<UserState> updatedObject = new IPLDObject<>(updated);
-                    updatedObject.save(context, null);
+                    updatedObject.save(context, null, null);
+                    if (userProgressListeners.size() > 0) {
+                        try {
+                            for (ProgressListener listener : userProgressListeners) {
+                                listener.finishedTask(ProgressTask.LINK_USER);
+                            }
+                        }
+                        catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                        ForwardingProgressListener listener = new ForwardingProgressListener();
+                        listener.listeners = userProgressListeners;
+                        // save progress listeners in case of an error later
+                        updatedObject.setProgressListener(listener);
+                        modelStateProgressListeners.add(listener);
+                    }
                     updatedUserStates.put(userHash, updatedObject);
                 }
                 catch (Exception e) {
                     e.printStackTrace();
                     requeue(userHash, toSave == userState ? null : toSave, docs, removals, sreqs, oreqs, granted,
-                            hashes, unbans, votings);
+                            hashes, ureqs, votings);
                     handleUserStateUnsaved(updatedUserStates, settlementStates, document, documentRemoval, unbanRequest,
                             newReviewTableEntries);
                     return false;
                 }
                 if (docs != null && docs.size() > 0) {
-                    for (IPLDObject<Document> doc : docs) {
+                    for (IPLDObject<Document> doc : docs.values()) {
                         newReviewTableEntries = updateNewReviewTableEntries(doc, newReviewTableEntries);
                     }
                 }
@@ -871,12 +1023,15 @@ public class ModelController {
             handleLocalModelStateUnsaved(updatedUserStates, votings, settlementStates, newReviewTableEntries);
             return false;
         }
+        for (ProgressListener progressListener : modelStateProgressListeners) {
+            progressListener.startedTask(ProgressTask.LINK_MODEL, 0);
+        }
         if (updatedUserStates.isEmpty()) {
             if (votings == null) {
                 return false;
             }
             modelState = modelState.updateUserState(null, null, null, votings, null, newReviewTableEntries,
-                    currentModelState, timestamp);
+                    currentModelState, timestamp, modelStateProgressListeners);
         }
         else {
             boolean first = true;
@@ -885,12 +1040,12 @@ public class ModelController {
                 if (first) {
                     modelState = modelState.updateUserState(entry.getValue(), settlementRequests.get(key),
                             ownershipRequests.get(key), votings, sealedDocuments, newReviewTableEntries,
-                            currentModelState, timestamp);
+                            currentModelState, timestamp, modelStateProgressListeners);
                     first = false;
                 }
                 else {
                     modelState = modelState.updateUserState(entry.getValue(), settlementRequests.get(key),
-                            ownershipRequests.get(key), null, null, null, null, timestamp);
+                            ownershipRequests.get(key), null, null, null, null, timestamp, modelStateProgressListeners);
                 }
             }
         }
@@ -900,7 +1055,12 @@ public class ModelController {
             return false;
         }
         try {
-            currentLocalHashes.put(newLocalState.save(context, null), settlementController);
+            currentLocalHashes.put(newLocalState.save(context, null, null), settlementController);
+            if (pendingUserStates != null) {
+                synchronized (pendingUserStates) {
+                    pendingUserStates.clear();
+                }
+            }
         }
         catch (Exception e) {
             e.printStackTrace();
@@ -909,6 +1069,61 @@ public class ModelController {
         }
         publishLocalState(newLocalState);
         return true;
+    }
+
+    private Map<String, String[]> transferDocument(IPLDObject<Document> transferredDocument,
+            IPLDObject<UserState> previousOwner, IPLDObject<UserState> newOwner, ECDSASignature foreignSignature,
+            Map<String, Map<String, IPLDObject<Document>>> documents,
+            Map<String, Queue<String>> transferredDocumentHashes,
+            Map<String, Map<String, IPLDObject<GrantedOwnership>>> grantedOwnerships,
+            Map<String, Collection<ProgressListener>> userHashes, final Map<String, String[]> newReviewTableEntries,
+            IPLDObject<ModelState> currentModelState, SettlementController settlementController) throws IOException {
+        Document transferredDoc = transferredDocument.getMapped();
+        String key = previousOwner.getMapped().getUser().getMultihash();
+        Queue<String> transferredDocHashes = transferredDocumentHashes.get(key);
+        if (transferredDocHashes == null) {
+            transferredDocHashes = new ArrayDeque<>();
+            transferredDocumentHashes.put(key, transferredDocHashes);
+        }
+        String firstVersionHash = transferredDocument.getMapped().getFirstVersionHash();
+        if (firstVersionHash == null) {
+            firstVersionHash = transferredDocument.getMultihash();
+        }
+        transferredDocHashes.add(firstVersionHash);
+        if (!userHashes.containsKey(key)) {
+            userHashes.put(key, null);
+        }
+        IPLDObject<Document> transferred = transferredDoc.transferTo(newOwner, transferredDocument, foreignSignature);
+        String transferredHash = transferred.save(context, null, null);
+        String[] reviewTableEntries = currentModelState.getMapped()
+                .getReviewTableEntries(transferredDocument.getMultihash());
+        Map<String, String[]> res = newReviewTableEntries;
+        if (reviewTableEntries != null) {
+            if (res == null) {
+                res = new LinkedHashMap<>();
+            }
+            res.put(transferredHash, reviewTableEntries);
+        }
+        key = newOwner.getMapped().getUser().getMultihash();
+        Map<String, IPLDObject<Document>> docs = documents.get(key);
+        if (docs == null) {
+            docs = new LinkedHashMap<>();
+            documents.put(key, docs);
+        }
+        docs.put(UserState.DOCUMENT_KEY_PROVIDER.getKey(transferred), transferred);
+        if (settlementController != null) {
+            settlementController.checkDocument(transferredDocument, true, null, null, null);
+        }
+        if (!userHashes.containsKey(key)) {
+            userHashes.put(key, null);
+        }
+        Map<String, IPLDObject<GrantedOwnership>> granted = grantedOwnerships.get(key);
+        if (granted == null) {
+            granted = new LinkedHashMap<>();
+            grantedOwnerships.put(key, granted);
+        }
+        granted.put(firstVersionHash, new IPLDObject<>(new GrantedOwnership(transferred, currentModelState)));
+        return res;
     }
 
     private void handleOwnershipTransferControllerException(Exception e, OwnershipTransferController controller,
@@ -984,12 +1199,7 @@ public class ModelController {
             Map<String, UserState> settlementStates, IPLDObject<Document> document, IPLDObject<DocumentRemoval> removal,
             IPLDObject<UnbanRequest> unbanRequest, Map<String, String[]> newReviewTableEntries) {
         if (updatedUserStates.size() > 0) {
-            if (pendingUserStates == null) {
-                pendingUserStates = new LinkedHashMap<>();
-            }
-            synchronized (pendingUserStates) {
-                pendingUserStates.putAll(updatedUserStates);
-            }
+            enqueue(updatedUserStates, pendingUserStates);
             updateAppliedSettlementData(settlementStates, updatedUserStates);
         }
         this.pendingNewReviewTableEntries = newReviewTableEntries;
@@ -1043,20 +1253,12 @@ public class ModelController {
             Map<String, IPLDObject<Voting>> votings, Map<String, UserState> settlementStates,
             Map<String, String[]> newReviewTableEntries) {
         if (updatedUserStates.size() > 0) {
-            if (pendingUserStates == null) {
-                pendingUserStates = new LinkedHashMap<>();
-            }
-            synchronized (pendingUserStates) {
-                pendingUserStates.putAll(updatedUserStates);
-            }
+            pendingUserStates = enqueue(updatedUserStates, pendingUserStates);
+            updateAppliedSettlementData(settlementStates, updatedUserStates);
         }
         if (votings != null) {
-            if (queuedVotings == null) {
-                queuedVotings = new HashMap<>();
-            }
-            queuedVotings.putAll(votings);
+            queuedVotings = enqueue(votings, queuedVotings);
         }
-        updateAppliedSettlementData(settlementStates, updatedUserStates);
         this.pendingNewReviewTableEntries = newReviewTableEntries;
     }
 
@@ -1079,63 +1281,23 @@ public class ModelController {
     }
 
     private void enqueueDocument(IPLDObject<Document> document) {
-        if (queuedDocuments == null) {
-            queuedDocuments = new HashMap<>();
-        }
         String key = document.getMapped().expectUserState().getUser().getMultihash();
-        synchronized (queuedDocuments) {
-            Queue<IPLDObject<Document>> queue = queuedDocuments.get(key);
-            if (queue == null) {
-                queue = new ArrayDeque<>();
-                queuedDocuments.put(key, queue);
-            }
-            queue.add(document);
-        }
+        queuedDocuments = enqueue(document, queuedDocuments, key);
     }
 
     private void enqueueDocumentRemoval(IPLDObject<DocumentRemoval> documentRemoval) {
-        if (queuedDocumentRemovals == null) {
-            queuedDocumentRemovals = new HashMap<>();
-        }
         String key = documentRemoval.getMapped().getDocument().getMapped().expectUserState().getUser().getMultihash();
-        synchronized (queuedDocumentRemovals) {
-            Queue<IPLDObject<DocumentRemoval>> queue = queuedDocumentRemovals.get(key);
-            if (queue == null) {
-                queue = new ArrayDeque<>();
-                queuedDocumentRemovals.put(key, queue);
-            }
-            queue.add(documentRemoval);
-        }
+        queuedDocumentRemovals = enqueue(documentRemoval, queuedDocumentRemovals, key);
     }
 
     private void enqueueSettlementRequest(IPLDObject<SettlementRequest> settlementRequest) {
-        if (queuedSettlementRequests == null) {
-            queuedSettlementRequests = new HashMap<>();
-        }
         String key = settlementRequest.getMapped().getUserState().getMapped().getUser().getMultihash();
-        synchronized (queuedSettlementRequests) {
-            Queue<IPLDObject<SettlementRequest>> queue = queuedSettlementRequests.get(key);
-            if (queue == null) {
-                queue = new ArrayDeque<>();
-                queuedSettlementRequests.put(key, queue);
-            }
-            queue.add(settlementRequest);
-        }
+        queuedSettlementRequests = enqueue(settlementRequest, queuedSettlementRequests, key);
     }
 
     private void enqueueUnbanRequest(IPLDObject<UnbanRequest> unbanRequest) {
-        if (queuedUnbanRequests == null) {
-            queuedUnbanRequests = new HashMap<>();
-        }
         String key = unbanRequest.getMapped().getUserState().getMapped().getUser().getMultihash();
-        synchronized (queuedUnbanRequests) {
-            Queue<IPLDObject<UnbanRequest>> queue = queuedUnbanRequests.get(key);
-            if (queue == null) {
-                queue = new ArrayDeque<>();
-                queuedUnbanRequests.put(key, queue);
-            }
-            queue.add(unbanRequest);
-        }
+        queuedUnbanRequests = enqueue(unbanRequest, queuedUnbanRequests, key);
     }
 
     private void enqueueOwnershipTransferController(OwnershipTransferController controller) {
@@ -1152,56 +1314,30 @@ public class ModelController {
             queuedVotings = new HashMap<String, IPLDObject<Voting>>();
         }
         synchronized (queuedVotings) {
-            queuedVotings.put(voting.getMapped().getSubject().getMultihash(), voting);
+            ProgressListener progressListener = voting.getProgressListener();
+            if (progressListener == null) {
+                queuedVotings.put(ModelState.VOTING_KEY_PROVIDER.getKey(voting), voting);
+            }
+            else if (!progressListener.isCanceled()) {
+                queuedVotings.put(ModelState.VOTING_KEY_PROVIDER.getKey(voting), voting);
+                progressListener.enqueued();
+            }
         }
     }
 
-    private void requeue(String userHash, IPLDObject<UserState> pending, Queue<IPLDObject<Document>> documents,
-            Queue<IPLDObject<DocumentRemoval>> removals, Queue<IPLDObject<SettlementRequest>> sreqs,
-            Queue<IPLDObject<OwnershipRequest>> oreqs, Queue<IPLDObject<GrantedOwnership>> granted,
-            Queue<String> transferredOwnershipHashes, Queue<IPLDObject<UnbanRequest>> unbans,
+    private void requeue(String userHash, IPLDObject<UserState> pending, Map<String, IPLDObject<Document>> documents,
+            Map<String, IPLDObject<DocumentRemoval>> removals, Map<String, IPLDObject<SettlementRequest>> sreqs,
+            Queue<IPLDObject<OwnershipRequest>> oreqs, Map<String, IPLDObject<GrantedOwnership>> granted,
+            Queue<String> transferredOwnershipHashes, Map<String, IPLDObject<UnbanRequest>> unbans,
             Map<String, IPLDObject<Voting>> votings) {
         if (documents != null) {
-            if (queuedDocuments == null) {
-                queuedDocuments = new HashMap<>();
-            }
-            synchronized (queuedDocuments) {
-                Queue<IPLDObject<Document>> queue = queuedDocuments.get(userHash);
-                if (queue == null) {
-                    queuedDocuments.put(userHash, documents);
-                }
-                else {
-                    queue.addAll(documents);
-                }
-            }
+            queuedDocuments = enqueue(documents, queuedDocuments, userHash);
         }
         if (removals != null) {
-            if (queuedDocumentRemovals == null) {
-                queuedDocumentRemovals = new HashMap<>();
-            }
-            synchronized (queuedDocumentRemovals) {
-                Queue<IPLDObject<DocumentRemoval>> queue = queuedDocumentRemovals.get(userHash);
-                if (queue == null) {
-                    queuedDocumentRemovals.put(userHash, removals);
-                }
-                else {
-                    queue.addAll(removals);
-                }
-            }
+            queuedDocumentRemovals = enqueue(removals, queuedDocumentRemovals, userHash);
         }
         if (sreqs != null) {
-            if (queuedSettlementRequests == null) {
-                queuedSettlementRequests = new HashMap<>();
-            }
-            synchronized (queuedSettlementRequests) {
-                Queue<IPLDObject<SettlementRequest>> queue = queuedSettlementRequests.get(userHash);
-                if (queue == null) {
-                    queuedSettlementRequests.put(userHash, sreqs);
-                }
-                else {
-                    queue.addAll(sreqs);
-                }
-            }
+            queuedSettlementRequests = enqueue(sreqs, queuedSettlementRequests, userHash);
         }
         if (oreqs != null) {
             if (queuedOwnershipRequests == null) {
@@ -1224,10 +1360,10 @@ public class ModelController {
             synchronized (queuedGrantedOwnerships) {
                 Queue<IPLDObject<GrantedOwnership>> queue = queuedGrantedOwnerships.get(userHash);
                 if (queue == null) {
-                    queuedGrantedOwnerships.put(userHash, granted);
+                    queuedGrantedOwnerships.put(userHash, new ArrayDeque<>(granted.values()));
                 }
                 else {
-                    queue.addAll(granted);
+                    queue.addAll(granted.values());
                 }
             }
         }
@@ -1246,30 +1382,36 @@ public class ModelController {
             }
         }
         if (unbans != null) {
-            if (queuedUnbanRequests == null) {
-                queuedUnbanRequests = new HashMap<>();
-            }
-            synchronized (queuedUnbanRequests) {
-                Queue<IPLDObject<UnbanRequest>> queue = queuedUnbanRequests.get(userHash);
-                if (queue == null) {
-                    queuedUnbanRequests.put(userHash, unbans);
-                }
-                else {
-                    queue.addAll(unbans);
-                }
-            }
+            queuedUnbanRequests = enqueue(unbans, queuedUnbanRequests, userHash);
         }
         if (votings != null) {
             if (queuedVotings == null) {
                 queuedVotings = new HashMap<>();
             }
             synchronized (queuedVotings) {
-                queuedVotings.putAll(votings);
+                for (Entry<String, IPLDObject<Voting>> entry : votings.entrySet()) {
+                    IPLDObject<Voting> value = entry.getValue();
+                    ProgressListener progressListener = value.getProgressListener();
+                    if (progressListener == null) {
+                        queuedVotings.put(entry.getKey(), value);
+                    }
+                    else if (!progressListener.isCanceled()) {
+                        queuedVotings.put(entry.getKey(), value);
+                        progressListener.enqueued();
+                    }
+                }
             }
         }
         if (pending != null) {
             synchronized (pendingUserStates) {
-                pendingUserStates.put(userHash, pending);
+                ProgressListener progressListener = pending.getProgressListener();
+                if (progressListener == null) {
+                    pendingUserStates.put(userHash, pending);
+                }
+                else if (!progressListener.isCanceled()) {
+                    pendingUserStates.put(userHash, pending);
+                    progressListener.enqueued();
+                }
             }
         }
     }
@@ -1314,7 +1456,7 @@ public class ModelController {
         }
         nextValidatedState = new IPLDObject<ModelState>(localMergeBase);
         try {
-            String newHash = nextValidatedState.save(context, null);
+            String newHash = nextValidatedState.save(context, null, null);
             SettlementController currentSnapshot = currentValidationContext.getMainSettlementController()
                     .createPreEvaluationSnapshot(0);
             currentLocalHashes.put(newHash, currentSnapshot);
@@ -1385,7 +1527,7 @@ public class ModelController {
 
     private void publishLocalState(IPLDObject<ModelState> localState) {
         try {
-            access.publish(mainIOTAAddress, localState.getMultihash());
+            access.publish(address, localState.getMultihash());
         }
         catch (Exception e) {
             e.printStackTrace();

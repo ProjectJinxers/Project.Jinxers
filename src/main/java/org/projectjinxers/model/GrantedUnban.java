@@ -18,6 +18,7 @@ import java.io.IOException;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.controller.IPLDObject.ProgressListener;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.ValidationContext;
@@ -33,6 +34,14 @@ public class GrantedUnban implements IPLDSerializable, Loader<GrantedUnban> {
 
     private IPLDObject<UnbanRequest> unbanRequest;
 
+    GrantedUnban() {
+
+    }
+
+    public GrantedUnban(IPLDObject<UnbanRequest> unbanRequest) {
+        this.unbanRequest = unbanRequest;
+    }
+
     @Override
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {
@@ -41,8 +50,9 @@ public class GrantedUnban implements IPLDSerializable, Loader<GrantedUnban> {
     }
 
     @Override
-    public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
-        writer.writeLink(KEY_UNBAN_REQUEST, unbanRequest, null, null);
+    public void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+            throws IOException {
+        writer.writeLink(KEY_UNBAN_REQUEST, unbanRequest, null, null, null);
     }
 
     public IPLDObject<UnbanRequest> getUnbanRequest() {

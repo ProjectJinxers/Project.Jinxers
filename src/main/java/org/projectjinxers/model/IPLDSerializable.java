@@ -22,6 +22,7 @@ import java.util.Set;
 import org.ethereum.crypto.ECKey;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
+import org.projectjinxers.controller.IPLDObject.ProgressListener;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.ValidationContext;
@@ -146,8 +147,9 @@ public interface IPLDSerializable {
     /**
      * The meta version of a stored instance is stored with it in the metadata object. This enables code changes in data
      * model classes, that also change hashes (the ones for signatures and multihashes, as well). Method implementations
-     * of {@link #read(IPLDReader, IPLDContext, boolean)} and {@link #write(IPLDWriter, ECKey, IPLDContext)} must
-     * respect the meta version value. The default implementation returns 0.
+     * of {@link #read(IPLDReader, IPLDContext, boolean)} and
+     * {@link #write(IPLDWriter, ECKey, IPLDContext, ProgressListener)} must respect the meta version value. The default
+     * implementation returns 0.
      * 
      * @return the meta version (default 0)
      */
@@ -186,12 +188,14 @@ public interface IPLDSerializable {
     /**
      * Writes (serializes) the single properties.
      * 
-     * @param writer  takes the single values by key
-     * @param signer  the signer (for recursion)
-     * @param context the context (for recursion)
+     * @param writer           takes the single values by key
+     * @param signer           the signer (for recursion)
+     * @param context          the context (for recursion)
+     * @param progressListener TODO
      * @throws IOException if writing a single property fails
      */
-    void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException;
+    void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+            throws IOException;
 
     /**
      * Calculates the bytes to hash for creating or verifying a signature. The default implementation forwards the call

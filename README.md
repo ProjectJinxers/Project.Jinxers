@@ -29,6 +29,14 @@ Another issue could be scaling. If a (sub)system has many users and contains man
 In bigger (sub)systems, it might be useful to introduce the concept of light nodes, which are nodes, that don't perform validation and
 instead trust other nodes. They can still calculate and publish new model states, when the user adds a document for instance. Validator nodes could be rewarded for the work they do. This is not the main focus of this project, so feel free to work on that in your own fork. And if you create a new crypto currency, please consider calling it Jinxers ;)
 
+## Extensions
+
+The specification leaves some room for extensions. The main entry point for extensions is the DocumentContents class. It can be anything.
+
+### Search Index
+
+The specification does not contain anything regarding searching. But in combination with special dedicated accounts, DocumentContents instances (or instances of subclasses thereof) can be used to save search indices. Users will have to trust them. However, the platform already provides means to get rid of unfair search indices, since they are also documents, which can be reviewed. Without using a search index, a search algorithm has to load all documents of the current (or another) model state. Search index reviews could also utilize special DocumentContents instances (or instances of subclasses thereof), to allow for checking the claims stated in the review.
+
 ## Contributions
 
 Feel free to fork this repo and use it as a starting point for refinement and for adding your own ideas. Pull Requests will probably not be merged, at least not in the near future. We'll see what happens. No matter who does it, we want to see the ideas come to life!

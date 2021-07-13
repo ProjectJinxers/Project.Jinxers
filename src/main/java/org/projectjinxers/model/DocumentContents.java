@@ -17,6 +17,7 @@ import java.io.IOException;
 
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
+import org.projectjinxers.controller.IPLDObject.ProgressListener;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.ValidationContext;
@@ -50,7 +51,8 @@ public class DocumentContents implements IPLDSerializable, Loader<DocumentConten
     }
 
     @Override
-    public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+    public void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+            throws IOException {
         writer.writeString(KEY_ABSTRACT, abstr);
         writer.writeString(KEY_CONTENTS, contents);
     }

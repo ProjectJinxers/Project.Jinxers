@@ -21,6 +21,7 @@ import org.junit.Assert;
 import org.junit.jupiter.api.Test;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.config.Config;
+import org.projectjinxers.controller.IPLDObject.ProgressListener;
 import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.Loader;
 import org.projectjinxers.model.Metadata;
@@ -47,7 +48,7 @@ class LocalIPFSAccessTest {
         testData.text = "Yo!";
         IPLDObject<TestData> wrapper = new IPLDObject<>(testData);
         String multihash;
-        multihash = wrapper.save(context, null);
+        multihash = wrapper.save(context, null, null);
         Assert.assertNotNull(multihash);
         Assert.assertEquals(multihash, wrapper.getMultihash());
         TestData read = new TestData();
@@ -87,7 +88,8 @@ class LocalIPFSAccessTest {
         }
 
         @Override
-        public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+        public void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+                throws IOException {
             writer.writeString("text", text);
         }
 

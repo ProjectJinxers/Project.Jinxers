@@ -163,9 +163,9 @@ public class TestIPLDObject<D extends IPLDSerializable> extends IPLDObject<D> {
     }
 
     @Override
-    String save(IPLDContext context, Signer signer) throws IOException {
+    String save(IPLDContext context, Signer signer, ProgressListener progressListener) throws IOException {
         if (defaultBehavior) {
-            return super.save(context, this.signer == null ? signer : this.signer);
+            return super.save(context, this.signer == null ? signer : this.signer, progressListener);
         }
         return testMultihash;
     }

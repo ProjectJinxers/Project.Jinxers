@@ -15,17 +15,23 @@ package org.projectjinxers.util;
 
 import static org.ethereum.crypto.HashUtil.sha3;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Queue;
 import java.util.Set;
 
 import org.projectjinxers.config.SecretConfig;
 import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.controller.IPLDObject.ProgressListener;
+import org.projectjinxers.controller.IPLDReader.KeyProvider;
 import org.projectjinxers.controller.ValidationException;
 import org.projectjinxers.model.IPLDSerializable;
 
@@ -36,12 +42,6 @@ import org.projectjinxers.model.IPLDSerializable;
 public class ModelUtility {
 
     public static final int CURRENT_HASH_OBFUSCATION_VERSION = 0;
-
-    private static int secretObfuscationParameter;
-
-    static {
-        secretObfuscationParameter = SecretConfig.getSharedInstance().getObfuscationParam();
-    }
 
     public static <D extends IPLDSerializable> boolean isEqual(IPLDObject<D> o1, IPLDObject<D> o2) {
         if (o1 == o2) {
@@ -268,7 +268,9 @@ public class ModelUtility {
         return res.size() == 0 ? null : res;
     }
 
-    public static byte[] obfuscateHash(byte[] toHash, long seed, int obfuscationVersion, int valueHashObfuscation) {
+    public static byte[] obfuscateHash(byte[] toHash, long seed, int obfuscationVersion, int valueHashObfuscation,
+            SecretConfig secretConfig) {
+        int secretObfuscationParameter = secretConfig.getObfuscationParam();
         // just some random stuff, definitely not ideal, maybe even easily crackable, but that's what the version
         // parameter is for: room for improvement without breaking validation
         int hashCount = (int) (((seed + valueHashObfuscation) * secretObfuscationParameter) % 31);
@@ -282,6 +284,227 @@ public class ModelUtility {
             res[i++] = (byte) (b * obfuscation);
             if (++obfuscation == 0) {
                 obfuscation = seed;
+            }
+        }
+        return res;
+    }
+
+    public static <T extends IPLDSerializable> Collection<IPLDObject<T>> dequeue(
+            Map<String, Queue<IPLDObject<T>>> queues, Map<String, Map<String, IPLDObject<T>>> into,
+            KeyProvider<T> keyProvider, Map<String, Collection<ProgressListener>> userHashes, boolean collect) {
+        Collection<IPLDObject<T>> res = collect ? new ArrayList<>() : null;
+        synchronized (queues) {
+            for (Entry<String, Queue<IPLDObject<T>>> entry : queues.entrySet()) {
+                String key = entry.getKey();
+                Map<String, IPLDObject<T>> map = into.get(key);
+                boolean addToMap;
+                if (map == null) {
+                    map = new LinkedHashMap<>();
+                    addToMap = true;
+                }
+                else {
+                    addToMap = false;
+                }
+                Collection<ProgressListener> userProgressListeners = userHashes.get(key);
+                boolean addToHashes;
+                if (userProgressListeners == null) {
+                    userProgressListeners = new ArrayList<>();
+                    addToHashes = true;
+                }
+                else {
+                    addToHashes = false;
+                }
+                Queue<IPLDObject<T>> value = entry.getValue();
+                Iterator<IPLDObject<T>> it = value.iterator();
+                while (it.hasNext()) {
+                    IPLDObject<T> next = it.next();
+                    if (addProgressListener(next, userProgressListeners, true)) {
+                        map.put(keyProvider.getKey(next), next);
+                        if (collect) {
+                            res.add(next);
+                        }
+                    }
+                    else {
+                        it.remove();
+                    }
+                }
+                if (addToMap) {
+                    if (map.size() > 0) {
+                        into.put(key, map);
+                    }
+                }
+                else if (value.isEmpty()) {
+                    into.remove(key);
+                }
+                if (addToHashes) {
+                    userHashes.put(key, userProgressListeners.size() > 0 ? userProgressListeners : null);
+                }
+            }
+        }
+        return res;
+    }
+
+    public static boolean addProgressListener(IPLDObject<?> object, Collection<ProgressListener> progressListeners,
+            boolean dequeued) {
+        ProgressListener progressListener = object.getProgressListener();
+        if (progressListener != null) {
+            if (dequeued) {
+                if (progressListener.dequeued()) {
+                    progressListeners.add(progressListener);
+                    return true;
+                }
+                return false;
+            }
+            if (progressListener.isCanceled()) {
+                return false;
+            }
+            progressListeners.add(progressListener);
+        }
+        return true;
+    }
+
+    public static <T extends IPLDSerializable> boolean addProgressListener(IPLDObject<T> object, String userHash,
+            Map<String, Collection<ProgressListener>> userHashes, Map<String, Map<String, IPLDObject<T>>> map,
+            KeyProvider<T> keyProvider) {
+        ProgressListener progressListener = object.getProgressListener();
+        if (progressListener != null) {
+            if (progressListener.isCanceled()) {
+                return false;
+            }
+            Collection<ProgressListener> progressListeners = userHashes.get(userHash);
+            if (progressListeners == null) {
+                progressListeners = new ArrayList<>();
+                userHashes.put(userHash, progressListeners);
+            }
+            progressListeners.add(progressListener);
+        }
+        else if (!userHashes.containsKey(userHash)) {
+            userHashes.put(userHash, null);
+        }
+        Map<String, IPLDObject<T>> userMap = map.get(userHash);
+        if (userMap == null) {
+            userMap = new LinkedHashMap<>();
+            map.put(userHash, userMap);
+        }
+        userMap.put(keyProvider.getKey(object), object);
+        return true;
+    }
+
+    public static <T extends IPLDSerializable, C extends IPLDSerializable> Map<String, IPLDObject<T>> addProgressListeners(
+            Map<String, IPLDObject<T>> source, Map<String, IPLDObject<T>> dest, Map<String, IPLDObject<C>> complement,
+            Collection<ProgressListener> progressListeners) {
+        Map<String, IPLDObject<T>> res = dest;
+        if (res == null) {
+            res = new LinkedHashMap<>();
+        }
+        Iterator<Entry<String, IPLDObject<T>>> it = source.entrySet().iterator();
+        while (it.hasNext()) {
+            Entry<String, IPLDObject<T>> entry = it.next();
+            IPLDObject<T> value = entry.getValue();
+            if (addProgressListener(value, progressListeners, false)) {
+                String key = entry.getKey();
+                res.put(key, value);
+                if (complement != null) {
+                    complement.remove(key);
+                }
+            }
+            else {
+                it.remove();
+            }
+        }
+        return res;
+    }
+
+    public static <T extends IPLDSerializable> Map<String, Queue<IPLDObject<T>>> enqueue(IPLDObject<T> object,
+            Map<String, Queue<IPLDObject<T>>> queues, String userHash) {
+        Map<String, Queue<IPLDObject<T>>> res = queues;
+        if (res == null) {
+            res = new HashMap<>();
+        }
+        synchronized (res) {
+            Queue<IPLDObject<T>> queue = res.get(userHash);
+            boolean addQueue;
+            if (queue == null) {
+                queue = new ArrayDeque<>();
+                addQueue = true;
+            }
+            else {
+                addQueue = false;
+            }
+            ProgressListener progressListener = object.getProgressListener();
+            if (progressListener == null) {
+                queue.add(object);
+            }
+            else if (progressListener.isCanceled()) {
+                addQueue = false;
+            }
+            else {
+                queue.add(object);
+                progressListener.enqueued();
+            }
+            if (addQueue) {
+                res.put(userHash, queue);
+            }
+        }
+        return res;
+    }
+
+    public static <T extends IPLDSerializable> Map<String, IPLDObject<T>> enqueue(Map<String, IPLDObject<T>> source,
+            Map<String, IPLDObject<T>> dest) {
+        Map<String, IPLDObject<T>> res = dest;
+        if (res == null) {
+            res = new LinkedHashMap<>();
+        }
+        synchronized (res) {
+            Iterator<Entry<String, IPLDObject<T>>> it = source.entrySet().iterator();
+            do {
+                Entry<String, IPLDObject<T>> entry = it.next();
+                IPLDObject<T> value = entry.getValue();
+                ProgressListener progressListener = value.getProgressListener();
+                if (progressListener == null) {
+                    res.put(entry.getKey(), value);
+                }
+                else if (progressListener.isCanceled()) {
+                    it.remove();
+                }
+                else {
+                    res.put(entry.getKey(), value);
+                    progressListener.enqueued();
+                }
+            }
+            while (it.hasNext());
+        }
+        return res;
+    }
+
+    public static <T extends IPLDSerializable> Map<String, Queue<IPLDObject<T>>> enqueue(Map<String, IPLDObject<T>> map,
+            Map<String, Queue<IPLDObject<T>>> queues, String userHash) {
+        Map<String, Queue<IPLDObject<T>>> res = queues;
+        if (res == null) {
+            res = new HashMap<>();
+        }
+        synchronized (res) {
+            Queue<IPLDObject<T>> queue = res.get(userHash);
+            boolean addQueue;
+            if (queue == null) {
+                queue = new ArrayDeque<>();
+                addQueue = true;
+            }
+            else {
+                addQueue = false;
+            }
+            for (IPLDObject<T> object : map.values()) {
+                ProgressListener progressListener = object.getProgressListener();
+                if (progressListener == null) {
+                    queue.add(object);
+                }
+                else if (!progressListener.isCanceled()) {
+                    queue.add(object);
+                    progressListener.enqueued();
+                }
+            }
+            if (addQueue && queue.size() > 0) {
+                res.put(userHash, queue);
             }
         }
         return res;

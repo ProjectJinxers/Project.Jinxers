@@ -37,6 +37,7 @@ import org.powermock.modules.junit4.PowerMockRunner;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.config.Config;
 import org.projectjinxers.config.TestSecretConfig;
+import org.projectjinxers.controller.IPLDObject.ProgressListener;
 import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.Loader;
 import org.projectjinxers.model.Metadata;
@@ -106,9 +107,10 @@ public class InfuraIPFSAccessTest {
         IPFS.Dag spy = PowerMockito.spy(ipfs.dag);
         IPLDContext context = new IPLDContext(access, IPLDEncoding.JSON, IPLDEncoding.CBOR, false) {
             @Override
-            public String saveObject(IPLDObject<?> object, Signer signer) throws IOException {
+            public String saveObject(IPLDObject<?> object, Signer signer, ProgressListener progressListener)
+                    throws IOException {
                 IPLDWriter writer = IPLDEncoding.JSON.createWriter();
-                final byte[] writtenBytes = writer.write(this, object, signer);
+                final byte[] writtenBytes = writer.write(this, object, signer, null);
                 String fileContents = new String(writtenBytes, StandardCharsets.UTF_8);
                 System.out.println(fileContents);
                 bytes = writtenBytes;
@@ -189,7 +191,8 @@ public class InfuraIPFSAccessTest {
         }
 
         @Override
-        public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+        public void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+                throws IOException {
             writer.writeString("text", text);
         }
 

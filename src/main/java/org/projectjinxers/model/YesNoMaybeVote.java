@@ -17,6 +17,7 @@ import java.io.IOException;
 
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
+import org.projectjinxers.controller.IPLDObject.ProgressListener;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.ValidationContext;
@@ -49,8 +50,9 @@ public class YesNoMaybeVote extends AbstractVote {
     }
 
     @Override
-    public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
-        super.write(writer, signer, context);
+    public void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+            throws IOException {
+        super.write(writer, signer, context, progressListener);
         writer.writeBoolean(KEY_BOOLEAN_VALUE, value);
     }
 

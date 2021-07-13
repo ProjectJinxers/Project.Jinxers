@@ -30,6 +30,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import org.projectjinxers.account.Signer;
+import org.projectjinxers.config.SecretConfig;
 import org.projectjinxers.model.Document;
 import org.projectjinxers.model.DocumentRemoval;
 import org.projectjinxers.model.GrantedOwnership;
@@ -62,10 +63,6 @@ import org.projectjinxers.model.Voting;
  */
 public class ValidationContext {
 
-    // if changed in a running system, all affected model meta versions must be changed as well and validation must be
-    // adjusted
-    public static final long TIMESTAMP_TOLERANCE = 1000L * 60 * 2;
-
     private static final Comparator<Long> DESCENDING = new Comparator<>() {
         @Override
         public int compare(Long o1, Long o2) {
@@ -78,6 +75,7 @@ public class ValidationContext {
     private final Set<String> currentLocalHashes;
     private final long timestamp;
     private final long timestampTolerance;
+    private final SecretConfig secretConfig;
     private final boolean strict;
     private SettlementController mainSettlementController;
 
@@ -96,12 +94,13 @@ public class ValidationContext {
     private Map<String, Set<String>> obsoleteReviewVersions = new HashMap<>();
 
     public ValidationContext(IPLDContext context, IPLDObject<ModelState> currentValidLocalState,
-            Set<String> currentLocalHashes, long timestamp, long timestampTolerance) {
+            Set<String> currentLocalHashes, long timestamp, long timestampTolerance, SecretConfig secretConfig) {
         this.context = context;
         this.currentValidLocalState = currentValidLocalState;
         this.currentLocalHashes = currentLocalHashes;
         this.timestamp = timestamp;
         this.timestampTolerance = timestampTolerance;
+        this.secretConfig = secretConfig;
         this.strict = timestampTolerance > 0;
     }
 
@@ -115,6 +114,10 @@ public class ValidationContext {
 
     public long getTimestamp() {
         return timestamp;
+    }
+
+    public SecretConfig getSecretConfig() {
+        return secretConfig;
     }
 
     public SettlementController getMainSettlementController() {
@@ -530,7 +533,7 @@ public class ValidationContext {
         boolean hasNewVotes = voting.validateNewVotes(commonState, modelState, this);
         IPLDObject<Tally> tally = voting.getTally();
         if (tally != null && validated.add(tally.getMultihash())) {
-            voting.validateTally();
+            voting.validateTally(secretConfig);
         }
         if (!hasNewVotes && (commonState == null || commonState.getVoting(key) == null)) {
             modelState.validateVotingCause(key, commonState == null ? -1 : commonState.getVersion(), this);

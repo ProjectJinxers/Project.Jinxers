@@ -21,6 +21,7 @@ import java.util.Map;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.controller.IPLDObject.ProgressListener;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.ValidationContext;
@@ -81,12 +82,13 @@ public class Review extends Document implements DocumentAction, Loader<Review> {
     }
 
     @Override
-    public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
-        super.write(writer, signer, context);
+    public void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+            throws IOException {
+        super.write(writer, signer, context, progressListener);
         writer.writeIfTrue(KEY_INVERT_TRUTH, invertTruth);
         writer.writeBoolean(KEY_APPROVE, approve);
-        writer.writeLink(KEY_DOCUMENT, document, null, null);
-        writer.writeLinkObjects(KEY_INVERT_TRUTH_LINKS, invertTruthLinks, null, null);
+        writer.writeLink(KEY_DOCUMENT, document, null, null, null);
+        writer.writeLinkObjects(KEY_INVERT_TRUTH_LINKS, invertTruthLinks, null, null, null);
     }
 
     @Override

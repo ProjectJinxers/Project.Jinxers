@@ -18,6 +18,7 @@ import java.io.IOException;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.ByteCodec;
 import org.projectjinxers.controller.IPLDContext;
+import org.projectjinxers.controller.IPLDObject.ProgressListener;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.ValidationContext;
@@ -64,7 +65,8 @@ public class ValueVote extends AbstractVote {
     }
 
     @Override
-    public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+    public void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+            throws IOException {
         if (value instanceof byte[]) {
             writer.writeByteArray(KEY_BYTES_VALUE, (byte[]) value, ByteCodec.DEFAULT);
         }

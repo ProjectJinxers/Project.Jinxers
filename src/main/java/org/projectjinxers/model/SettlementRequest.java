@@ -18,6 +18,7 @@ import java.io.IOException;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.controller.IPLDObject.ProgressListener;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.ValidationContext;
@@ -60,10 +61,11 @@ public class SettlementRequest implements DocumentAction, Loader<SettlementReque
     }
 
     @Override
-    public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+    public void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+            throws IOException {
         writer.writeNumber(KEY_TIMESTAMP, timestamp);
-        writer.writeLink(KEY_DOCUMENT, document, null, null);
-        writer.writeLink(KEY_USER_STATE, userState, null, null);
+        writer.writeLink(KEY_DOCUMENT, document, null, null, null);
+        writer.writeLink(KEY_USER_STATE, userState, null, null, null);
     }
 
     public long getTimestamp() {

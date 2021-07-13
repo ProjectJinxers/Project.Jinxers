@@ -15,6 +15,7 @@ package org.projectjinxers.model;
 
 import java.util.Date;
 
+import org.projectjinxers.config.SecretConfig;
 import org.projectjinxers.controller.ValidationContext;
 import org.projectjinxers.controller.ValidationException;
 
@@ -43,7 +44,7 @@ public interface Votable extends IPLDSerializable {
     /**
      * @return a new empty Vote instance (provisional method, will be changed)
      */
-    Vote createVote(byte[] invitationKey, int valueIndex, long seed, int obfuscationVersion);
+    Vote createVote(byte[] invitationKey, int valueIndex, long seed, int obfuscationVersion, SecretConfig secretConfig);
 
     /**
      * @param forDisplay indicates whether or not the values will be displayed to select from (true) or will be used

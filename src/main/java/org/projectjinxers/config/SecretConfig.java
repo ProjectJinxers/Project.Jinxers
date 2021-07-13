@@ -44,12 +44,27 @@ public class SecretConfig extends YamlConfig<SecretConfig.Root> {
         return sharedInstance;
     }
 
+    private Integer obfuscationParam;
+
     private SecretConfig() {
         super("secret-config.yml", Root.class);
     }
 
+    private SecretConfig(Root root) {
+        super(root);
+    }
+
     public int getObfuscationParam() {
-        return root.obfuscation.param;
+        if (obfuscationParam == null) {
+            obfuscationParam = root.obfuscation.param;
+        }
+        return obfuscationParam;
+    }
+
+    public SecretConfig subConfig(int obfuscationParam) {
+        SecretConfig res = new SecretConfig(root);
+        res.obfuscationParam = this.obfuscationParam;
+        return res;
     }
 
 }

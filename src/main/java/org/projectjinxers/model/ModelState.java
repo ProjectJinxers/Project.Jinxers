@@ -30,6 +30,7 @@ import java.util.TreeSet;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.controller.IPLDObject.ProgressListener;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDReader.KeyProvider;
 import org.projectjinxers.controller.IPLDWriter;
@@ -37,6 +38,8 @@ import org.projectjinxers.controller.SettlementController;
 import org.projectjinxers.controller.ValidationContext;
 import org.projectjinxers.controller.ValidationException;
 import org.projectjinxers.util.ModelUtility;
+
+import static org.projectjinxers.util.ModelUtility.addProgressListeners;
 
 /**
  * ModelStates are the root instances of a tree, that represents the system at a specific time.
@@ -64,7 +67,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
 
     };
 
-    private static final KeyProvider<Voting> VOTING_KEY_PROVIDER = new KeyProvider<>() {
+    public static final KeyProvider<Voting> VOTING_KEY_PROVIDER = new KeyProvider<>() {
 
         @Override
         public String getKey(IPLDObject<Voting> object) {
@@ -191,15 +194,16 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
     }
 
     @Override
-    public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+    public void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+            throws IOException {
         writer.writeNumber(KEY_VERSION, version);
         writer.writeNumber(KEY_TIMESTAMP, timestamp);
-        writer.writeLink(KEY_PREVIOUS_VERSION, previousVersion, signer, context);
-        writer.writeLinkObjects(KEY_USER_STATES, userStates, signer, context);
-        writer.writeLinkObjects(KEY_VOTINGS, votings, signer, context);
-        writer.writeLinkObjects(KEY_SETTLEMENT_REQUESTS, settlementRequests, signer, context);
-        writer.writeLinkObjects(KEY_SEALED_DOCUMENTS, sealedDocuments, signer, context);
-        writer.writeLinkObjectArrays(KEY_OWNERSHIP_REQUESTS, ownershipRequests, signer, context);
+        writer.writeLink(KEY_PREVIOUS_VERSION, previousVersion, null, null, null);
+        writer.writeLinkObjects(KEY_USER_STATES, userStates, null, null, null);
+        writer.writeLinkObjects(KEY_VOTINGS, votings, null, null, null);
+        writer.writeLinkObjects(KEY_SETTLEMENT_REQUESTS, settlementRequests, null, null, null);
+        writer.writeLinkObjects(KEY_SEALED_DOCUMENTS, sealedDocuments, signer, context, progressListener);
+        writer.writeLinkObjectArrays(KEY_OWNERSHIP_REQUESTS, ownershipRequests, null, null, null);
         writer.writeLinkArrays(KEY_REVIEW_TABLE, reviewTable);
     }
 
@@ -343,10 +347,10 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
      * @return the updated instance (can be this instance)
      */
     public ModelState updateUserState(IPLDObject<UserState> userState,
-            Collection<IPLDObject<SettlementRequest>> settlementRequests,
+            Map<String, IPLDObject<SettlementRequest>> settlementRequests,
             Collection<IPLDObject<OwnershipRequest>> ownershipRequests, Map<String, IPLDObject<Voting>> votings,
             Collection<IPLDObject<SealedDocument>> sealedDocuments, Map<String, String[]> reviewTable,
-            IPLDObject<ModelState> current, long timestamp) {
+            IPLDObject<ModelState> current, long timestamp, Collection<ProgressListener> progressListeners) {
         ModelState updated;
         if (current == null) {
             if (userState != null && this.userStates == null) {
@@ -429,10 +433,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
             updated.userStates.put(USER_STATE_KEY_PROVIDER.getKey(userState), userState);
         }
         if (settlementRequests != null) {
-            for (IPLDObject<SettlementRequest> settlementRequest : settlementRequests) {
-                updated.settlementRequests.put(UserState.SETTLEMENT_REQUEST_KEY_PROVIDER.getKey(settlementRequest),
-                        settlementRequest);
-            }
+            addProgressListeners(settlementRequests, updated.settlementRequests, null, progressListeners);
         }
         if (ownershipRequests != null) {
             for (IPLDObject<OwnershipRequest> ownershipRequest : ownershipRequests) {
@@ -453,7 +454,7 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
             }
         }
         if (votings != null) {
-            updated.votings.putAll(votings);
+            addProgressListeners(votings, updated.votings, null, progressListeners);
         }
         if (sealedDocuments != null) {
             for (IPLDObject<SealedDocument> sealed : sealedDocuments) {

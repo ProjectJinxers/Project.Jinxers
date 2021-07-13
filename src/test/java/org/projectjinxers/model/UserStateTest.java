@@ -21,10 +21,14 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Date;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.controller.IPLDReader.KeyProvider;
 import org.projectjinxers.controller.TestIPLDObject;
 
 /**
@@ -45,8 +49,9 @@ class UserStateTest {
         Review review = new Review(null, null, null, null, null, null,
                 new TestIPLDObject<Document>("hash", new Document()), false, null, null);
         UserState userState = new UserState();
-        UserState updated = userState.updateLinks(Arrays.asList(new TestIPLDObject<>("review", review)), null, null,
-                null, null, null, null, null, null, null);
+        UserState updated = userState.updateLinks(
+                map(Arrays.asList(new TestIPLDObject<>("review", review)), UserState.DOCUMENT_KEY_PROVIDER), null, null,
+                null, null, null, null, null, null, null, null, null);
         assertTrue(updated.checkNonNegativeReview("hash"));
         assertTrue(updated.checkNonPositiveReview("hash"));
     }
@@ -58,8 +63,9 @@ class UserStateTest {
         Review negative = new Review(null, null, null, null, null, null, reviewed, false, Boolean.FALSE, null);
         UserState userState = new UserState();
         userState.updateLinks(
-                Arrays.asList(new TestIPLDObject<>("review", review), new TestIPLDObject<>("negative", negative)), null,
-                null, null, null, null, null, null, null, null);
+                map(Arrays.asList(new TestIPLDObject<>("review", review), new TestIPLDObject<>("negative", negative)),
+                        UserState.DOCUMENT_KEY_PROVIDER),
+                null, null, null, null, null, null, null, null, null, null, null);
         assertFalse(userState.checkNonNegativeReview("hash"));
     }
 
@@ -70,8 +76,9 @@ class UserStateTest {
         Review positive = new Review(null, null, null, null, null, null, reviewed, false, Boolean.TRUE, null);
         UserState userState = new UserState();
         userState.updateLinks(
-                Arrays.asList(new TestIPLDObject<>("review", review), new TestIPLDObject<>("positive", positive)), null,
-                null, null, null, null, null, null, null, null);
+                map(Arrays.asList(new TestIPLDObject<>("review", review), new TestIPLDObject<>("positive", positive)),
+                        UserState.DOCUMENT_KEY_PROVIDER),
+                null, null, null, null, null, null, null, null, null, null, null);
         assertFalse(userState.checkNonPositiveReview("hash"));
     }
 
@@ -83,9 +90,9 @@ class UserStateTest {
         Review restoring = new Review(null, null, null, null, null, null, reviewed, false, null, null);
         UserState userState = new UserState();
         UserState updated = userState.updateLinks(
-                Arrays.asList(new TestIPLDObject<>("review", review), new TestIPLDObject<>("negative", negative),
-                        new TestIPLDObject<>("restoring", restoring)),
-                null, null, null, null, null, null, null, null, null);
+                map(Arrays.asList(new TestIPLDObject<>("review", review), new TestIPLDObject<>("negative", negative),
+                        new TestIPLDObject<>("restoring", restoring)), UserState.DOCUMENT_KEY_PROVIDER),
+                null, null, null, null, null, null, null, null, null, null, null);
         assertTrue(updated.checkNonNegativeReview("hash"));
     }
 
@@ -97,25 +104,27 @@ class UserStateTest {
         Review restoring = new Review(null, null, null, null, null, null, reviewed, false, null, null);
         UserState userState = new UserState();
         UserState updated = userState.updateLinks(
-                Arrays.asList(new TestIPLDObject<>("review", review), new TestIPLDObject<>("positive", positive),
-                        new TestIPLDObject<>("restoring", restoring)),
-                null, null, null, null, null, null, null, null, null);
+                map(Arrays.asList(new TestIPLDObject<>("review", review), new TestIPLDObject<>("positive", positive),
+                        new TestIPLDObject<>("restoring", restoring)), UserState.DOCUMENT_KEY_PROVIDER),
+                null, null, null, null, null, null, null, null, null, null, null);
         assertTrue(updated.checkNonPositiveReview("hash"));
     }
 
     @Test
     void tesNoLastActivity() {
         UserState userState = new UserState();
-        UserState updated = userState.updateLinks(Arrays.asList(new TestIPLDObject<>(new Document())), null, null, null,
-                null, null, null, null, null, null);
+        UserState updated = userState.updateLinks(
+                map(Arrays.asList(new TestIPLDObject<>(new Document())), UserState.DOCUMENT_KEY_PROVIDER), null, null,
+                null, null, null, null, null, null, null, null, null);
         assertNull(updated.getLastActivityDate(""));
     }
 
     @Test
     void testLastActivityNoDependencies() {
         UserState userState = new UserState();
-        UserState updated = userState.updateLinks(Arrays.asList(new TestIPLDObject<>("hash", new Document())), null,
-                null, null, null, null, null, null, null, null);
+        UserState updated = userState.updateLinks(
+                map(Arrays.asList(new TestIPLDObject<>("hash", new Document())), UserState.DOCUMENT_KEY_PROVIDER), null,
+                null, null, null, null, null, null, null, null, null, null);
         assertNull(updated.getLastActivityDate("hash"));
     }
 
@@ -130,8 +139,9 @@ class UserStateTest {
         assertNotNull(updatedDate);
         assertNotEquals(previousVersionDate, updatedDate);
         UserState userState = new UserState();
-        UserState updated = userState.updateLinks(Arrays.asList(prev, new TestIPLDObject<>("updated", document)), null,
-                null, null, null, null, null, null, null, null);
+        UserState updated = userState.updateLinks(
+                map(Arrays.asList(prev, new TestIPLDObject<>("updated", document)), UserState.DOCUMENT_KEY_PROVIDER),
+                null, null, null, null, null, null, null, null, null, null, null);
         assertEquals(updatedDate, updated.getLastActivityDate("hash"));
     }
 
@@ -153,8 +163,9 @@ class UserStateTest {
         assertNotEquals(updatedDate, secondUpdatedDate);
         UserState userState = new UserState();
         UserState updated = userState.updateLinks(
-                Arrays.asList(prev, first, new TestIPLDObject<>("updated", secondUpdate)), null, null, null, null, null,
-                null, null, null, null);
+                map(Arrays.asList(prev, first, new TestIPLDObject<>("updated", secondUpdate)),
+                        UserState.DOCUMENT_KEY_PROVIDER),
+                null, null, null, null, null, null, null, null, null, null, null);
         assertEquals(secondUpdatedDate, updated.getLastActivityDate("hash"));
     }
 
@@ -181,9 +192,9 @@ class UserStateTest {
         waitFor(1);
         Document unrelatedUpdate = unrelatedPrev.update(null, null, null, null, null, null, unrelated, null);
         UserState updated = userState.updateLinks(
-                Arrays.asList(unrelated, prev, first, new TestIPLDObject<>("updated", secondUpdate),
-                        new TestIPLDObject<>("unrelatedUpdate", unrelatedUpdate)),
-                null, null, null, null, null, null, null, null, null);
+                map(Arrays.asList(unrelated, prev, first, new TestIPLDObject<>("updated", secondUpdate),
+                        new TestIPLDObject<>("unrelatedUpdate", unrelatedUpdate)), UserState.DOCUMENT_KEY_PROVIDER),
+                null, null, null, null, null, null, null, null, null, null, null);
         assertEquals(secondUpdatedDate, updated.getLastActivityDate("hash"));
     }
 
@@ -200,8 +211,9 @@ class UserStateTest {
         Date expected = ofReview.getDate();
         waitFor(1);
         UserState userState = new UserState();
-        UserState updated = userState.updateLinks(Arrays.asList(reviewedObject, reviewOfReview), null, null, null, null,
-                null, null, null, null, null);
+        UserState updated = userState.updateLinks(
+                map(Arrays.asList(reviewedObject, reviewOfReview), UserState.DOCUMENT_KEY_PROVIDER), null, null, null,
+                null, null, null, null, null, null, null, null);
         assertEquals(expected, updated.getLastActivityDate("reviewed"));
     }
 
@@ -253,12 +265,23 @@ class UserStateTest {
         IPLDObject<Document> reviewOfUnrelatedReview = new TestIPLDObject<Document>("ofUnrelatedReview",
                 ofUnrelatedReview);
         Review hundo = new Review(null, null, null, null, null, null, reviewOfUnrelatedReview, false, null, null);
-        UserState updated = userState.updateLinks(Arrays.asList(unrelated, prev, unrelatedReviewObject, first,
-                new TestIPLDObject<>("updated", secondUpdate), reviewOfReview,
-                new TestIPLDObject<>("unrelatedUpdate", unrelatedUpdate), updatedUnrelatedReviewObject,
-                new TestIPLDObject<>("hundo", updatedUnrelatedReviewUpdate), new TestIPLDObject<>("done", hundo)), null,
-                null, null, null, null, null, null, null, null);
+        UserState updated = userState.updateLinks(
+                map(Arrays.asList(unrelated, prev, unrelatedReviewObject, first,
+                        new TestIPLDObject<>("updated", secondUpdate), reviewOfReview,
+                        new TestIPLDObject<>("unrelatedUpdate", unrelatedUpdate), updatedUnrelatedReviewObject,
+                        new TestIPLDObject<>("hundo", updatedUnrelatedReviewUpdate),
+                        new TestIPLDObject<>("done", hundo)), UserState.DOCUMENT_KEY_PROVIDER),
+                null, null, null, null, null, null, null, null, null, null, null);
         assertEquals(expected, updated.getLastActivityDate("hash"));
+    }
+
+    private <T extends IPLDSerializable> Map<String, IPLDObject<T>> map(Collection<IPLDObject<T>> collection,
+            KeyProvider<T> keyProvider) {
+        Map<String, IPLDObject<T>> res = new LinkedHashMap<>();
+        for (IPLDObject<T> object : collection) {
+            res.put(keyProvider.getKey(object), object);
+        }
+        return res;
     }
 
     private void waitFor(long millis) {

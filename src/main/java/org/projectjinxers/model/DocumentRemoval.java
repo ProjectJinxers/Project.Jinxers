@@ -18,6 +18,7 @@ import java.io.IOException;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.controller.IPLDObject.ProgressListener;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.ValidationContext;
@@ -49,8 +50,9 @@ public class DocumentRemoval implements DocumentAction, Loader<DocumentRemoval> 
     }
 
     @Override
-    public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
-        writer.writeLink(KEY_DOCUMENT, document, null, null);
+    public void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+            throws IOException {
+        writer.writeLink(KEY_DOCUMENT, document, null, null, null);
     }
 
     @Override

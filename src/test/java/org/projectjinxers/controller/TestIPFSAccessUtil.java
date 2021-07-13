@@ -34,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import org.projectjinxers.account.ECCSigner;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.account.Users;
+import org.projectjinxers.config.Config;
 import org.projectjinxers.model.Document;
 import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.LoaderFactory;
@@ -93,7 +94,7 @@ class TestIPFSAccessUtil {
     private static final Date ELIGIBLE_FOR_SETTLEMENT_REQUEST = new Date(
             System.currentTimeMillis() - REQUIRED_SETTLEMENT_REQUEST_AGE);
     private static final Date ELIGIBLE_FOR_SETTLEMENT_EXECUTION = new Date(ELIGIBLE_FOR_SETTLEMENT_REQUEST.getTime()
-            - REQUIRED_SETTLEMENT_EXECUTION_AGE + ValidationContext.TIMESTAMP_TOLERANCE + 1000);
+            - REQUIRED_SETTLEMENT_EXECUTION_AGE + Config.DEFAULT_TIMESTAMP_TOLERANCE + 1000);
     private static final Date ELIGIBLE_FOR_OWNERSHIP_TRANSFER = new Date(
             System.currentTimeMillis() - REQUIRED_OWNERSHIP_TRANSFER_INACTIVITY);
 
@@ -161,12 +162,12 @@ class TestIPFSAccessUtil {
                         for (Entry<String, IPLDObject<UserState>> entry : allUserStateEntries) {
                             if (entry.getValue() == userState) {
                                 UserState updatedOwner = entry.getValue().getMapped().updateLinks(null, null, null,
-                                        null, null, null, null, null, null, entry.getValue());
+                                        null, null, null, null, null, null, null, entry.getValue(), null);
                                 updatedOwner.removeTrueClaim(document);
                                 IPLDObject<UserState> updatedOwnerState = new IPLDObject<>(updatedOwner);
-                                updatedOwnerState.save(context, null);
+                                updatedOwnerState.save(context, null, null);
                                 updated = updated.updateUserState(updatedOwnerState, null, null, null, null, null,
-                                        loaded, timestamp);
+                                        loaded, timestamp, null);
                             }
                             else {
                                 String username = entry.getValue().getMapped().getUser().getMapped().getUsername();
@@ -179,8 +180,8 @@ class TestIPFSAccessUtil {
                                     IPLDObject<Document> toSeal = entry.getValue().getMapped()
                                             .expectDocumentObject(review.getMapped().getFirstVersionHash());
                                     UserState rewarded = entry.getValue().getMapped().updateLinks(null, null, null,
-                                            null, null, null, Set.of(toSeal.getMultihash()), null, null,
-                                            entry.getValue());
+                                            null, null, null, Set.of(toSeal.getMultihash()), null, null, null,
+                                            entry.getValue(), null);
 
                                     rewarded.removeFalseDeclination(review);
 
@@ -190,7 +191,7 @@ class TestIPFSAccessUtil {
                                             .invertTruth();
                                     updated.updateUserState(rewardedObject, null, null, null,
                                             Arrays.asList(new IPLDObject<>(sealed), new IPLDObject<>(inverted)), null,
-                                            null, timestamp);
+                                            null, timestamp, null);
                                 }
                                 if (username.startsWith("user")) {
                                     String password = username.replace("user", "pass");
@@ -203,12 +204,12 @@ class TestIPFSAccessUtil {
                                             ((Review) ((review = allDocuments.values().iterator().next()).getMapped()))
                                                     .getApprove())) {
                                         UserState updatedReviewer = entry.getValue().getMapped().updateLinks(null, null,
-                                                null, null, null, null, null, null, null, entry.getValue());
+                                                null, null, null, null, null, null, null, null, entry.getValue(), null);
 
                                         updatedReviewer.removeTrueApproval(review);
 
                                         updated.updateUserState(new IPLDObject<>(updatedReviewer), null, null, null,
-                                                null, null, null, timestamp);
+                                                null, null, null, timestamp, null);
                                     }
                                 }
                             }
@@ -336,6 +337,9 @@ class TestIPFSAccessUtil {
                 }
             }
             else {
+                if (updated.getMultihash() == null) {
+                    updated.save(context, DEFAULT_SIGNER, null);
+                }
                 removeHashes.add(multihash);
             }
             return updated;
@@ -404,10 +408,12 @@ class TestIPFSAccessUtil {
         IPLDObject<User> userObject = new IPLDObject<>(user);
         UserState userState = new UserState(userObject);
         IPLDObject<UserState> userStateObject = new IPLDObject<>(userState);
-        IPLDObject<ModelState> modelStateObject = new IPLDObject<>(modelState);
-        modelState.updateUserState(userStateObject, null, null, null, null, null, null, System.currentTimeMillis());
         Signer signer = DEFAULT_SIGNER;
-        modelStateObject.save(context, signer);
+        userStateObject.save(context, signer, null);
+        IPLDObject<ModelState> modelStateObject = new IPLDObject<>(modelState);
+        modelState.updateUserState(userStateObject, null, null, null, null, null, null, System.currentTimeMillis(),
+                null);
+        modelStateObject.save(context, signer, null);
         byte[][] allObjects = access.getAllObjects();
         if (allObjects.length == 1) {
             byte[] singleObject = allObjects[0];
@@ -573,7 +579,7 @@ class TestIPFSAccessUtil {
         IPLDObject<T> loaded = updater.load(hash, context);
         IPLDObject<T> updated = updater.update(loaded, context, removeHashes);
         if (updated != null) {
-            updated.save(context, signer);
+            updated.save(context, signer, null);
             return updated != loaded;
         }
         return false;
@@ -593,7 +599,7 @@ class TestIPFSAccessUtil {
         for (String remove : removeHashes) {
             access.removeOldObject(remove);
         }
-        String newRootHash = context.saveObject(root, DEFAULT_SIGNER);
+        String newRootHash = context.saveObject(root, DEFAULT_SIGNER, null);
         System.out.println("New root hash: " + newRootHash + "\n");
     }
 

@@ -19,6 +19,7 @@ import java.util.Map;
 
 import org.ethereum.crypto.ECKey.ECDSASignature;
 import org.projectjinxers.account.Signer;
+import org.projectjinxers.controller.IPLDObject.ProgressListener;
 import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.Loader;
 import org.projectjinxers.model.Metadata;
@@ -63,8 +64,9 @@ public class IPLDContext {
      * @return the string form of the multihash for the saved object
      * @throws IOException if a single write operation fails
      */
-    public String saveObject(IPLDObject<?> object, Signer signer) throws IOException {
-        byte[] bytes = serializeObject(object, signer);
+    public String saveObject(IPLDObject<?> object, Signer signer, ProgressListener progressListener)
+            throws IOException {
+        byte[] bytes = serializeObject(object, signer, progressListener);
         String multihash = access.saveObject(in.getIn(), bytes, out.getIn());
         synchronized (cache) {
             cache.put(multihash, object.withoutContext(null));
@@ -81,9 +83,10 @@ public class IPLDContext {
      * @return the serialized bytes
      * @throws IOException if a single write operation fails
      */
-    public byte[] serializeObject(IPLDObject<?> object, Signer signer) throws IOException {
+    public byte[] serializeObject(IPLDObject<?> object, Signer signer, ProgressListener progressListener)
+            throws IOException {
         IPLDWriter writer = in.createWriter();
-        return writer.write(this, object, signer);
+        return writer.write(this, object, signer, progressListener);
     }
 
     /**

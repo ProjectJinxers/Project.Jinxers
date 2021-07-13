@@ -29,6 +29,7 @@ import org.mockito.stubbing.Answer;
 import org.projectjinxers.account.ECCSigner;
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.account.Users;
+import org.projectjinxers.controller.IPLDObject.ProgressListener;
 import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.Metadata;
 
@@ -71,7 +72,8 @@ class IPLDSerializationTest {
         }
 
         @Override
-        public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+        public void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+                throws IOException {
             writer.writeNumber("value", value);
         }
 
@@ -82,7 +84,7 @@ class IPLDSerializationTest {
         SimpleData simpleData = new SimpleData();
         simpleData.value = 9;
         IPLDObject<SimpleData> object = new IPLDObject<>(simpleData);
-        byte[] bytes = writer.write(context, object, null);
+        byte[] bytes = writer.write(context, object, null, null);
         String json = new String(bytes, StandardCharsets.UTF_8);
         assertEquals(jsonString("{\"value\":9}"), json);
     }
@@ -94,7 +96,8 @@ class IPLDSerializationTest {
         private boolean b;
 
         @Override
-        public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+        public void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+                throws IOException {
             writer.writeChar("c", c);
             writer.writeString("s", s);
             writer.writeBoolean("b", b);
@@ -109,7 +112,7 @@ class IPLDSerializationTest {
         multiValueData.s = "multi";
         multiValueData.b = true;
         IPLDObject<MultiValueData> object = new IPLDObject<>(multiValueData);
-        byte[] bytes = writer.write(context, object, null);
+        byte[] bytes = writer.write(context, object, null, null);
         String json = new String(bytes, StandardCharsets.UTF_8);
         assertEquals(jsonString("{\"c\":110,\"s\":\"multi\",\"b\":true}"), json);
     }
@@ -119,7 +122,8 @@ class IPLDSerializationTest {
         private String link;
 
         @Override
-        public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+        public void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+                throws IOException {
             writer.writeLink("link", link);
         }
 
@@ -130,7 +134,7 @@ class IPLDSerializationTest {
         StringLinkValueData stringLinkData = new StringLinkValueData();
         stringLinkData.link = "a";
         IPLDObject<StringLinkValueData> object = new IPLDObject<>(stringLinkData);
-        byte[] bytes = writer.write(context, object, null);
+        byte[] bytes = writer.write(context, object, null, null);
         String json = new String(bytes, StandardCharsets.UTF_8);
         assertEquals(jsonString("{\"link\":\"a\"}"), json);
     }
@@ -140,8 +144,9 @@ class IPLDSerializationTest {
         private IPLDObject<?> link;
 
         @Override
-        public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
-            writer.writeLink("link", link, signer, context);
+        public void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+                throws IOException {
+            writer.writeLink("link", link, signer, context, null);
         }
 
     }
@@ -155,8 +160,8 @@ class IPLDSerializationTest {
         objectLinkValueData.link = a;
         IPLDObject<ObjectLinkValueData> object = new IPLDObject<>(objectLinkValueData);
         IPLDContext spy = Mockito.spy(context);
-        Mockito.doReturn("a").when(spy).saveObject(Mockito.any(), Mockito.any());
-        byte[] bytes = writer.write(spy, object, null);
+        Mockito.doReturn("a").when(spy).saveObject(Mockito.any(), Mockito.any(), Mockito.any());
+        byte[] bytes = writer.write(spy, object, null, null);
         String json = new String(bytes, StandardCharsets.UTF_8);
         assertEquals(jsonString("{\"link\":\"a\"}"), json);
     }
@@ -166,7 +171,8 @@ class IPLDSerializationTest {
         private int[] ints;
 
         @Override
-        public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+        public void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+                throws IOException {
             writer.writeIntArray("ints", ints);
         }
 
@@ -177,7 +183,7 @@ class IPLDSerializationTest {
         PrimitiveArrayValueData primitiveArrayValueData = new PrimitiveArrayValueData();
         primitiveArrayValueData.ints = new int[] { 8, 12, 4, 0 };
         IPLDObject<PrimitiveArrayValueData> object = new IPLDObject<>(primitiveArrayValueData);
-        byte[] bytes = writer.write(context, object, null);
+        byte[] bytes = writer.write(context, object, null, null);
         String json = new String(bytes, StandardCharsets.UTF_8);
         assertEquals(jsonString("{\"ints\":[8,12,4,0]}"), json);
     }
@@ -187,7 +193,8 @@ class IPLDSerializationTest {
         private String[] strings;
 
         @Override
-        public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+        public void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+                throws IOException {
             writer.writeStringArray("strings", strings);
         }
 
@@ -198,7 +205,7 @@ class IPLDSerializationTest {
         StringArrayValueData stringArrayValueData = new StringArrayValueData();
         stringArrayValueData.strings = new String[] { "a", "b", "c" };
         IPLDObject<StringArrayValueData> object = new IPLDObject<>(stringArrayValueData);
-        byte[] bytes = writer.write(context, object, null);
+        byte[] bytes = writer.write(context, object, null, null);
         String json = new String(bytes, StandardCharsets.UTF_8);
         assertEquals(jsonString("{\"strings\":[\"a\",\"b\",\"c\"]}"), json);
     }
@@ -208,7 +215,8 @@ class IPLDSerializationTest {
         private String[] links;
 
         @Override
-        public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+        public void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+                throws IOException {
             writer.writeLinkArray("links", links);
         }
 
@@ -219,7 +227,7 @@ class IPLDSerializationTest {
         StringLinkArrayValueData stringLinkArrayValueData = new StringLinkArrayValueData();
         stringLinkArrayValueData.links = new String[] { "a", "b", "c" };
         IPLDObject<StringLinkArrayValueData> object = new IPLDObject<>(stringLinkArrayValueData);
-        byte[] bytes = writer.write(context, object, null);
+        byte[] bytes = writer.write(context, object, null, null);
         String json = new String(bytes, StandardCharsets.UTF_8);
         assertEquals(jsonString("{\"links\":[\"a\",\"b\",\"c\"]}"), json);
     }
@@ -229,8 +237,9 @@ class IPLDSerializationTest {
         private IPLDObject<?>[] links;
 
         @Override
-        public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
-            writer.writeLinkArray("links", links, signer, context);
+        public void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+                throws IOException {
+            writer.writeLinkArray("links", links, signer, context, null);
         }
 
     }
@@ -243,7 +252,7 @@ class IPLDSerializationTest {
         IPLDObject<?> c = new IPLDObject<>("c", null, context, null);
         objectArrayValueData.links = new IPLDObject<?>[] { a, b, c };
         IPLDObject<ObjectLinkArrayValueData> object = new IPLDObject<>(objectArrayValueData);
-        byte[] bytes = writer.write(context, object, null);
+        byte[] bytes = writer.write(context, object, null, null);
         String json = new String(bytes, StandardCharsets.UTF_8);
         assertEquals(jsonString("{\"links\":[\"a\",\"b\",\"c\"]}"), json);
     }
@@ -269,8 +278,8 @@ class IPLDSerializationTest {
                 IPLDObject<?> object = invocation.getArgument(0, IPLDObject.class);
                 return String.valueOf((char) ('a' + ((SimpleData) object.getMapped()).value));
             }
-        }).when(spy).saveObject(Mockito.any(), Mockito.any());
-        byte[] bytes = writer.write(spy, object, null);
+        }).when(spy).saveObject(Mockito.any(), Mockito.any(), Mockito.any());
+        byte[] bytes = writer.write(spy, object, null, null);
         String json = new String(bytes, StandardCharsets.UTF_8);
         assertEquals(jsonString("{\"links\":[\"a\",\"b\",\"c\"]}"), json);
     }
@@ -282,7 +291,7 @@ class IPLDSerializationTest {
         IPLDObject<SimpleData> object = new IPLDObject<>(simpleData);
         sign = true;
         ECCSigner signer = new ECCSigner("user", "pass");
-        byte[] bytes = writer.write(context, object, signer);
+        byte[] bytes = writer.write(context, object, signer, null);
         String json = new String(bytes, StandardCharsets.UTF_8);
         ECDSASignature expectedSignature = new ECDSASignature(
                 new BigInteger("1357931233302495577296061641443476864107299032798182399163036348318695313558"),

@@ -21,6 +21,7 @@ import java.util.Map;
 
 import org.ethereum.crypto.ECKey.ECDSASignature;
 import org.projectjinxers.account.Signer;
+import org.projectjinxers.controller.IPLDObject.ProgressListener;
 import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.Metadata;
 import org.spongycastle.util.Arrays;
@@ -44,23 +45,31 @@ public class IPLDJsonWriter implements IPLDWriter {
     }
 
     @Override
-    public byte[] write(IPLDContext context, IPLDObject<?> object, Signer signer) throws IOException {
+    public byte[] write(IPLDContext context, IPLDObject<?> object, Signer signer, ProgressListener progressListener)
+            throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         jsonWriter = new JsonWriter(new BufferedWriter(new OutputStreamWriter(baos)));
         jsonWriter.beginObject().name(IPLDJsonReader.KEY_DATA).beginObject();
         jsonWriter.flush();
         byte[] start = baos.toByteArray();
         baos.reset();
-        object.write(this, signer, context);
+        object.write(this, signer, context, progressListener);
         jsonWriter.flush();
         byte[] data = baos.toByteArray();
         baos.reset();
         jsonWriter.endObject();
         Metadata metadata = object.signIfMandatory(signer, data);
+        if (progressListener != null && object.getForeignSignature() == null && metadata.getSignature() != null
+                && progressListener != object.getProgressListener()) {
+            progressListener.nextStep();
+        }
         writeMetadata(metadata);
         jsonWriter.endObject();
         jsonWriter.flush();
         byte[] end = baos.toByteArray();
+        if (progressListener != null) {
+            progressListener.nextStep();
+        }
         return Arrays.concatenate(start, data, end);
     }
 
@@ -69,7 +78,7 @@ public class IPLDJsonWriter implements IPLDWriter {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         jsonWriter = new JsonWriter(new BufferedWriter(new OutputStreamWriter(baos)));
         jsonWriter.beginObject();
-        data.write(this, null, context);
+        data.write(this, null, context, null);
         jsonWriter.flush();
         // We needed beginObject() in write() after KEY_DATA, otherwise the name would not be contained in start but
         // in data. OTOH we also need beginObject() here, to prevent an exception. To make sure the hash base is the
@@ -201,14 +210,14 @@ public class IPLDJsonWriter implements IPLDWriter {
     }
 
     @Override
-    public void writeLinkArray(String key, IPLDObject<?>[] links, Signer signer, IPLDContext context)
-            throws IOException {
+    public void writeLinkArray(String key, IPLDObject<?>[] links, Signer signer, IPLDContext context,
+            ProgressListener progressListener) throws IOException {
         if (links != null && (!compact || links.length > 0)) {
             jsonWriter.name(key).beginArray();
             for (IPLDObject<?> link : links) {
                 String multihash = link.getMultihash();
                 if (multihash == null) {
-                    multihash = link.save(context, signer);
+                    multihash = link.save(context, signer, progressListener);
                 }
                 writeLink(multihash);
             }
@@ -238,7 +247,7 @@ public class IPLDJsonWriter implements IPLDWriter {
 
     @Override
     public <D extends IPLDSerializable> void writeLinkObjectArrays(String key, Map<String, IPLDObject<D>[]> linkArrays,
-            Signer signer, IPLDContext context) throws IOException {
+            Signer signer, IPLDContext context, ProgressListener progressListener) throws IOException {
         if (linkArrays != null && (!compact || linkArrays.size() > 0)) {
             jsonWriter.name(key).beginArray();
             for (IPLDObject<D>[] linkArray : linkArrays.values()) {
@@ -247,7 +256,7 @@ public class IPLDJsonWriter implements IPLDWriter {
                     for (IPLDObject<?> link : linkArray) {
                         String multihash = link.getMultihash();
                         if (multihash == null) {
-                            multihash = link.save(context, signer);
+                            multihash = link.save(context, signer, progressListener);
                         }
                         writeLink(multihash);
                     }

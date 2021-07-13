@@ -26,8 +26,10 @@ import java.util.Set;
 
 import org.apache.commons.codec.binary.Base64;
 import org.projectjinxers.account.Signer;
+import org.projectjinxers.config.SecretConfig;
 import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.controller.IPLDObject.ProgressListener;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDReader.KeyProvider;
 import org.projectjinxers.controller.IPLDWriter;
@@ -118,12 +120,17 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
     }
 
     @Override
-    public void write(IPLDWriter writer, Signer signer, IPLDContext context) throws IOException {
+    public void write(IPLDWriter writer, Signer signer, IPLDContext context, ProgressListener progressListener)
+            throws IOException {
         writer.writeNumber(KEY_SEED, seed);
         writer.writeNumber(KEY_OBFUSCATION_VERSION, obfuscationVersion);
-        writer.writeLink(KEY_SUBJECT, subject, null, context);
-        writer.writeLink(KEY_INITIAL_MODEL_STATE, initialModelState, null, null);
-        writer.writeLinkObjects(KEY_VOTES, votes, null, null);
+        writer.writeLink(KEY_SUBJECT, subject, null, context, progressListener);
+        writer.writeLink(KEY_INITIAL_MODEL_STATE, initialModelState, null, null, null);
+        writer.writeLinkObjects(KEY_VOTES, votes, signer, context, progressListener);
+    }
+
+    public long getSeed() {
+        return seed;
     }
 
     public int getObfuscationVersion() {
@@ -176,26 +183,28 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
      * @param modelState the model state
      * @return the invitation key for the user or null, if the user is not eligible to vote
      */
-    public byte[] getInvitationKey(String userHash) {
+    public byte[] getInvitationKey(String userHash, SecretConfig secretConfig) {
         if (initialModelState.getMapped().containsUserState(userHash)) {
             byte[] toHash = userHash.getBytes(StandardCharsets.UTF_8);
             if (isAnonymous()) {
-                return ModelUtility.obfuscateHash(toHash, seed, obfuscationVersion, 0);
+                return ModelUtility.obfuscateHash(toHash, seed, obfuscationVersion, 0, secretConfig);
             }
             return toHash;
         }
         return null;
     }
 
-    public Voting addVote(String userHash, int valueIndex, long seed, long timestamp, long timestampTolerance) {
+    public Voting addVote(String userHash, int valueIndex, long seed, long timestamp, long timestampTolerance,
+            SecretConfig secretConfig) {
         if (tally != null || subject.getMapped().getDeadline().getTime() < timestamp + timestampTolerance) {
             return null;
         }
-        byte[] invitationKey = getInvitationKey(userHash);
+        byte[] invitationKey = getInvitationKey(userHash, secretConfig);
         if (invitationKey != null) {
             String check = getInvitationKeyString(invitationKey);
             if (!votes.containsKey(check)) {
-                Vote vote = subject.getMapped().createVote(invitationKey, valueIndex, seed, obfuscationVersion);
+                Vote vote = subject.getMapped().createVote(invitationKey, valueIndex, seed, obfuscationVersion,
+                        secretConfig);
                 IPLDObject<Vote> voteObject = new IPLDObject<Vote>(vote);
                 Voting copy = copy();
                 if (copy.votes == null) {
@@ -208,9 +217,9 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
         return null;
     }
 
-    public Voting tally(long timestamp, long timestampTolerance) {
+    public Voting tally(long timestamp, long timestampTolerance, SecretConfig secretConfig) {
         if (tally != null && subject.getMapped().getDeadline().getTime() < timestamp + timestampTolerance) {
-            int[] counts = tally();
+            int[] counts = tally(secretConfig);
             Voting res = copy();
             res.tally = new IPLDObject<>(new Tally(counts));
             return res;
@@ -252,7 +261,8 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
                                 validVersion);
                         for (Entry<String, User> userEntry : entrySet) {
                             String userHash = userEntry.getKey();
-                            String invitationKey = getInvitationKeyString(userHash);
+                            String invitationKey = getInvitationKeyString(userHash,
+                                    validationContext.getSecretConfig());
                             if (key.equals(invitationKey)) {
                                 context.verifySignature(value, Signer.VERIFIER, userEntry.getValue());
                                 continue outer;
@@ -279,9 +289,9 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
         return false;
     }
 
-    public void validateTally() {
+    public void validateTally(SecretConfig secretConfig) {
         int[] expectedCounts = tally.getMapped().getCounts();
-        int[] counts = tally();
+        int[] counts = tally(secretConfig);
         if (!Arrays.equals(expectedCounts, counts)) {
             throw new ValidationException("unexpected tally counts");
         }
@@ -297,9 +307,9 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
         return this;
     }
 
-    private String getInvitationKeyString(String userHash) {
+    private String getInvitationKeyString(String userHash, SecretConfig secretConfig) {
         byte[] hashBytes = userHash.getBytes(StandardCharsets.UTF_8);
-        byte[] invitationKeyBytes = ModelUtility.obfuscateHash(hashBytes, seed, obfuscationVersion, 0);
+        byte[] invitationKeyBytes = ModelUtility.obfuscateHash(hashBytes, seed, obfuscationVersion, 0, secretConfig);
         return getInvitationKeyString(invitationKeyBytes);
     }
 
@@ -320,13 +330,13 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
         return res;
     }
 
-    private int[] tally() {
+    private int[] tally(SecretConfig secretConfig) {
         int[] counts = new int[votes.size()];
         Votable subject = this.subject.getMapped();
         if (subject.isAnonymous()) {
             byte[][] allValueHashBases = subject.getAllValueHashBases();
             for (String userHash : initialModelState.getMapped().expectAllUserHashes()) {
-                String invitationKey = getInvitationKeyString(userHash);
+                String invitationKey = getInvitationKeyString(userHash, secretConfig);
                 IPLDObject<Vote> voteObject = votes.get(invitationKey);
                 if (voteObject != null) {
                     Vote vote = voteObject.getMapped();
@@ -335,7 +345,7 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
                     int i = 0;
                     for (byte[] valueHashBase : allValueHashBases) {
                         byte[] obfuscatedHash = ModelUtility.obfuscateHash(valueHashBase, seed, obfuscationVersion,
-                                valueHashObfuscation);
+                                valueHashObfuscation, secretConfig);
                         if (Arrays.equals(obfuscatedHash, value)) {
                             counts[i]++;
                         }

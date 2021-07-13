@@ -18,6 +18,7 @@ import java.lang.reflect.Array;
 import java.util.Map;
 
 import org.projectjinxers.account.Signer;
+import org.projectjinxers.controller.IPLDObject.ProgressListener;
 import org.projectjinxers.model.IPLDSerializable;
 
 /**
@@ -40,7 +41,8 @@ public interface IPLDWriter {
      * @return the serialized form of the given object
      * @throws IOException if single write operations fail
      */
-    byte[] write(IPLDContext context, IPLDObject<?> object, Signer signer) throws IOException;
+    byte[] write(IPLDContext context, IPLDObject<?> object, Signer signer, ProgressListener progressListener)
+            throws IOException;
 
     /**
      * Calculates the bytes to hash for creating or verifying a signature.
@@ -114,17 +116,20 @@ public interface IPLDWriter {
     /**
      * Writes a link property. If the given link object has no multihash, it will be saved recursively.
      * 
-     * @param key     the key
-     * @param link    the link
-     * @param signer  the signer for recursion
-     * @param context the context for recursion (you can pass null, if it is an error, if the link does not exist yet)
+     * @param key              the key
+     * @param link             the link
+     * @param signer           the signer for recursion
+     * @param context          the context for recursion (you can pass null, if it is an error, if the link does not
+     *                         exist yet)
+     * @param progressListener TODO
      * @throws IOException if writing fails
      */
-    default void writeLink(String key, IPLDObject<?> link, Signer signer, IPLDContext context) throws IOException {
+    default void writeLink(String key, IPLDObject<?> link, Signer signer, IPLDContext context,
+            ProgressListener progressListener) throws IOException {
         if (link != null) {
             String multihash = link.getMultihash();
             if (multihash == null) {
-                multihash = link.save(context, signer);
+                multihash = link.save(context, signer, progressListener);
             }
             writeLink(key, multihash);
         }
@@ -206,14 +211,16 @@ public interface IPLDWriter {
     /**
      * Recursively writes a link array property. All links without multihash will be saved recursively.
      * 
-     * @param key     the key
-     * @param links   the links
-     * @param signer  the signer for recursion
-     * @param context the context for recursion (you can pass null, if it is an error, if at least one link does not
-     *                exist yet)
+     * @param key              the key
+     * @param links            the links
+     * @param signer           the signer for recursion
+     * @param context          the context for recursion (you can pass null, if it is an error, if at least one link
+     *                         does not exist yet)
+     * @param progressListener TODO
      * @throws IOException if writing fails
      */
-    void writeLinkArray(String key, IPLDObject<?>[] links, Signer signer, IPLDContext context) throws IOException;
+    void writeLinkArray(String key, IPLDObject<?>[] links, Signer signer, IPLDContext context,
+            ProgressListener progressListener) throws IOException;
 
     /**
      * Recursively writes a link map property. All links without multihash will be saved recursively. The default
@@ -228,16 +235,16 @@ public interface IPLDWriter {
      * @throws IOException if writing fails
      */
     default <D extends IPLDSerializable> void writeLinkObjects(String key, Map<String, IPLDObject<D>> links,
-            Signer signer, IPLDContext context) throws IOException {
+            Signer signer, IPLDContext context, ProgressListener progressListener) throws IOException {
         if (links != null) {
             IPLDObject<?>[] linkArray = (IPLDObject<?>[]) Array.newInstance(IPLDObject.class, links.size());
-            writeLinkArray(key, links.values().toArray(linkArray), signer, context);
+            writeLinkArray(key, links.values().toArray(linkArray), signer, context, null);
         }
     }
 
     void writeLinkArrays(String key, Map<String, String[]> links) throws IOException;
 
     <D extends IPLDSerializable> void writeLinkObjectArrays(String key, Map<String, IPLDObject<D>[]> linkArrays,
-            Signer signer, IPLDContext context) throws IOException;
+            Signer signer, IPLDContext context, ProgressListener progressListener) throws IOException;
 
 }
