@@ -241,22 +241,16 @@ public class OwnershipTransferController {
             this.newOwner = resolvedUser;
             return true;
         }
-        UserState currentOwner = resolvedDocument.getMapped().expectUserState();
-        String ownerUserHash = currentOwner.getUser().getMultihash();
-        UserState ownerUserState = modelState.expectUserState(ownerUserHash).getMapped();
-
         IPLDObject<OwnershipRequest> request = resolvedUser.getMapped().getOwnershipRequest(documentHash);
-
         if (request == null) {
-            Date lastActivityDate = ownerUserState.getLastActivityDate(documentHash);
-            if (lastActivityDate == null) {
-                lastActivityDate = resolvedDocument.getMapped().getDate();
-            }
-            long inactivity = timestamp - lastActivityDate.getTime();
-            if (inactivity >= REQUIRED_INACTIVITY) {
-                this.ownershipRequest = new IPLDObject<>(
-                        new OwnershipRequest(resolvedUser, resolvedDocument, anonymousVoting), signature);
-                return true;
+            Date lastActivityDate = modelState.getLastActivityDate(resolvedDocument);
+            if (lastActivityDate != null) {
+                long inactivity = timestamp - lastActivityDate.getTime();
+                if (inactivity >= REQUIRED_INACTIVITY) {
+                    this.ownershipRequest = new IPLDObject<>(
+                            new OwnershipRequest(resolvedUser, resolvedDocument, anonymousVoting), signature);
+                    return true;
+                }
             }
             return false;
         }

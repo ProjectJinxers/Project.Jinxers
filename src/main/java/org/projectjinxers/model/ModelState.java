@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -40,6 +41,7 @@ import org.projectjinxers.controller.ValidationException;
 import org.projectjinxers.util.ModelUtility;
 
 import static org.projectjinxers.util.ModelUtility.addProgressListeners;
+import static org.projectjinxers.util.ModelUtility.isEqual;
 
 /**
  * ModelStates are the root instances of a tree, that represents the system at a specific time.
@@ -139,6 +141,17 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         }
 
     };
+
+    private static void collectAllReviewHashes(String documentHash, Map<String, String[]> reviewTable,
+            Set<String> hashes) {
+        String[] reviewHashes = reviewTable.get(documentHash);
+        if (reviewHashes != null) {
+            for (String reviewHash : reviewHashes) {
+                hashes.add(reviewHash);
+                collectAllReviewHashes(reviewHash, reviewTable, hashes);
+            }
+        }
+    }
 
     private long version;
     private long timestamp;
@@ -330,6 +343,51 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
 
     public String[] getReviewTableEntries(String documentHash) {
         return reviewTable == null ? null : reviewTable.get(documentHash);
+    }
+
+    /**
+     * Finds related documents and returns the date of the most recent one. If the given document is not the most recent
+     * version for its current owner, null is returned.
+     * 
+     * @param document the document
+     * @return the last activity date or null if the document has already been replaced with another version
+     */
+    public Date getLastActivityDate(IPLDObject<Document> document) {
+        Document doc = document.getMapped();
+        UserState userState = doc.expectUserState();
+        userState = expectUserState(userState.getUser().getMultihash()).getMapped();
+        String firstVersionHash = doc.getFirstVersionHash();
+        if (firstVersionHash == null) {
+            firstVersionHash = document.getMultihash();
+        }
+        if (!isEqual(document, userState.expectDocumentObjectByFirstVersionHash(firstVersionHash))) {
+            return null;
+        }
+        if (reviewTable != null) {
+            Set<String> allReviewHashes = new HashSet<>();
+            String documentHash = document.getMultihash();
+            collectAllReviewHashes(documentHash, reviewTable, allReviewHashes);
+            int reviewCount = allReviewHashes.size();
+            if (reviewCount > 0) {
+                Date max = null;
+                if (reviewCount > 1) { // could change that to another threshold value -> performance optimization
+                    userState.ensureAllDocumentVersions();
+                }
+                for (String reviewHash : allReviewHashes) {
+                    IPLDObject<Document> review = userState.getDocument(reviewHash);
+                    if (review != null) {
+                        Date date = review.getMapped().getDate();
+                        if (max == null || date.compareTo(max) > 0) {
+                            max = date;
+                        }
+                    }
+                }
+                if (max != null) {
+                    return max;
+                }
+            }
+        }
+        return document.getMapped().getDate();
     }
 
     /**

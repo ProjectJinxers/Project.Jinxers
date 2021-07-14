@@ -18,11 +18,10 @@ import static org.projectjinxers.util.ModelUtility.isEqual;
 
 import java.io.IOException;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Date;
 import java.util.Deque;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -421,6 +420,8 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
                                                                          // transferred
     private Map<String, IPLDObject<GrantedUnban>> grantedUnbans;
 
+    private Map<String, IPLDObject<Document>> allDocumentVersions;
+
     private Collection<IPLDObject<Document>> newDocuments;
     private Map<String, IPLDObject<DocumentRemoval>> newRemovedDocuments;
     private Collection<IPLDObject<SettlementRequest>> newSettlementRequests;
@@ -537,7 +538,21 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
      * @return the document wrapper stored in this instance with the given hash (null-safe)
      */
     public IPLDObject<Document> getDocument(String documentHash) {
-        return documents == null ? null : expandDocuments(documents, null, null, documentHash);
+        if (documents == null) {
+            return null;
+        }
+        if (allDocumentVersions == null) {
+            return expandDocuments(documents, null, null, documentHash);
+        }
+        return allDocumentVersions.get(documentHash);
+    }
+
+    /**
+     * @param firstVersionHash the hash of the first version of the document
+     * @return the document stored in this instance with the given first version hash (no null checks!)
+     */
+    public IPLDObject<Document> expectDocumentObjectByFirstVersionHash(String firstVersionHash) {
+        return documents.get(firstVersionHash);
     }
 
     /**
@@ -561,16 +576,31 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
      * @return the document stored in this instance with the given hash (no null checks!)
      */
     public Document expectDocument(String documentHash) {
-        return expandDocuments(documents, null, null, documentHash).getMapped();
+        return allDocumentVersions == null ? expandDocuments(documents, null, null, documentHash).getMapped()
+                : allDocumentVersions.get(documentHash).getMapped();
+    }
+
+    public void ensureAllDocumentVersions() {
+        if (documents != null) {
+            Map<String, IPLDObject<Document>> allVersions = allDocumentVersions;
+            if (allVersions == null) {
+                allVersions = new LinkedHashMap<>();
+                expandDocuments(documents, null, allVersions, null);
+                allDocumentVersions = allVersions;
+            }
+        }
     }
 
     public Map<String, IPLDObject<Document>> getAllDocuments() {
         if (documents == null) {
             return null;
         }
-        Map<String, IPLDObject<Document>> res = new LinkedHashMap<>();
-        expandDocuments(documents, null, res, null);
-        return res;
+        if (allDocumentVersions == null) {
+            Map<String, IPLDObject<Document>> res = new LinkedHashMap<>();
+            expandDocuments(documents, null, res, null);
+            allDocumentVersions = res;
+        }
+        return new LinkedHashMap<>(allDocumentVersions);
     }
 
     /**
@@ -622,11 +652,13 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
                 return;
             }
             if (reviewHashes != null) {
-                Map<String, IPLDObject<Document>> allDocuments = null;
+                Map<String, IPLDObject<Document>> allDocuments = allDocumentVersions;
                 for (String reviewHash : reviewHashes) {
                     if (allDocuments == null) {
                         allDocuments = new HashMap<>();
-                        if (expandDocuments(documents, null, allDocuments, reviewHash) != null) {
+                        boolean found = expandDocuments(documents, null, allDocuments, reviewHash) != null;
+                        allDocumentVersions = allDocuments;
+                        if (found) {
                             return;
                         }
                     }
@@ -637,63 +669,6 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             }
         }
         throw new ValidationException("unrelated document");
-    }
-
-    /**
-     * Finds related documents and returns the date of the most recent one or null, if there is none (in which case the
-     * date of the document with the given hash can be assumed as the last activity date). TODO: use reviewTable (model
-     * state) and expandDocuments without expandInto
-     * 
-     * @param documentHash the document hash
-     * @return the last activity date or null, if the document itself is the last activity
-     */
-    public Date getLastActivityDate(String documentHash) {
-        Set<String> relatedHashes = new HashSet<>();
-        Set<String> unrelatedHashes = new HashSet<>();
-        relatedHashes.add(documentHash);
-        Document lastActivity = null;
-        Map<String, IPLDObject<Document>> allDocuments = new LinkedHashMap<>();
-        expandDocuments(documents, null, allDocuments, null);
-        main: for (Entry<String, IPLDObject<Document>> entry : allDocuments.entrySet()) {
-            String docHash = entry.getKey();
-            IPLDObject<Document> document = entry.getValue();
-            Document doc = document.getMapped();
-            String hash = doc.getPreviousVersionHash();
-            if (hash != null) {
-                if (relatedHashes.contains(hash)) {
-                    relatedHashes.add(docHash);
-                    lastActivity = doc;
-                    continue;
-                }
-                unrelatedHashes.add(docHash);
-            }
-            else if (doc instanceof Review) {
-                Review review = (Review) doc;
-                do {
-                    IPLDObject<Document> reviewed = review.getDocument();
-                    String reviewedHash = reviewed.getMultihash();
-                    if (unrelatedHashes.contains(reviewedHash)) {
-                        unrelatedHashes.add(docHash);
-                        continue main;
-                    }
-                    if (relatedHashes.contains(reviewedHash)) {
-                        relatedHashes.add(docHash);
-                        lastActivity = doc;
-                        continue main;
-                    }
-                    Document reviewedDoc = reviewed.getMapped();
-                    if (reviewedDoc instanceof Review) {
-                        review = (Review) reviewedDoc;
-                    }
-                    else {
-                        break;
-                    }
-                }
-                while (true);
-                unrelatedHashes.add(docHash);
-            }
-        }
-        return lastActivity == null ? null : lastActivity.getDate();
     }
 
     /**
@@ -932,9 +907,12 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
                     newDocuments = null;
                 }
                 else {
-                    Map<String, IPLDObject<Document>> tmp = new LinkedHashMap<>();
-                    expandDocuments(documents, null, tmp, null);
-                    newDocuments = tmp.values();
+                    if (allDocumentVersions == null) {
+                        Map<String, IPLDObject<Document>> tmp = new LinkedHashMap<>();
+                        expandDocuments(documents, null, tmp, null);
+                        allDocumentVersions = tmp;
+                    }
+                    newDocuments = new ArrayList<>(allDocumentVersions.values());
                 }
             }
             else {
@@ -1088,8 +1066,12 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             Map<String, Set<String>> newReviewTableValues, Map<String, Map<String, String>> reviewers) {
         if (documents != null) {
             boolean res = false;
-            Map<String, IPLDObject<Document>> allDocuments = new HashMap<>();
-            expandDocuments(documents, null, allDocuments, null);
+            Map<String, IPLDObject<Document>> allDocuments = allDocumentVersions;
+            if (allDocuments == null) {
+                allDocuments = new LinkedHashMap<>();
+                expandDocuments(documents, null, allDocuments, null);
+                allDocumentVersions = allDocuments;
+            }
             for (IPLDObject<Document> document : allDocuments.values()) {
                 res = controller.checkDocument(document, true, newReviewTableKeys, newReviewTableValues, reviewers)
                         || res;
@@ -1238,8 +1220,12 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         SettlementController mainSettlementController = validationContext.getMainSettlementController();
         if (documents != null) {
             boolean res = false;
-            Map<String, IPLDObject<Document>> allDocuments = new HashMap<>();
-            expandDocuments(documents, null, allDocuments, null);
+            Map<String, IPLDObject<Document>> allDocuments = allDocumentVersions;
+            if (allDocuments == null) {
+                allDocuments = new LinkedHashMap<>();
+                expandDocuments(documents, null, allDocuments, null);
+                allDocumentVersions = allDocuments;
+            }
             for (IPLDObject<Document> document : allDocuments.values()) {
                 res = mainSettlementController.checkDocument(document, true, null, null, null) || res;
             }
