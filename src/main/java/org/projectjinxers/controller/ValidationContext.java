@@ -786,7 +786,7 @@ public class ValidationContext {
         while (previousState != null) {
             ModelState state = previousState.getMapped();
             IPLDObject<UserState> userState = state.expectUserState(userHash);
-            if (userState.getMapped().getGrantedOwnership(documentHash) != null) {
+            if (userState.getMapped().getGrantedOwnership(documentHash) == null) {
                 withoutGranted = previousState;
                 break;
             }

@@ -66,6 +66,11 @@ import org.spongycastle.util.encoders.Base64;
  */
 public class ModelController {
 
+    public interface ModelControllerListener {
+
+        void handleInvalidSettlement(Set<String> invalidHashes);
+    }
+
     static class PendingSubMessage {
 
         final String message;
@@ -206,6 +211,8 @@ public class ModelController {
     private Map<String, IPLDObject<Voting>> queuedVotings;
     private boolean abortLocalChanges;
 
+    private ModelControllerListener listener;
+
     /**
      * Constructor. If it returns without throwing an exception, the instance is completely initialized and continuously
      * listens for model states and ownership requests from peers.
@@ -314,6 +321,10 @@ public class ModelController {
         return currentValidatedState;
     }
 
+    public void setListener(ModelControllerListener listener) {
+        this.listener = listener;
+    }
+
     private String readNextModelStateHashFromTangle(String address) {
         return null;
     }
@@ -340,6 +351,7 @@ public class ModelController {
                     if (localSettlement != null) {
                         this.currentSnapshot = localSettlement;
                     }
+                    checkPendingUserStatesAndQueues(currentValidatedState);
                 }
             }
             else {
@@ -836,9 +848,11 @@ public class ModelController {
                 if (invalidSettlementRequests.size() > 0) {
                     handleNoUserStatesSaved(document, documentRemoval, settlementRequest, unbanRequest,
                             ownershipTransferController, voting);
-                    // TODO: replace exception with client notification and return false (idea: client can set delete
-                    // flag on queued objects which is checked when objects are dequeued)
-                    throw new ValidationException("settlement request for document with too few reviews");
+                    ModelControllerListener listener = this.listener;
+                    if (listener != null) {
+                        listener.handleInvalidSettlement(invalidSettlementRequests);
+                    }
+                    return false;
                 }
                 settlementStates = null;
                 sealedDocuments = null;
@@ -916,17 +930,17 @@ public class ModelController {
                 }
             }
         }
+        Map<String, String[]> pendingNewReviewTableEntries = this.pendingNewReviewTableEntries;
         if (pendingNewReviewTableEntries != null) {
-            synchronized (pendingNewReviewTableEntries) {
-                if (newReviewTableEntries == null) {
-                    newReviewTableEntries = new LinkedHashMap<>(pendingNewReviewTableEntries);
-                }
-                else { // preserve order
-                    Map<String, String[]> tmp = newReviewTableEntries;
-                    newReviewTableEntries = new LinkedHashMap<>(pendingNewReviewTableEntries);
-                    newReviewTableEntries.putAll(tmp);
-                }
+            if (newReviewTableEntries == null) {
+                newReviewTableEntries = new LinkedHashMap<>(pendingNewReviewTableEntries);
             }
+            else { // preserve order
+                Map<String, String[]> tmp = newReviewTableEntries;
+                newReviewTableEntries = new LinkedHashMap<>(pendingNewReviewTableEntries);
+                newReviewTableEntries.putAll(tmp);
+            }
+            this.pendingNewReviewTableEntries = null;
         }
         if (queuedUnbanRequests != null) {
             dequeue(queuedUnbanRequests, unbanRequests, UserState.UNBAN_REQUEST_KEY_PROVIDER, userHashes, false);
@@ -1477,7 +1491,6 @@ public class ModelController {
         ModelState localMergeBase;
         if (currentValidationContext.isTrivialMerge()) {
             ModelState localRoot = validated.getMapped();
-            checkPendingUserStatesAndQueues(localRoot);
             Map<String, Set<String>> obsoleteReviewVersions = currentValidationContext.getObsoleteReviewVersions();
             SettlementController snapshot = currentValidationContext.getMainSettlementController()
                     .createPreEvaluationSnapshot(0);
@@ -1486,7 +1499,7 @@ public class ModelController {
                 nextValidatedState = validated;
                 this.currentValidatedState = nextValidatedState;
                 this.currentSnapshot = snapshot;
-                checkPendingUserStatesAndQueues(localRoot);
+                checkPendingUserStatesAndQueues(validated);
                 return true;
             }
             localMergeBase = localRoot;
@@ -1507,11 +1520,11 @@ public class ModelController {
             return false;
         }
         publishLocalState(nextValidatedState);
-        checkPendingUserStatesAndQueues(localMergeBase);
+        checkPendingUserStatesAndQueues(validated);
         return true;
     }
 
-    private void checkPendingUserStatesAndQueues(ModelState localRoot) {
+    private void checkPendingUserStatesAndQueues(IPLDObject<ModelState> validated) {
         if (pendingUserStates != null) {
             synchronized (pendingUserStates) {
                 for (IPLDObject<UserState> userState : pendingUserStates.values()) {
@@ -1526,14 +1539,184 @@ public class ModelController {
                 appliedSettlementData.clear();
             }
         }
-        if (pendingNewReviewTableEntries != null) {
-            synchronized (pendingNewReviewTableEntries) {
-                pendingNewReviewTableEntries.clear();
+        pendingNewReviewTableEntries = null;
+        if (validated != null) {
+            ModelState valid = validated.getMapped();
+            if (queuedSettlementRequests != null) {
+                synchronized (queuedSettlementRequests) {
+                    Iterator<Entry<String, Queue<IPLDObject<SettlementRequest>>>> it = queuedSettlementRequests
+                            .entrySet().iterator();
+                    while (it.hasNext()) {
+                        Entry<String, Queue<IPLDObject<SettlementRequest>>> entry = it.next();
+                        Queue<IPLDObject<SettlementRequest>> value = entry.getValue();
+                        Iterator<IPLDObject<SettlementRequest>> innerIt = value.iterator();
+                        while (innerIt.hasNext()) {
+                            IPLDObject<SettlementRequest> settlementRequest = innerIt.next();
+                            String documentHash = settlementRequest.getMapped().getDocument().getMultihash();
+                            if (valid.getSettlementRequest(documentHash) != null) {
+                                innerIt.remove();
+                                ProgressListener progressListener = settlementRequest.getProgressListener();
+                                if (progressListener != null) {
+                                    progressListener.obsoleted();
+                                }
+                            }
+                        }
+                        if (value.isEmpty()) {
+                            it.remove();
+                        }
+                    }
+                }
             }
-        }
-        // TODO: check queued single instances (and check if localRoot has to be non-null)
-        if (localRoot != null) {
-
+            if (queuedUnbanRequests != null) {
+                synchronized (queuedUnbanRequests) {
+                    Iterator<Entry<String, Queue<IPLDObject<UnbanRequest>>>> it = queuedUnbanRequests.entrySet()
+                            .iterator();
+                    while (it.hasNext()) {
+                        Entry<String, Queue<IPLDObject<UnbanRequest>>> entry = it.next();
+                        String userHash = entry.getKey();
+                        UserState userState = valid.expectUserState(userHash).getMapped();
+                        if (userState.checkRequiredRating()) {
+                            for (IPLDObject<UnbanRequest> unbanRequest : entry.getValue()) {
+                                ProgressListener progressListener = unbanRequest.getProgressListener();
+                                if (progressListener != null) {
+                                    progressListener.obsoleted();
+                                }
+                            }
+                            it.remove();
+                        }
+                    }
+                }
+            }
+            if (queuedOwnershipRequests != null) {
+                synchronized (queuedOwnershipRequests) {
+                    Iterator<Entry<String, Queue<IPLDObject<OwnershipRequest>>>> it = queuedOwnershipRequests.entrySet()
+                            .iterator();
+                    while (it.hasNext()) {
+                        Entry<String, Queue<IPLDObject<OwnershipRequest>>> entry = it.next();
+                        Queue<IPLDObject<OwnershipRequest>> value = entry.getValue();
+                        Iterator<IPLDObject<OwnershipRequest>> innerIt = value.iterator();
+                        while (innerIt.hasNext()) {
+                            IPLDObject<OwnershipRequest> ownershipRequest = innerIt.next();
+                            try {
+                                new OwnershipTransferController(ownershipRequest, validated, context);
+                            }
+                            catch (Exception e) {
+                                innerIt.remove();
+                            }
+                        }
+                        if (value.isEmpty()) {
+                            it.remove();
+                        }
+                    }
+                }
+            }
+            if (queuedGrantedOwnerships != null) {
+                synchronized (queuedGrantedOwnerships) {
+                    Map<String, String[]> restoredReviewTableEntries = null;
+                    Iterator<Entry<String, Queue<IPLDObject<GrantedOwnership>>>> it = queuedGrantedOwnerships.entrySet()
+                            .iterator();
+                    while (it.hasNext()) {
+                        Entry<String, Queue<IPLDObject<GrantedOwnership>>> entry = it.next();
+                        String userHash = entry.getKey();
+                        Queue<IPLDObject<GrantedOwnership>> value = entry.getValue();
+                        Iterator<IPLDObject<GrantedOwnership>> innerIt = value.iterator();
+                        while (innerIt.hasNext()) {
+                            IPLDObject<GrantedOwnership> grantedOwnership = innerIt.next();
+                            try {
+                                new OwnershipTransferController(grantedOwnership, validated, userHash, context,
+                                        timestampTolerance);
+                                // restore reviewTableEntries for still valid granted ownership
+                                GrantedOwnership granted = grantedOwnership.getMapped();
+                                IPLDObject<Document> document = granted.getDocument();
+                                Document doc = document.getMapped();
+                                String[] reviewTableEntries = valid.getReviewTableEntries(doc.getPreviousVersionHash());
+                                if (reviewTableEntries != null) {
+                                    if (restoredReviewTableEntries == null) {
+                                        restoredReviewTableEntries = new LinkedHashMap<>();
+                                    }
+                                    restoredReviewTableEntries.put(document.getMultihash(), reviewTableEntries);
+                                }
+                            }
+                            catch (Exception e) {
+                                GrantedOwnership granted = grantedOwnership.getMapped();
+                                IPLDObject<Document> document = granted.getDocument();
+                                Document doc = document.getMapped();
+                                if (queuedTransferredDocumentHashes != null) {
+                                    synchronized (queuedTransferredDocumentHashes) {
+                                        String prevOwnerHash = doc.getPreviousVersion().expectUserState().getUser()
+                                                .getMultihash();
+                                        Queue<String> queue = queuedTransferredDocumentHashes.get(prevOwnerHash);
+                                        if (queue != null) {
+                                            queue.remove(doc.getFirstVersionHash());
+                                        }
+                                    }
+                                }
+                                if (queuedDocuments != null) {
+                                    synchronized (queuedDocuments) {
+                                        String newOwnerHash = doc.expectUserState().getUser().getMultihash();
+                                        Queue<IPLDObject<Document>> queue = queuedDocuments.get(newOwnerHash);
+                                        queue.remove(document);
+                                    }
+                                }
+                                innerIt.remove();
+                            }
+                        }
+                        if (value.isEmpty()) {
+                            it.remove();
+                        }
+                    }
+                    if (restoredReviewTableEntries != null) {
+                        pendingNewReviewTableEntries = restoredReviewTableEntries;
+                    }
+                }
+            }
+            if (queuedVotings != null) {
+                synchronized (queuedVotings) {
+                    Iterator<Entry<String, IPLDObject<Voting>>> it = queuedVotings.entrySet().iterator();
+                    while (it.hasNext()) {
+                        Entry<String, IPLDObject<Voting>> entry = it.next();
+                        String key = entry.getKey();
+                        IPLDObject<Voting> validVoting = valid.getVoting(key);
+                        boolean remove = validVoting != null;
+                        if (!remove) {
+                            IPLDObject<Voting> value = entry.getValue();
+                            Voting voting = value.getMapped();
+                            if (voting.hasVotes()) {
+                                remove = true;
+                            }
+                            else {
+                                Votable subject = voting.getSubject().getMapped();
+                                if (subject instanceof OwnershipSelection) {
+                                    try {
+                                        new OwnershipTransferController((OwnershipSelection) subject, validated);
+                                    }
+                                    catch (Exception e) {
+                                        remove = true;
+                                    }
+                                }
+                            }
+                        }
+                        if (remove) {
+                            it.remove();
+                            IPLDObject<Voting> value = entry.getValue();
+                            ProgressListener progressListener = value.getProgressListener();
+                            if (progressListener != null) {
+                                progressListener.obsoleted();
+                            }
+                        }
+                    }
+                }
+            }
+            if (queuedOwnershipTransferControllers != null) {
+                synchronized (queuedOwnershipTransferControllers) {
+                    for (Iterator<OwnershipTransferController> it = queuedOwnershipTransferControllers.iterator(); it
+                            .hasNext();) {
+                        if (!it.next().processAgain(validated)) {
+                            it.remove();
+                        }
+                    }
+                }
+            }
         }
     }
 

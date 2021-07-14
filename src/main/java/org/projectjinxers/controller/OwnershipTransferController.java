@@ -65,8 +65,8 @@ public class OwnershipTransferController {
     private final String documentHash;
     private final String userHash;
     private final boolean anonymousVoting;
-    private final IPLDObject<ModelState> modelStateObject;
-    private final ModelState modelState;
+    private IPLDObject<ModelState> modelStateObject;
+    private ModelState modelState;
     private final IPLDContext context;
     private final ECDSASignature signature;
     private final long timestamp;
@@ -157,6 +157,25 @@ public class OwnershipTransferController {
      * @return true iff the request is valid
      */
     boolean process() {
+        return process(modelState);
+    }
+
+    boolean processAgain(IPLDObject<ModelState> validState) {
+        ownershipRequest = null;
+        voting = null;
+        previousOwner = null;
+        newOwner = null;
+        document = null;
+        ModelState valid = validState.getMapped();
+        if (process(valid)) {
+            this.modelStateObject = validState;
+            this.modelState = valid;
+            return true;
+        }
+        return false;
+    }
+
+    private boolean process(ModelState modelState) {
         if (modelState.isSealedDocument(documentHash)
                 || modelState.getVotingForOwnershipTransfer(documentHash) != null) {
             return false;
