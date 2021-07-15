@@ -26,6 +26,12 @@ import org.projectjinxers.controller.ValidationException;
  */
 public interface Votable extends IPLDSerializable {
 
+    public interface TieBreaker {
+
+        int getWinner(int sameCounts);
+
+    }
+
     /**
      * @return whether or not the voting must be anonymous
      */
@@ -44,7 +50,8 @@ public interface Votable extends IPLDSerializable {
     /**
      * @return a new empty Vote instance (provisional method, will be changed)
      */
-    Vote createVote(byte[] invitationKey, int valueIndex, long seed, int obfuscationVersion, SecretConfig secretConfig);
+    Vote createVote(byte[] invitationKey, int valueIndex, int obfuscationVersion, int valueHashObfuscation,
+            SecretConfig secretConfig);
 
     /**
      * @param forDisplay indicates whether or not the values will be displayed to select from (true) or will be used
@@ -64,7 +71,7 @@ public interface Votable extends IPLDSerializable {
      * @param value  the expected winner
      * @param counts the actual counts (after tally)
      */
-    void expectWinner(Object value, int[] counts, long seed);
+    void expectWinner(Object value, int[] counts, TieBreaker seedProvider);
 
     void validate(Voting voting, ValidationContext validationContext);
 

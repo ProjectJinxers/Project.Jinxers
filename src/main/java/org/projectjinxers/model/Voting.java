@@ -32,6 +32,7 @@ import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.IPLDObject.ProgressListener;
 import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDReader.KeyProvider;
+import org.projectjinxers.model.Votable.TieBreaker;
 import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.ValidationContext;
 import org.projectjinxers.controller.ValidationException;
@@ -43,7 +44,7 @@ import org.projectjinxers.util.ModelUtility;
  * 
  * @author ProjectJinxers
  */
-public class Voting implements IPLDSerializable, Loader<Voting> {
+public class Voting implements IPLDSerializable, Loader<Voting>, TieBreaker {
 
     private static final String KEY_SEED = "f"; // f for fallback
     private static final String KEY_OBFUSCATION_VERSION = "o";
@@ -81,6 +82,9 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
     private Map<String, IPLDObject<Vote>> votes;
     private IPLDObject<Tally> tally;
 
+    private long hashSeed;
+    private long resolvedSeed;
+
     Voting() {
 
     }
@@ -106,6 +110,9 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
     public void read(IPLDReader reader, IPLDContext context, ValidationContext validationContext, boolean eager,
             Metadata metadata) {
         this.seed = reader.readNumber(KEY_SEED).longValue();
+        if (validationContext != null && seed == 0) {
+            throw new ValidationException("invalid seed");
+        }
         this.obfuscationVersion = reader.readNumber(KEY_OBFUSCATION_VERSION).intValue();
         this.subject = reader.readLinkObject(KEY_OBFUSCATION_VERSION, context, validationContext, LoaderFactory.VOTABLE,
                 eager);
@@ -127,10 +134,6 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
         writer.writeLink(KEY_SUBJECT, subject, null, context, progressListener);
         writer.writeLink(KEY_INITIAL_MODEL_STATE, initialModelState, null, null, null);
         writer.writeLinkObjects(KEY_VOTES, votes, signer, context, progressListener);
-    }
-
-    public long getSeed() {
-        return seed;
     }
 
     public int getObfuscationVersion() {
@@ -191,15 +194,18 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
         if (initialModelState.getMapped().containsUserState(userHash)) {
             byte[] toHash = userHash.getBytes(StandardCharsets.UTF_8);
             if (isAnonymous()) {
-                return ModelUtility.obfuscateHash(toHash, seed, obfuscationVersion, 0, secretConfig);
+                if (hashSeed == 0) {
+                    hashSeed = subject.getMapped().getHashSeed();
+                }
+                return ModelUtility.obfuscateHash(toHash, hashSeed, obfuscationVersion, 0, secretConfig);
             }
             return toHash;
         }
         return null;
     }
 
-    public Voting addVote(String userHash, int valueIndex, long seed, long timestamp, long timestampTolerance,
-            SecretConfig secretConfig) {
+    public Voting addVote(String userHash, int valueIndex, int valueHashObfuscation, long timestamp,
+            long timestampTolerance, SecretConfig secretConfig) {
         if (tally != null || subject.getMapped().getDeadline().getTime() < timestamp + timestampTolerance) {
             return null;
         }
@@ -207,8 +213,8 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
         if (invitationKey != null) {
             String check = getInvitationKeyString(invitationKey);
             if (!votes.containsKey(check)) {
-                Vote vote = subject.getMapped().createVote(invitationKey, valueIndex, seed, obfuscationVersion,
-                        secretConfig);
+                Vote vote = subject.getMapped().createVote(invitationKey, valueIndex, obfuscationVersion,
+                        valueHashObfuscation, secretConfig);
                 IPLDObject<Vote> voteObject = new IPLDObject<Vote>(vote);
                 Voting copy = copy();
                 if (copy.votes == null) {
@@ -234,7 +240,7 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
 
     public void expectWinner(Object value) {
         int[] counts = tally.getMapped().getCounts();
-        subject.getMapped().expectWinner(value, counts, seed);
+        subject.getMapped().expectWinner(value, counts, this);
     }
 
     public boolean validateNewVotes(ModelState since, ModelState currentState, ValidationContext validationContext) {
@@ -257,6 +263,9 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
             Set<Entry<String, User>> entrySet = allUsers.entrySet();
             IPLDContext context = validationContext.getContext();
             if (subject.isAnonymous()) {
+                if (hashSeed == 0) {
+                    hashSeed = subject.getHashSeed();
+                }
                 outer: for (Entry<String, IPLDObject<Vote>> entry : newVotes.entrySet()) {
                     String key = entry.getKey();
                     IPLDObject<Vote> value = entry.getValue();
@@ -312,9 +321,42 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
         return this;
     }
 
+    @Override
+    public int getWinner(int sameCounts) {
+        if (resolvedSeed == 0) {
+            long seed = this.seed;
+            for (IPLDObject<Vote> vote : votes.values()) {
+                // s[0]*31^(n-1) + s[1]*31^(n-2) + ... + s[n-1]
+                long hashCode = vote.getMultihash().hashCode();
+                // ignore negative hash codes
+                if (hashCode > 0) {
+                    // java long overflow does not break the algorithm (max + max = -2)
+                    seed += hashCode;
+                }
+            }
+            // this.seed is positive, <0 can only be caused by overflow
+            if (seed < 0) {
+                if (seed == Long.MIN_VALUE) {
+                    seed += this.seed;
+                }
+                seed = -seed;
+            }
+            resolvedSeed = seed;
+        }
+        // might be unfair, but we can't use Random class here, since that probably works with java only
+        // probably not manipulable (users on the same team don't know what the other team does, and you can't guarantee
+        // that your vote be the last one)
+        long seed = resolvedSeed;
+        while (seed < sameCounts) {
+            seed += this.seed;
+        }
+        return (int) (seed % sameCounts);
+    }
+
     private String getInvitationKeyString(String userHash, SecretConfig secretConfig) {
         byte[] hashBytes = userHash.getBytes(StandardCharsets.UTF_8);
-        byte[] invitationKeyBytes = ModelUtility.obfuscateHash(hashBytes, seed, obfuscationVersion, 0, secretConfig);
+        byte[] invitationKeyBytes = ModelUtility.obfuscateHash(hashBytes, hashSeed, obfuscationVersion, 0,
+                secretConfig);
         return getInvitationKeyString(invitationKeyBytes);
     }
 
@@ -332,6 +374,7 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
             res.votes = new LinkedHashMap<>(votes);
         }
         res.tally = tally;
+        res.hashSeed = hashSeed;
         return res;
     }
 
@@ -339,6 +382,9 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
         int[] counts = new int[votes.size()];
         Votable subject = this.subject.getMapped();
         if (subject.isAnonymous()) {
+            if (hashSeed == 0) {
+                hashSeed = subject.getHashSeed();
+            }
             byte[][] allValueHashBases = subject.getAllValueHashBases();
             for (String userHash : initialModelState.getMapped().expectAllUserHashes()) {
                 String invitationKey = getInvitationKeyString(userHash, secretConfig);
@@ -349,7 +395,7 @@ public class Voting implements IPLDSerializable, Loader<Voting> {
                     byte[] value = (byte[]) vote.getValue();
                     int i = 0;
                     for (byte[] valueHashBase : allValueHashBases) {
-                        byte[] obfuscatedHash = ModelUtility.obfuscateHash(valueHashBase, seed, obfuscationVersion,
+                        byte[] obfuscatedHash = ModelUtility.obfuscateHash(valueHashBase, hashSeed, obfuscationVersion,
                                 valueHashObfuscation, secretConfig);
                         if (Arrays.equals(obfuscatedHash, value)) {
                             counts[i]++;

@@ -478,15 +478,16 @@ public class ModelController {
         saveLocalChanges(null, null, null, null, null, voting, System.currentTimeMillis());
     }
 
-    public boolean addVote(IPLDObject<Voting> voting, String userHash, int valueIndex, long seed, Signer signer)
+    public boolean addVote(IPLDObject<Voting> voting, String userHash, int valueIndex, int valueHashObfuscation,
+            Signer signer)
             throws IOException {
         ProgressListener progressListener = voting.getProgressListener();
         if (progressListener != null) {
             progressListener.startedTask(ProgressTask.INIT, 0);
         }
         long timestamp = System.currentTimeMillis();
-        Voting updated = voting.getMapped().addVote(userHash, valueIndex, seed, timestamp, timestampTolerance,
-                secretConfig);
+        Voting updated = voting.getMapped().addVote(userHash, valueIndex, valueHashObfuscation, timestamp,
+                timestampTolerance, secretConfig);
         if (progressListener != null) {
             progressListener.finishedTask(ProgressTask.INIT);
         }
@@ -790,7 +791,7 @@ public class ModelController {
                     }
                     else if (subject instanceof OwnershipSelection) {
                         OwnershipSelection selection = (OwnershipSelection) subject;
-                        IPLDObject<OwnershipRequest> winnerObject = selection.getWinner(counts, vot.getSeed());
+                        IPLDObject<OwnershipRequest> winnerObject = selection.getWinner(counts, vot);
                         OwnershipRequest winner = winnerObject.getMapped();
                         String userHash = winner.getUserState().getMapped().getUser().getMultihash();
                         IPLDObject<Document> docObj = winner.getDocument();

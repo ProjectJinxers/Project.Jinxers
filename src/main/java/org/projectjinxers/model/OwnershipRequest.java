@@ -24,6 +24,7 @@ import org.projectjinxers.controller.IPLDReader;
 import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.OwnershipTransferController;
 import org.projectjinxers.controller.ValidationContext;
+import org.projectjinxers.controller.ValidationException;
 
 /**
  * Ownership requests can be issued if a user wants to take ownership of an abandoned document.
@@ -38,7 +39,7 @@ public class OwnershipRequest extends ToggleRequest implements DocumentAction, L
     private static final String KEY_DOCUMENT = "d";
 
     private boolean anonymousVoting;
-    private int votingHashSeed;
+    private long votingHashSeed;
     private long timestamp;
     private IPLDObject<Document> document;
 
@@ -56,7 +57,10 @@ public class OwnershipRequest extends ToggleRequest implements DocumentAction, L
         super(userState);
         this.document = document;
         this.anonymousVoting = anonymousVoting;
-        this.votingHashSeed = (int) (Math.random() * Integer.MAX_VALUE);
+        do {
+            this.votingHashSeed = (long) (Math.random() * Long.MAX_VALUE);
+        }
+        while (this.votingHashSeed == 0);
         this.timestamp = System.currentTimeMillis();
     }
 
@@ -66,6 +70,9 @@ public class OwnershipRequest extends ToggleRequest implements DocumentAction, L
         super.read(reader, context, validationContext, eager, metadata);
         this.anonymousVoting = Boolean.TRUE.equals(reader.readBoolean(KEY_ANONYMOUS_VOTING));
         this.votingHashSeed = reader.readNumber(KEY_VOTING_HASH_SEED).intValue();
+        if (validationContext != null && votingHashSeed == 0) {
+            throw new ValidationException("invalid voting hash seed");
+        }
         this.timestamp = reader.readNumber(KEY_TIMESTAMP).longValue();
         this.document = reader.readLinkObject(KEY_DOCUMENT, context, validationContext, LoaderFactory.DOCUMENT, eager);
     }
@@ -85,6 +92,10 @@ public class OwnershipRequest extends ToggleRequest implements DocumentAction, L
      */
     public boolean isAnonymousVoting() {
         return anonymousVoting;
+    }
+
+    public long getVotingHashSeed() {
+        return votingHashSeed;
     }
 
     /**

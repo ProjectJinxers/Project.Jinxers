@@ -24,7 +24,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Random;
 import java.util.Set;
 
 import org.projectjinxers.account.Signer;
@@ -77,13 +76,15 @@ public class OwnershipSelection implements Votable {
     public OwnershipSelection(IPLDObject<Document> document, Collection<IPLDObject<OwnershipRequest>> selection,
             boolean anonymous, long timestamp) {
         this.anonymous = anonymous;
-        this.hashSeed = (int) (Math.random() * Integer.MAX_VALUE);
         this.deadline = new Date(timestamp + DURATION);
         this.document = document;
         this.selection = new LinkedHashMap<>();
+        long hashSeed = 1;
         for (IPLDObject<OwnershipRequest> request : selection) {
             this.selection.put(request.getMultihash(), request);
+            hashSeed *= request.getMapped().getVotingHashSeed();
         }
+        this.hashSeed = hashSeed;
     }
 
     @Override
@@ -130,16 +131,11 @@ public class OwnershipSelection implements Votable {
     }
 
     @Override
-    public Vote createVote(byte[] invitationKey, int valueIndex, long seed, int obfuscationVersion,
+    public Vote createVote(byte[] invitationKey, int valueIndex, int obfuscationVersion, int valueHashObfuscation,
             SecretConfig secretConfig) {
         if (anonymous) {
-            int valueHashObfuscation;
-            do {
-                valueHashObfuscation = (int) (Math.random() * Integer.MAX_VALUE);
-            }
-            while (valueHashObfuscation == 0);
             return new ValueVote(invitationKey,
-                    ModelUtility.obfuscateHash(String.valueOf(valueIndex).getBytes(StandardCharsets.UTF_8), seed,
+                    ModelUtility.obfuscateHash(String.valueOf(valueIndex).getBytes(StandardCharsets.UTF_8), hashSeed,
                             obfuscationVersion, valueHashObfuscation, secretConfig),
                     false, valueHashObfuscation);
         }
@@ -186,8 +182,8 @@ public class OwnershipSelection implements Votable {
     }
 
     @Override
-    public void expectWinner(Object value, int[] counts, long seed) {
-        int maxIndex = getMaxIndex(counts, seed);
+    public void expectWinner(Object value, int[] counts, TieBreaker tieBreaker) {
+        int maxIndex = getMaxIndex(counts, tieBreaker);
         if (((Integer) value).intValue() != maxIndex) {
             throw new ValidationException("expected count for " + value + " to be the max");
         }
@@ -214,8 +210,8 @@ public class OwnershipSelection implements Votable {
         }
     }
 
-    public IPLDObject<OwnershipRequest> getWinner(int[] counts, long seed) {
-        int maxIndex = getMaxIndex(counts, seed);
+    public IPLDObject<OwnershipRequest> getWinner(int[] counts, TieBreaker tieBreaker) {
+        int maxIndex = getMaxIndex(counts, tieBreaker);
         Iterator<Entry<String, IPLDObject<OwnershipRequest>>> iterator = selection.entrySet().iterator();
         for (int i = 0; i < maxIndex; i++) {
             iterator.next();
@@ -223,7 +219,7 @@ public class OwnershipSelection implements Votable {
         return iterator.next().getValue();
     }
 
-    private int getMaxIndex(int[] counts, long seed) {
+    private int getMaxIndex(int[] counts, TieBreaker tieBreaker) {
         int max = 0;
         int maxIndex = -1;
         List<Integer> sameCount = null;
@@ -248,9 +244,8 @@ public class OwnershipSelection implements Votable {
             i++;
         }
         if (sameCount != null && sameCount.size() > 0) {
-            Random rnd = new Random(seed);
-            int randomIndex = rnd.nextInt(sameCount.size());
-            maxIndex = sameCount.get(randomIndex);
+            int winner = tieBreaker.getWinner(sameCount.size());
+            maxIndex = sameCount.get(winner);
         }
         return maxIndex;
     }

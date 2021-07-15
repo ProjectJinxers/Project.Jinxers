@@ -38,6 +38,7 @@ public class UnbanRequest extends ToggleRequest implements DocumentAction, Votab
     private static final String KEY_ANONYMOUS = "o";
     private static final String KEY_HASH_SEED = "s";
     private static final String KEY_DEADLINE = "d";
+    private static final String KEY_MESSAGE = "m";
     private static final String KEY_DOCUMENT = "c";
 
     private static final Boolean[] ALL_VALUES = { Boolean.TRUE, Boolean.FALSE, null };
@@ -48,6 +49,7 @@ public class UnbanRequest extends ToggleRequest implements DocumentAction, Votab
     private boolean anonymous;
     private long hashSeed;
     private Date deadline;
+    private String message;
     private IPLDObject<Document> document;
 
     @Override
@@ -56,7 +58,11 @@ public class UnbanRequest extends ToggleRequest implements DocumentAction, Votab
         super.read(reader, context, validationContext, eager, metadata);
         this.anonymous = Boolean.TRUE.equals(reader.readBoolean(KEY_ANONYMOUS));
         this.hashSeed = reader.readNumber(KEY_HASH_SEED).longValue();
+        if (validationContext != null && hashSeed == 0) {
+            throw new ValidationException("invalid hash seed");
+        }
         this.deadline = new Date(reader.readNumber(KEY_DEADLINE).longValue());
+        this.message = reader.readString(KEY_MESSAGE);
         this.document = reader.readLinkObject(KEY_DOCUMENT, context, validationContext, LoaderFactory.DOCUMENT, eager);
     }
 
@@ -67,6 +73,7 @@ public class UnbanRequest extends ToggleRequest implements DocumentAction, Votab
         writer.writeBoolean(KEY_ANONYMOUS, anonymous);
         writer.writeNumber(KEY_HASH_SEED, hashSeed);
         writer.writeNumber(KEY_DEADLINE, deadline.getTime());
+        writer.writeString(KEY_MESSAGE, message);
         writer.writeLink(KEY_DOCUMENT, document, null, null, null);
     }
 
@@ -86,15 +93,10 @@ public class UnbanRequest extends ToggleRequest implements DocumentAction, Votab
     }
 
     @Override
-    public Vote createVote(byte[] invitationKey, int valueIndex, long seed, int obfuscationVersion,
+    public Vote createVote(byte[] invitationKey, int valueIndex, int obfuscationVersion, int valueHashObfuscation,
             SecretConfig secretConfig) {
         if (anonymous) {
-            int valueHashObfuscation;
-            do {
-                valueHashObfuscation = (int) (Math.random() * Integer.MAX_VALUE);
-            }
-            while (valueHashObfuscation == 0);
-            return new ValueVote(invitationKey, ModelUtility.obfuscateHash(ALL_VALUE_HASH_BASES[valueIndex], seed,
+            return new ValueVote(invitationKey, ModelUtility.obfuscateHash(ALL_VALUE_HASH_BASES[valueIndex], hashSeed,
                     obfuscationVersion, valueHashObfuscation, secretConfig), false, valueHashObfuscation);
         }
         return new YesNoMaybeVote(invitationKey, ALL_VALUES[valueIndex]);
@@ -119,7 +121,7 @@ public class UnbanRequest extends ToggleRequest implements DocumentAction, Votab
     }
 
     @Override
-    public void expectWinner(Object value, int[] counts, long seed) {
+    public void expectWinner(Object value, int[] counts, TieBreaker tieBreaker) {
         if (!isGranted(counts)) {
             throw new ValidationException("expected yes count to be greater than no count");
         }
