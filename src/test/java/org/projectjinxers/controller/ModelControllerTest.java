@@ -120,10 +120,8 @@ class ModelControllerTest {
     @Test
     void testSaveDocument() throws Exception {
         String[] hashes = access.readObjects("model/modelController/saveDocument/simple.json");
-        final String modelStateHash = hashes[1];
         final String userHash = hashes[0];
         Config config = Config.getSharedInstance();
-        access.saveModelStateHash(config.getIOTAAddress(), modelStateHash);
         ModelController controller = ModelController.getModelController(access, null);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
@@ -145,10 +143,8 @@ class ModelControllerTest {
     @Test
     void testSaveDocumentDeferredBySaveFailure() throws Exception {
         String[] hashes = access.readObjects("model/modelController/saveDocument/simple.json");
-        final String modelStateHash = hashes[1];
         final String userHash = hashes[0];
         Config config = Config.getSharedInstance();
-        access.saveModelStateHash(config.getIOTAAddress(), modelStateHash);
         ModelController controller = ModelController.getModelController(access, null);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
@@ -182,10 +178,8 @@ class ModelControllerTest {
     @Test
     void testSaveDocumentDeferredTwiceBySaveFailure() throws Exception {
         String[] hashes = access.readObjects("model/modelController/saveDocument/simple.json");
-        final String modelStateHash = hashes[1];
         final String userHash = hashes[0];
         Config config = Config.getSharedInstance();
-        access.saveModelStateHash(config.getIOTAAddress(), modelStateHash);
         ModelController controller = ModelController.getModelController(access, null);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
@@ -224,10 +218,8 @@ class ModelControllerTest {
     @Test
     void testSaveDocumentDeferredAfterInvalidModelStateMessage() throws Exception {
         String[] hashes = access.readObjects("model/modelController/saveDocument/simple.json");
-        final String modelStateHash = hashes[1];
         final String userHash = hashes[0];
         Config config = Config.getSharedInstance();
-        access.saveModelStateHash(config.getIOTAAddress(), modelStateHash);
         ModelController controller = ModelController.getModelController(access, null);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();

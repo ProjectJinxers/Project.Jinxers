@@ -240,6 +240,10 @@ public class ModelController {
             }
         }
         catch (FileNotFoundException e) {
+            currentModelStateHash = cfg.getValidHash(address);
+            if (currentModelStateHash != null) {
+                this.currentValidatedState = loadModelState(currentModelStateHash, false);
+            }
             do {
                 currentModelStateHash = readNextModelStateHashFromTangle(address);
                 if (currentModelStateHash != null) {
@@ -479,8 +483,7 @@ public class ModelController {
     }
 
     public boolean addVote(IPLDObject<Voting> voting, String userHash, int valueIndex, int valueHashObfuscation,
-            Signer signer)
-            throws IOException {
+            Signer signer) throws IOException {
         ProgressListener progressListener = voting.getProgressListener();
         if (progressListener != null) {
             progressListener.startedTask(ProgressTask.INIT, 0);

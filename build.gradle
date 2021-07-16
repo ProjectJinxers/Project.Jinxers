@@ -1,3 +1,7 @@
+plugins {
+    id 'org.openjfx.javafxplugin' version '0.0.10'
+}
+
 apply plugin: 'java'
 apply plugin: 'eclipse'
 apply plugin: 'application'
@@ -6,6 +10,10 @@ apply plugin: 'jacoco'
 repositories { 
     mavenCentral()
     maven { url 'https://jitpack.io' }
+    
+    // For some of MarkdownEditorControl's dependencies
+    maven { url "https://sandec.jfrog.io/artifactory/repo" }
+    maven { url "https://dl.bintray.com/dukke/maven" }
 }
 
 import org.gradle.plugins.ide.eclipse.model.SourceFolder 
@@ -23,6 +31,10 @@ eclipse.classpath.file {
 sourceCompatibility = 1.11
 targetCompatibility = 1.11
 
+javafx {
+    modules = [ 'javafx.controls', 'javafx.fxml' ]
+}
+
 dependencies {
 
     implementation('com.hedera.hashgraph:ethereumj-core:1.12.0-v0.5.0') {
@@ -35,6 +47,10 @@ dependencies {
     implementation 'org.yaml:snakeyaml:1.24'
     implementation 'com.google.code.gson:gson:2.8.6'
     implementation 'com.github.fzakaria:ascii85:1.2'
+    implementation 'com.ibm.mdfromhtml:remark:1.0.9'
+    implementation 'com.github.Dansoftowner:MarkdownEditorControlFX:0.6.9.2'
+    
+    implementation fileTree(dir: 'local-libs', include: '*.jar')
     
     testImplementation('org.junit.jupiter:junit-jupiter-api:5.4.2')
     testImplementation 'org.mockito:mockito-core:3.11.0'
@@ -45,6 +61,22 @@ dependencies {
     testRuntimeOnly('org.junit.jupiter:junit-jupiter-engine:5.4.2')
     testImplementation 'org.junit.vintage:junit-vintage-engine:5.7.0'
     
+}
+
+task copyDependencies(type: Copy, group: 'ide') {
+  duplicatesStrategy = DuplicatesStrategy.INCLUDE
+  into file("libs")
+  from (configurations.compileClasspath)
+  rename { fileName ->
+      stripVersion(fileName)
+  }
+}
+
+String stripVersion(String fileNameWithVersion) {
+  String ext = fileNameWithVersion.substring(fileNameWithVersion.lastIndexOf("."),fileNameWithVersion.length())
+  int end = fileNameWithVersion.lastIndexOf("-"); //assumes that: name-version.ext. Will not work with name-version-SNAPSHOT.ext
+  String fileNameWithoutVersion = fileNameWithVersion.substring(0, end) + ext
+  return fileNameWithoutVersion
 }
 
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
@@ -79,3 +111,5 @@ test {
 jacocoTestReport {
     dependsOn test
 }
+
+mainClassName = 'org.projectjinxers.ui.ProjectJinxers'

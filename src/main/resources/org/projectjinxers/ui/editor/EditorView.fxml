@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.layout.VBox?>
+<?import com.dansoftware.mdeditor.MarkdownEditorControl?>
+
+<VBox xmlns:fx="http://javafx.com/fxml/1">
+    <MarkdownEditorControl fx:id="editor">
+    </MarkdownEditorControl>
+	<!-- TODO Add Nodes -->
+</VBox>
+

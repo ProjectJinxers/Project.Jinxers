@@ -13,6 +13,8 @@
  */
 package org.projectjinxers.config;
 
+import java.util.Map;
+
 /**
  * Corresponds to the config.yml resource file.
  * 
@@ -55,6 +57,7 @@ public class Config extends YamlConfig<Config.Root> {
     static class IOTA {
 
         public IOTAMain main;
+        public Map<String, String> validHashes;
 
     }
 
@@ -166,6 +169,11 @@ public class Config extends YamlConfig<Config.Root> {
             iotaAddress = root.iota.main.address;
         }
         return iotaAddress;
+    }
+
+    public String getValidHash(String iotaAddress) {
+        Map<String, String> validHashes = root.iota.validHashes;
+        return validHashes == null ? null : validHashes.get(iotaAddress);
     }
 
     public long getTimestampTolerance() {
