@@ -33,7 +33,7 @@ public class ProjectJinxers extends Application {
     @Override
     public void start(Stage primaryStage) throws Exception {
         primaryStage.setTitle("ProjectJinxers");
-        Image appIcon = new Image(getClass().getClassLoader().getResourceAsStream("icon.jpeg"));
+        Image appIcon = new Image(getClass().getClassLoader().getResourceAsStream("images/appicon.jpeg"));
         primaryStage.getIcons().add(appIcon);
         setTaskbarImage();
         MainPresenter mainPresenter = MainView.createMainPresenter(this);
@@ -43,7 +43,7 @@ public class ProjectJinxers extends Application {
 
     private void setTaskbarImage() {
         final Toolkit defaultToolkit = Toolkit.getDefaultToolkit();
-        final URL imageResource = getClass().getClassLoader().getResource("icon.jpeg");
+        final URL imageResource = getClass().getClassLoader().getResource("images/appicon.jpeg");
         final java.awt.Image image = defaultToolkit.getImage(imageResource);
 
         // this is new since JDK 9

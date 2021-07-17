@@ -16,6 +16,10 @@ package org.projectjinxers.ui.main;
 import org.projectjinxers.ui.ProjectJinxers;
 import org.projectjinxers.ui.common.PJView;
 
+import javafx.event.Event;
+import javafx.fxml.FXML;
+import javafx.scene.layout.VBox;
+
 /**
  * @author ProjectJinxers
  *
@@ -31,9 +35,22 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
 
     private MainPresenter mainPresenter;
 
+    @FXML
+    private VBox detailViewContainer;
+
     @Override
     public MainPresenter getPresenter() {
         return mainPresenter;
+    }
+
+    @FXML
+    void onAddGroup(Event e) {
+        System.out.println("Not yet implemented");
+    }
+
+    @FXML
+    void onAddDocument(Event e) {
+        mainPresenter.createDocument("https://en.wikipedia.org/wiki/Carolin_Kebekus");
     }
 
 }

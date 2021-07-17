@@ -1,8 +1,80 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.SplitPane?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.control.Tooltip?>
 <?import javafx.scene.layout.VBox?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
 
 <VBox xmlns:fx="http://javafx.com/fxml/1">
-	<!-- TODO Add Nodes -->
+	<SplitPane>
+	   <TabPane fx:id="masterTabView">
+	       <fx:define>
+               <Image fx:id="addIcon" url="images/add.png"/>
+           </fx:define>
+	       <Tab fx:id="groupsTab" closable="false">
+	           <VBox>
+	               <HBox>
+	                   <Button onAction="#onAddGroup">
+	                       <graphic>
+	                           <ImageView image="$addIcon"/>
+	                       </graphic>
+	                       <tooltip>
+                               <Tooltip text="Add group"/>
+                           </tooltip>
+	                   </Button>
+	               </HBox>
+	               <ListView fx:id="groupsList"/>
+	           </VBox>
+	       </Tab>
+	       <Tab fx:id="documentsTab" closable="false">
+	           <VBox>
+	               <HBox>
+	                   <TextField fx:id="filterField"/>
+	                   <CheckBox fx:id="myDocuments"/>
+	                   <Button onAction="#onAddDocument">
+                           <graphic>
+                               <ImageView image="$addIcon"/>
+                           </graphic>
+                           <tooltip>
+                               <Tooltip text="Create new document"/>
+                           </tooltip>
+                       </Button>
+	               </HBox>
+	               <ListView fx:id="documentsList"/>
+	           </VBox>
+	       </Tab>
+	       <Tab fx:id="ownershipRequestsTab" closable="false">
+	           <VBox>
+	               <HBox>
+	                   <CheckBox fx:id="myOwnershipRequests"/>
+	               </HBox>
+	               <ListView fx:id="ownershipRequestsList"/>
+	           </VBox>
+	       </Tab>
+	       <Tab fx:id="unbanRequestsTab" closable="false">
+	           <VBox>
+	               <HBox>
+	                   <CheckBox fx:id="myUnbanRequests"/>
+	               </HBox>
+	               <ListView fx:id="unbanRequestsList"/>
+	           </VBox>
+	       </Tab>
+	       <Tab fx:id="votingsTab" closable="false">
+	           <VBox>
+	               <CheckBox fx:id="myVotings"/>
+	           </VBox>
+	           <ListView fx:id="votingsList"/>
+	       </Tab>
+	   </TabPane>
+	   <VBox fx:id="detailViewContainer"/>
+	</SplitPane>
 </VBox>
 

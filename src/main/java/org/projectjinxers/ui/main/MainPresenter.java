@@ -45,7 +45,6 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> {
     protected Scene createScene() {
         Scene res = new MainScene(this);
         // configure scene
-        createDocument("https://en.wikipedia.org/wiki/Carolin_Kebekus");
         return res;
     }
 
