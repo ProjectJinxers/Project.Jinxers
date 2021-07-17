@@ -17,6 +17,7 @@ repositories {
 }
 
 import org.gradle.plugins.ide.eclipse.model.SourceFolder 
+import org.gradle.plugins.ide.eclipse.model.AccessRule
 eclipse.classpath.file {
     beforeMerged { classpath -> 
         classpath.entries.clear()
@@ -25,6 +26,11 @@ eclipse.classpath.file {
         cp.entries.findAll { it instanceof SourceFolder && it.path.startsWith("src/main/") }*.output = "bin/main" 
         cp.entries.findAll { it instanceof SourceFolder && it.path.startsWith("src/test/") }*.output = "bin/test" 
         cp.entries.removeAll { it.kind == "output" }
+        cp.entries.each { source ->
+            if (source.kind == 'con' && source.path.startsWith('org.eclipse.jdt.launching.JRE_CONTAINER')) {
+                source.accessRules.add(new AccessRule('0', 'com/apple/eawt/**'))
+            }
+        }
     }
 }
 
@@ -49,6 +55,7 @@ dependencies {
     implementation 'com.github.fzakaria:ascii85:1.2'
     implementation 'com.ibm.mdfromhtml:remark:1.0.9'
     implementation 'com.github.Dansoftowner:MarkdownEditorControlFX:0.6.9.2'
+    implementation 'com.vladsch.flexmark:flexmark-all:0.62.2'
     
     implementation fileTree(dir: 'local-libs', include: '*.jar')
     
