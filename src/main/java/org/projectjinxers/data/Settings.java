@@ -11,32 +11,35 @@
  * You should have received a copy of the GNU General Public License along with this program. If not, see
  * <https://www.gnu.org/licenses/>.
  */
-package org.projectjinxers.ui.common;
-
-import org.projectjinxers.ui.common.PJPresenter.View;
-
-import javafx.scene.control.Alert;
-import javafx.scene.control.Alert.AlertType;
-import javafx.scene.control.ButtonType;
+package org.projectjinxers.data;
 
 /**
  * @author ProjectJinxers
  *
  */
-public interface PJView<V extends View, P extends PJPresenter<V>> extends View {
+public class Settings {
 
-    P getPresenter();
+    private boolean saveGroups;
+    private boolean saveUsers;
 
-    @Override
-    default void showMessage(String message) {
-        Alert alert = new Alert(AlertType.INFORMATION, message, ButtonType.OK);
-        alert.showAndWait();
+    public Settings() {
+
     }
 
-    @Override
-    default void showError(String message, Throwable exception) {
-        Alert alert = new Alert(AlertType.ERROR, message, ButtonType.OK);
-        alert.showAndWait();
+    public boolean isSaveGroups() {
+        return saveGroups;
+    }
+
+    public void setSaveGroups(boolean saveGroups) {
+        this.saveGroups = saveGroups;
+    }
+
+    public boolean isSaveUsers() {
+        return saveUsers;
+    }
+
+    public void setSaveUsers(boolean saveUsers) {
+        this.saveUsers = saveUsers;
     }
 
 }

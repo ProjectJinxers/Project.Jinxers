@@ -11,32 +11,34 @@
  * You should have received a copy of the GNU General Public License along with this program. If not, see
  * <https://www.gnu.org/licenses/>.
  */
-package org.projectjinxers.ui.common;
+package org.projectjinxers.ui.util;
 
-import org.projectjinxers.ui.common.PJPresenter.View;
+import java.util.function.UnaryOperator;
 
-import javafx.scene.control.Alert;
-import javafx.scene.control.Alert.AlertType;
-import javafx.scene.control.ButtonType;
+import javafx.application.Platform;
+import javafx.scene.control.TextField;
+import javafx.scene.control.TextFormatter.Change;
 
 /**
  * @author ProjectJinxers
  *
  */
-public interface PJView<V extends View, P extends PJPresenter<V>> extends View {
+public class TextFieldUtility {
 
-    P getPresenter();
+    public static final UnaryOperator<Change> NUMBER_FILTER = change -> {
+        String text = change.getText();
 
-    @Override
-    default void showMessage(String message) {
-        Alert alert = new Alert(AlertType.INFORMATION, message, ButtonType.OK);
-        alert.showAndWait();
-    }
+        if (text.matches("[0-9]*")) {
+            return change;
+        }
 
-    @Override
-    default void showError(String message, Throwable exception) {
-        Alert alert = new Alert(AlertType.ERROR, message, ButtonType.OK);
-        alert.showAndWait();
+        return null;
+    };
+
+    public static void unfocus(TextField textField) {
+        Platform.runLater(() -> {
+            textField.getParent().requestFocus();
+        });
     }
 
 }

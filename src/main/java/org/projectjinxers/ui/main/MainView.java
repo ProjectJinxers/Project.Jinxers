@@ -13,18 +13,39 @@
  */
 package org.projectjinxers.ui.main;
 
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.ResourceBundle;
+
+import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.data.Group;
+import org.projectjinxers.model.Document;
+import org.projectjinxers.model.OwnershipRequest;
+import org.projectjinxers.model.UnbanRequest;
+import org.projectjinxers.model.Voting;
 import org.projectjinxers.ui.ProjectJinxers;
+import org.projectjinxers.ui.cell.DocumentCell;
+import org.projectjinxers.ui.cell.GroupCell;
+import org.projectjinxers.ui.cell.OwnershipRequestCell;
+import org.projectjinxers.ui.cell.UnbanRequestCell;
+import org.projectjinxers.ui.cell.VotingCell;
 import org.projectjinxers.ui.common.PJView;
 
+import javafx.collections.FXCollections;
 import javafx.event.Event;
 import javafx.fxml.FXML;
+import javafx.fxml.Initializable;
+import javafx.scene.control.ListView;
 import javafx.scene.layout.VBox;
 
 /**
  * @author ProjectJinxers
  *
  */
-public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, MainPresenter.MainView {
+public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, MainPresenter.MainView, Initializable {
 
     public static MainPresenter createMainPresenter(ProjectJinxers application) {
         MainView mainView = new MainView();
@@ -36,6 +57,21 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
     private MainPresenter mainPresenter;
 
     @FXML
+    private ListView<Group> groupsList;
+
+    @FXML
+    private ListView<IPLDObject<Document>> documentsList;
+
+    @FXML
+    private ListView<IPLDObject<OwnershipRequest>> ownershipRequestsList;
+
+    @FXML
+    private ListView<IPLDObject<UnbanRequest>> unbanRequestsList;
+
+    @FXML
+    private ListView<IPLDObject<Voting>> votingsList;
+
+    @FXML
     private VBox detailViewContainer;
 
     @Override
@@ -43,14 +79,50 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
         return mainPresenter;
     }
 
+    @Override
+    public void initialize(URL location, ResourceBundle resources) {
+        groupsList.setCellFactory(param -> new GroupCell(mainPresenter));
+        documentsList.setCellFactory(param -> new DocumentCell());
+        ownershipRequestsList.setCellFactory(param -> new OwnershipRequestCell());
+        unbanRequestsList.setCellFactory(param -> new UnbanRequestCell());
+        votingsList.setCellFactory(param -> new VotingCell());
+    }
+
+    @Override
+    public void updateView() {
+        updateGroups();
+    }
+
+    @Override
+    public void didAddGroup(Group group) {
+        updateGroups();
+    }
+
+    @Override
+    public void didEditGroup(Group group) {
+        groupsList.refresh();
+    }
+
+    @Override
+    public void didDeleteGroup(Group group) {
+        updateGroups();
+    }
+
     @FXML
     void onAddGroup(Event e) {
-        System.out.println("Not yet implemented");
+        mainPresenter.createGroup();
     }
 
     @FXML
     void onAddDocument(Event e) {
         mainPresenter.createDocument("https://en.wikipedia.org/wiki/Carolin_Kebekus");
+    }
+
+    private void updateGroups() {
+        Map<String, Group> groups = mainPresenter.getGroups();
+        List<Group> groupsList = new ArrayList<>(groups.values());
+        Collections.sort(groupsList);
+        this.groupsList.setItems(FXCollections.observableList(groupsList));
     }
 
 }

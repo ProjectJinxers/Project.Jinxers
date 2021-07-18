@@ -8,7 +8,25 @@ The project is still in its early stages. Its first artifact was a UML model con
 
 ## Next steps
 
-The current plan is to create a JavaFX prototype application as a proof of concept. The business logic, which uses [ipfs-shipyard/java-ipfs-http-client](https://github.com/ipfs-shipyard/java-ipfs-http-client) for communicating with a local IPFS node and will probably use [iotaledger/iota-java](https://github.com/iotaledger/iota-java) for communicating with a public IOTA (perma)node, is currently being implemented. Most of the required features are done. Time is limited, the matter is complex. Apart from unit-testing, none of the proposed solutions for the identified problems have been practically evaluated using IPFS and the IOTA Tangle, yet.
+The current plan is to create a JavaFX prototype application as a proof of concept. The business logic, which uses [ipfs-shipyard/java-ipfs-http-client](https://github.com/ipfs-shipyard/java-ipfs-http-client) for communicating with a local IPFS node and will probably use [iotaledger/iota-java](https://github.com/iotaledger/iota-java) for communicating with a public IOTA (perma)node, has been implemented. The UI is currently being implemented. Time is limited, the matter is complex. Apart from unit-testing, none of the proposed solutions for the identified problems have been practically evaluated using IPFS and the IOTA Tangle, yet.
+
+## Local setup
+
+In order to run the prototype application, you can either import the project into your favorite IDE or use the gradle command line tool to execute the 'run' task.
+
+### Debugging
+
+If you want to debug the application in your favorite IDE without connecting the debugger to the running application, you might have to copy all dependencies into a folder in the project. The gradle task 'copyDependencies' strips the version from the jar file names and copies the renamed jars into the local-libs folder. Some original jar file names cause java module resolution errors. After executing the task and adding local-libs to the module path, there will still be some module errors. You can solve them by removing the affected copied jars. Not all jars in the folder have to be on the module path.
+
+### IPFS Node
+
+The application needs a running IPFS node. You can download [IPFS Desktop](https://docs.ipfs.io/install/ipfs-desktop/) or use a command line IPFS daemon. IPFS Desktop connects to a daemon, which is installed with it and which is started by it when it is started. However, the current version does not enable pubsub by default. The application relies on pubsub. You can start the deamon before starting IPFS Desktop. In fact, you don't need to start IPFS Desktop. Starting the daemon is good enough for the application. You can use this command to enable pubsub:
+
+```
+ipfs daemon --enable-pubsub-experiment
+```
+
+
 
 ## Validation
 

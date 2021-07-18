@@ -11,32 +11,18 @@
  * You should have received a copy of the GNU General Public License along with this program. If not, see
  * <https://www.gnu.org/licenses/>.
  */
-package org.projectjinxers.ui.common;
+package org.projectjinxers.ui.group;
 
-import org.projectjinxers.ui.common.PJPresenter.View;
-
-import javafx.scene.control.Alert;
-import javafx.scene.control.Alert.AlertType;
-import javafx.scene.control.ButtonType;
+import org.projectjinxers.ui.common.PJScene;
 
 /**
  * @author ProjectJinxers
  *
  */
-public interface PJView<V extends View, P extends PJPresenter<V>> extends View {
+public class GroupScene extends PJScene<GroupPresenter.GroupView, GroupPresenter> {
 
-    P getPresenter();
-
-    @Override
-    default void showMessage(String message) {
-        Alert alert = new Alert(AlertType.INFORMATION, message, ButtonType.OK);
-        alert.showAndWait();
-    }
-
-    @Override
-    default void showError(String message, Throwable exception) {
-        Alert alert = new Alert(AlertType.ERROR, message, ButtonType.OK);
-        alert.showAndWait();
+    protected GroupScene(GroupPresenter presenter) {
+        super("GroupView.fxml", presenter);
     }
 
 }

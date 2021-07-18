@@ -11,32 +11,24 @@
  * You should have received a copy of the GNU General Public License along with this program. If not, see
  * <https://www.gnu.org/licenses/>.
  */
-package org.projectjinxers.ui.common;
+package org.projectjinxers.ui.cell;
 
-import org.projectjinxers.ui.common.PJPresenter.View;
-
-import javafx.scene.control.Alert;
-import javafx.scene.control.Alert.AlertType;
-import javafx.scene.control.ButtonType;
+import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.model.Document;
 
 /**
  * @author ProjectJinxers
  *
  */
-public interface PJView<V extends View, P extends PJPresenter<V>> extends View {
+public class DocumentCell extends AbstractListCell<IPLDObject<Document>> {
 
-    P getPresenter();
-
-    @Override
-    default void showMessage(String message) {
-        Alert alert = new Alert(AlertType.INFORMATION, message, ButtonType.OK);
-        alert.showAndWait();
+    public DocumentCell() {
+        super("DocumentCell.fxml");
     }
 
     @Override
-    default void showError(String message, Throwable exception) {
-        Alert alert = new Alert(AlertType.ERROR, message, ButtonType.OK);
-        alert.showAndWait();
+    protected void update(IPLDObject<Document> item) {
+
     }
 
 }

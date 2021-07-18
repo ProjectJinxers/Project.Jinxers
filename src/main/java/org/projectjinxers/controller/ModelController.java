@@ -34,6 +34,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Queue;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import org.ethereum.crypto.ECKey.ECDSASignature;
 import org.projectjinxers.account.Signer;
@@ -163,6 +164,16 @@ public class ModelController {
 
     private static final Map<String, ModelController> MODEL_CONTROLLERS = new HashMap<>();
 
+    public static ModelController getModelController(Config config) throws Exception {
+        return getModelController(config, null);
+    }
+
+    public static ModelController getModelController(Config config, SecretConfig secretConfig) throws Exception {
+        IPFSAccess access = new IPFSAccess();
+        access.configure();
+        return getModelController(access, config, secretConfig);
+    }
+
     public static ModelController getModelController(IPFSAccess access, Config config) throws Exception {
         return getModelController(access, config, null);
     }
@@ -269,8 +280,11 @@ public class ModelController {
         new Thread(new Runnable() {
             @Override
             public void run() {
+                boolean subscribedSuccessfully = false;
                 try {
-                    access.subscribe(address).forEach(map -> {
+                    Stream<Map<String, Object>> stream = access.subscribe(address);
+                    subscribedSuccessfully = true;
+                    stream.forEach(map -> {
                         try {
                             String pubSubData = (String) map.get(PUBSUB_SUB_KEY_DATA);
                             handleIncomingModelState(pubSubData, System.currentTimeMillis());
@@ -282,7 +296,9 @@ public class ModelController {
                 }
                 catch (Exception e) {
                     e.printStackTrace();
-                    subscribeToModelStatesTopic();
+                    if (subscribedSuccessfully) {
+                        subscribeToModelStatesTopic();
+                    }
                 }
             }
         }).start();
@@ -292,8 +308,12 @@ public class ModelController {
         new Thread(new Runnable() {
             @Override
             public void run() {
+                boolean subscribedSuccessfully = false;
                 try {
-                    access.subscribe(PUBSUB_TOPIC_PREFIX_OWNERSHIP_REQUEST + address).forEach(map -> {
+                    Stream<Map<String, Object>> stream = access
+                            .subscribe(PUBSUB_TOPIC_PREFIX_OWNERSHIP_REQUEST + address);
+                    subscribedSuccessfully = true;
+                    stream.forEach(map -> {
                         try {
                             String pubSubData = (String) map.get(PUBSUB_SUB_KEY_DATA);
                             handleIncomingOwnershipRequest(pubSubData, System.currentTimeMillis() + timestampTolerance);
@@ -305,7 +325,9 @@ public class ModelController {
                 }
                 catch (Exception e) {
                     e.printStackTrace();
-                    subscribeToOwnershipRequestsTopic();
+                    if (subscribedSuccessfully) {
+                        subscribeToOwnershipRequestsTopic();
+                    }
                 }
             }
         }).start();

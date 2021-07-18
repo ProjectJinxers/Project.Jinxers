@@ -176,6 +176,11 @@ public class Config extends YamlConfig<Config.Root> {
         return validHashes == null ? null : validHashes.get(iotaAddress);
     }
 
+    public Long getConfiguredTimestampTolerance() {
+        ValidationParams params = root.validationParams;
+        return params == null ? null : params.timestampTolerance;
+    }
+
     public long getTimestampTolerance() {
         if (timestampTolerance == null) {
             ValidationParams params = root.validationParams;
