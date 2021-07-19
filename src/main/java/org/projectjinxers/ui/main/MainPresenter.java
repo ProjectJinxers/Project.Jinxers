@@ -14,15 +14,16 @@
 package org.projectjinxers.ui.main;
 
 import java.io.IOException;
-import java.net.URL;
 import java.text.DateFormat;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
 
 import org.projectjinxers.config.Config;
 import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.ModelController;
 import org.projectjinxers.data.Data;
+import org.projectjinxers.data.Document;
 import org.projectjinxers.data.Group;
 import org.projectjinxers.data.Settings;
 import org.projectjinxers.data.User;
@@ -31,15 +32,11 @@ import org.projectjinxers.ui.ProjectJinxers;
 import org.projectjinxers.ui.common.DataPresenter.DataListener;
 import org.projectjinxers.ui.common.PJPresenter;
 import org.projectjinxers.ui.common.PJPresenter.View;
-import org.projectjinxers.ui.editor.EditorPresenter;
-import org.projectjinxers.ui.editor.EditorView;
+import org.projectjinxers.ui.document.DocumentPresenter;
+import org.projectjinxers.ui.document.DocumentView;
 import org.projectjinxers.ui.group.GroupPresenter;
 import org.projectjinxers.ui.group.GroupView;
 
-import com.overzealous.remark.Remark;
-
-import javafx.application.Platform;
-import javafx.concurrent.Task;
 import javafx.scene.Scene;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
@@ -48,7 +45,7 @@ import javafx.stage.Stage;
  * @author ProjectJinxers
  *
  */
-public class MainPresenter extends PJPresenter<MainPresenter.MainView> implements DataListener<Group> {
+public class MainPresenter extends PJPresenter<MainPresenter.MainView> {
 
     interface MainView extends View {
 
@@ -58,11 +55,19 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
 
         void didDeleteGroup(Group group);
 
+        void didAddDocument(Document document);
+
+        void didUpdateDocument(Document document);
+
     }
 
     private Data data;
+    private Map<String, Document> allDocuments;
 
     private boolean editing;
+
+    private DataListener<Group> groupListener;
+    private DataListener<Document> documentListener;
 
     public MainPresenter(MainView view, ProjectJinxers application) {
         super(view, application);
@@ -100,6 +105,10 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
         return data.getUsers();
     }
 
+    public Map<String, Document> getAllDocuments() {
+        return allDocuments;
+    }
+
     public void saveGroup(Group group) {
         Group replaced = data.addGroup(group);
         boolean saveGroup = group.isSave();
@@ -135,18 +144,6 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
     protected Scene createScene() {
         Scene res = new MainScene(this);
         return res;
-    }
-
-    @Override
-    public boolean didConfirmData(Group data) {
-        saveGroup(data);
-        if (editing) {
-            getView().didEditGroup(data);
-        }
-        else {
-            getView().didAddGroup(data);
-        }
-        return true;
     }
 
     public String getTimestampToleranceInfo(Group group) {
@@ -211,7 +208,22 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
 
     private void showGroupScene(Group group) {
         GroupPresenter groupPresenter = GroupView.createGroupPresenter(group, data.getSettings(), getApplication());
-        groupPresenter.setListener(this);
+        if (groupListener == null) {
+            groupListener = new DataListener<Group>() {
+                @Override
+                public boolean didConfirmData(Group data) {
+                    saveGroup(data);
+                    if (editing) {
+                        getView().didEditGroup(data);
+                    }
+                    else {
+                        getView().didAddGroup(data);
+                    }
+                    return true;
+                }
+            };
+        }
+        groupPresenter.setListener(groupListener);
         Stage stage = new Stage();
         stage.initOwner(getStage());
         stage.initModality(Modality.WINDOW_MODAL);
@@ -219,23 +231,54 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
         stage.show();
     }
 
-    void createDocument(String url) {
-        Task<Void> task = new Task<>() {
-            @Override
-            protected Void call() throws Exception {
-                Remark remark = new Remark();
-                final String markdown = remark.convert(new URL(url), 15000);
-                System.out.println("Converted to Markdown: " + markdown);
-                Platform.runLater(() -> {
-                    EditorPresenter editorPresenter = EditorView
-                            .createEditorPresenter(markdown == null ? "Duh" : markdown, getApplication());
-                    Scene scene = editorPresenter.getScene();
-                    getStage().setScene(scene);
-                });
-                return null;
+    void createDocument() {
+        editing = false;
+        showDocumentScene(null, null);
+    }
+
+    private void showDocumentScene(Document document, IPLDObject<org.projectjinxers.model.Document> reviewed) {
+        try {
+            DocumentPresenter documentPresenter = DocumentView.createDocumentPresenter(document, reviewed, data,
+                    getApplication());
+            if (documentListener == null) {
+                documentListener = new DataListener<Document>() {
+                    @Override
+                    public boolean didConfirmData(Document data) {
+                        if (editing) {
+                            handleUpdatedDocument(document, data);
+                        }
+                        else {
+                            handleNewDocument(data);
+                        }
+                        return true;
+                    }
+                };
             }
-        };
-        new Thread(task).start();
+            documentPresenter.setListener(documentListener);
+            Stage stage = new Stage();
+            stage.initOwner(getStage());
+            stage.initModality(Modality.WINDOW_MODAL);
+            stage.setScene(documentPresenter.getScene());
+            stage.show();
+        }
+        catch (Exception e) {
+            getView().showError("Error showing document details", e);
+        }
+    }
+
+    void handleNewDocument(Document document) {
+        String multihash = document.getMultihash();
+        String key = multihash == null ? document.getImportURL() : multihash;
+        if (allDocuments == null) {
+            allDocuments = new HashMap<>();
+        }
+        allDocuments.put(key, document);
+        getView().didAddDocument(document);
+    }
+
+    void handleUpdatedDocument(Document old, Document updated) {
+        // TODO: check if key changed and update allDocuments accordingly if so, otherwise replace document in map and
+        // update listview
     }
 
     public void saveData() {

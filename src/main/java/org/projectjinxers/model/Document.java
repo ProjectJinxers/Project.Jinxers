@@ -31,6 +31,8 @@ import org.projectjinxers.controller.OwnershipTransferController;
 import org.projectjinxers.controller.ValidationContext;
 import org.projectjinxers.controller.ValidationException;
 
+import static org.projectjinxers.util.ObjectUtility.isEqual;
+
 /**
  * Documents are one of the central parts of the system. Users can create, review, update and delete documents. If an
  * owner of a document has been inactive for a specific time span, other users can request ownership. If there is more
@@ -175,7 +177,7 @@ public class Document implements IPLDSerializable {
         writer.writeLink(KEY_USER_STATE, userState, signer, context, progressListener);
         writer.writeLink(KEY_PREVIOUS_VERSION, previousVersion, null, null, null);
         writer.writeLink(KEY_FIRST_VERSION, firstVersion, null, null, null);
-        writer.writeLinkObjects(KEY_LINKS, links, signer, context, progressListener);
+        writer.writeLinkObjects(KEY_LINKS, links, null, null, null);
     }
 
     protected void handleMissingContents() {
@@ -187,6 +189,10 @@ public class Document implements IPLDSerializable {
      */
     public String getTitle() {
         return title;
+    }
+
+    public String getSubtitle() {
+        return subtitle;
     }
 
     public String getVersion() {
@@ -202,6 +208,10 @@ public class Document implements IPLDSerializable {
      */
     public Date getDate() {
         return date;
+    }
+
+    public String getSource() {
+        return source;
     }
 
     public IPLDObject<DocumentContents> getContents() {
@@ -272,6 +282,22 @@ public class Document implements IPLDSerializable {
         return firstVersion == null ? this : firstVersion.getMapped();
     }
 
+    public boolean checkUnchanged(Document other) {
+        if (isEqual(title, other.title) && isEqual(subtitle, other.subtitle) && isEqual(version, other.version)
+                && isEqual(tags, other.tags) && isEqual(date, other.date) && isEqual(source, other.source)) {
+            if (contents == null && other.contents == null) {
+                return true;
+            }
+            if (contents == null || other.contents == null) {
+                return false;
+            }
+            DocumentContents dc1 = contents.getMapped();
+            DocumentContents dc2 = other.contents.getMapped();
+            return isEqual(dc1.getAbstract(), dc2.getAbstract()) && isEqual(dc1.getContents(), dc2.getContents());
+        }
+        return false;
+    }
+
     public Document update(String version, String tags, IPLDObject<DocumentContents> contents,
             IPLDObject<Document> current, IPLDObject<UserState> userState) {
         return update(title, subtitle, version, tags, source, contents, current, userState);
@@ -310,6 +336,26 @@ public class Document implements IPLDSerializable {
         }
         updated.userState = userState;
         return updated;
+    }
+
+    public Document update(IPLDObject<DocumentContents> contents, IPLDObject<UserState> userState) {
+        Document updated = copy();
+        updated.contents = contents;
+        updated.userState = userState;
+        return updated;
+    }
+
+    public Document update(Document data, IPLDObject<DocumentContents> contents, IPLDObject<Document> current,
+            IPLDObject<UserState> userState) {
+        return update(data.title, data.subtitle, data.version, data.tags, data.source, contents, current, userState);
+    }
+
+    public boolean updateModelState(ModelState modelState) {
+        if (userState != null) {
+            String userHash = userState.getMapped().getUser().getMultihash();
+            this.userState = modelState.expectUserState(userHash);
+        }
+        return true;
     }
 
     @Override

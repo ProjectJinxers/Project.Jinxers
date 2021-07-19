@@ -13,6 +13,11 @@
  */
 package org.projectjinxers.data;
 
+import static org.projectjinxers.util.ObjectUtility.isEqual;
+
+import java.util.HashMap;
+import java.util.Map;
+
 import org.projectjinxers.config.Config;
 import org.projectjinxers.config.SecretConfig;
 import org.projectjinxers.controller.ModelController;
@@ -27,6 +32,7 @@ public class Group implements Comparable<Group> {
     private String address;
     private Long timestampTolerance;
     private Integer secretObfuscationParam;
+    private Map<String, Document> standaloneDocuments;
     private boolean main;
 
     private transient boolean save;
@@ -70,6 +76,21 @@ public class Group implements Comparable<Group> {
         return secretObfuscationParam;
     }
 
+    public Map<String, Document> getStandaloneDocuments() {
+        return standaloneDocuments;
+    }
+
+    public void addStandaloneDocument(Document document) {
+        if (standaloneDocuments == null) {
+            standaloneDocuments = new HashMap<>();
+        }
+        standaloneDocuments.put(document.getMultihash(), document);
+    }
+
+    public void removeStandaloneDocument(String multihash) {
+        standaloneDocuments.remove(multihash);
+    }
+
     public boolean isMain() {
         return main;
     }
@@ -109,11 +130,27 @@ public class Group implements Comparable<Group> {
 
     public void update(Group newValues) {
         this.name = newValues.name;
-        this.timestampTolerance = newValues.timestampTolerance;
-        this.secretObfuscationParam = newValues.secretObfuscationParam;
+        Long timestampTolerance = newValues.timestampTolerance;
+        if (!isEqual(timestampTolerance, this.timestampTolerance, Config.DEFAULT_TIMESTAMP_TOLERANCE)) {
+            this.timestampTolerance = timestampTolerance;
+            this.config = null;
+        }
+        Integer secretObfuscationParam = newValues.secretObfuscationParam;
+        if (!isEqual(secretObfuscationParam, this.secretObfuscationParam,
+                SecretConfig.getSharedInstance().getObfuscationParam())) {
+            this.secretObfuscationParam = secretObfuscationParam;
+            this.secretConfig = null;
+        }
+        if (controller != null && (config == null || secretConfig == null)) {
+            ModelController.removeModelController(address);
+            this.controller = null;
+        }
         this.save = newValues.save;
-        this.config = null;
-        this.secretConfig = null;
+    }
+
+    @Override
+    public String toString() {
+        return name;
     }
 
     @Override

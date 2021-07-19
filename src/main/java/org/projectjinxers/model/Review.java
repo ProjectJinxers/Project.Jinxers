@@ -27,6 +27,8 @@ import org.projectjinxers.controller.IPLDWriter;
 import org.projectjinxers.controller.ValidationContext;
 import org.projectjinxers.controller.ValidationException;
 
+import static org.projectjinxers.util.ObjectUtility.isEqual;
+
 /**
  * Review instances represent users' reviews of a document. There are also special reviews, which can invert the truth
  * for a sealed document. They have to be on the opposite side of the majority and must be settled successfully. If
@@ -121,6 +123,11 @@ public class Review extends Document implements DocumentAction, Loader<Review> {
         return invertTruthLinks == null ? null : Collections.unmodifiableMap(invertTruthLinks);
     }
 
+    @Override
+    public boolean checkUnchanged(Document other) {
+        return isEqual(approve, ((Review) other).approve) && super.checkUnchanged(other);
+    }
+
     /**
      * Updates the properties of this review. Whether or not that is done in a copy depends on the parameter 'current'.
      * If that parameter's value is null, this object will be updated. Otherwise a copy of this object, where the
@@ -144,6 +151,14 @@ public class Review extends Document implements DocumentAction, Loader<Review> {
         res.invertTruth = invertTruth;
         res.approve = approve;
         return res;
+    }
+
+    @Override
+    public boolean updateModelState(ModelState modelState) {
+        if (!invertTruth && modelState.isSealedDocument(document.getMultihash())) {
+            return false;
+        }
+        return super.updateModelState(modelState);
     }
 
     @Override

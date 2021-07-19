@@ -70,6 +70,9 @@ public class ModelController {
     public interface ModelControllerListener {
 
         void handleInvalidSettlement(Set<String> invalidHashes);
+
+        void handleRemoved();
+
     }
 
     static class PendingSubMessage {
@@ -189,6 +192,16 @@ public class ModelController {
                 MODEL_CONTROLLERS.put(address, modelController);
             }
             return modelController;
+        }
+    }
+
+    public static void removeModelController(String address) {
+        ModelController removed;
+        synchronized (MODEL_CONTROLLERS) {
+            removed = MODEL_CONTROLLERS.remove(address);
+        }
+        if (removed != null && removed.listener != null) {
+            removed.listener.handleRemoved();
         }
     }
 
@@ -418,12 +431,7 @@ public class ModelController {
                 OwnershipTransferController.OWNERSHIP_VOTING_ANONYMOUS.equals(requestParts[0]), currentModelState,
                 context, signature, timestamp);
         if (controller.process()) {
-            try {
-                saveLocalChanges(null, null, null, null, controller, null, System.currentTimeMillis());
-            }
-            catch (IOException e) {
-                e.printStackTrace();
-            }
+            saveLocalChanges(null, null, null, null, controller, null, System.currentTimeMillis());
         }
         return true;
     }
@@ -578,8 +586,7 @@ public class ModelController {
 
     private boolean saveLocalChanges(IPLDObject<Document> document, IPLDObject<DocumentRemoval> documentRemoval,
             IPLDObject<SettlementRequest> settlementRequest, IPLDObject<UnbanRequest> unbanRequest,
-            OwnershipTransferController ownershipTransferController, IPLDObject<Voting> voting, long timestamp)
-            throws IOException {
+            OwnershipTransferController ownershipTransferController, IPLDObject<Voting> voting, long timestamp) {
         IPLDObject<ModelState> currentModelState = currentValidatedState;
         ModelState currentState;
         ModelState modelState;

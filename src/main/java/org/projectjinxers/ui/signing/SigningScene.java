@@ -11,23 +11,18 @@
  * You should have received a copy of the GNU General Public License along with this program. If not, see
  * <https://www.gnu.org/licenses/>.
  */
-package org.projectjinxers.ui.cell;
+package org.projectjinxers.ui.signing;
 
-import org.projectjinxers.data.Document;
+import org.projectjinxers.ui.common.PJScene;
 
 /**
  * @author ProjectJinxers
  *
  */
-public class DocumentCell extends AbstractListCell<Document> {
+public class SigningScene extends PJScene<SigningPresenter.SigningView, SigningPresenter> {
 
-    public DocumentCell() {
-        super("DocumentCell.fxml");
-    }
-
-    @Override
-    protected void update(Document item) {
-
+    protected SigningScene(SigningPresenter presenter) {
+        super("SigningView.fxml", presenter);
     }
 
 }

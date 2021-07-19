@@ -32,6 +32,8 @@ public abstract class PJPresenter<V extends PJPresenter.View> {
 
         void showMessage(String message);
 
+        boolean askForConfirmation(String message);
+
         void showError(String message, Throwable exception);
 
     }

@@ -11,23 +11,31 @@
  * You should have received a copy of the GNU General Public License along with this program. If not, see
  * <https://www.gnu.org/licenses/>.
  */
-package org.projectjinxers.ui.cell;
-
-import org.projectjinxers.data.Document;
+package org.projectjinxers.util;
 
 /**
  * @author ProjectJinxers
  *
  */
-public class DocumentCell extends AbstractListCell<Document> {
+public class ObjectUtility {
 
-    public DocumentCell() {
-        super("DocumentCell.fxml");
+    public static boolean isEqual(Object o1, Object o2) {
+        return o1 == o2 || o1 != null && o1.equals(o2);
     }
 
-    @Override
-    protected void update(Document item) {
+    public static boolean isEqual(Object o1, Object o2, Object defaultValue) {
+        if (o1 == o2) {
+            return true;
+        }
+        return isEqual(o1 == null ? defaultValue : o1, o2 == null ? defaultValue : o2);
+    }
 
+    public static boolean isNullOrEmpty(String s) {
+        return s == null || s.equals("");
+    }
+
+    public static boolean isNullOrBlank(String s) {
+        return s == null || s.trim().equals("");
     }
 
 }

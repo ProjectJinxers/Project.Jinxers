@@ -15,9 +15,11 @@ package org.projectjinxers.data;
 
 import org.ethereum.crypto.ECKey;
 import org.projectjinxers.account.Users;
+import org.projectjinxers.config.Config;
 import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.ModelController;
 import org.projectjinxers.controller.ValidationException;
+import org.projectjinxers.model.LoaderFactory;
 import org.projectjinxers.model.ModelState;
 import org.projectjinxers.model.UserState;
 
@@ -27,22 +29,28 @@ import org.projectjinxers.model.UserState;
  */
 public class User {
 
-    public static User createNewUser(String name, boolean save) {
+    public static User createNewUser(String name, String password, int securityLevel, boolean save) {
         User res = new User();
         res.name = name;
+        res.securityLevel = securityLevel;
+        ECKey account = Users.createAccount(name, password, securityLevel);
+        res.publicKey = account.getPubKey();
         res.save = save;
         return res;
     }
 
-    public static User createExistingUser(String multihash, String nameCheck, boolean save) {
+    public static User createExistingUser(String multihash, String nameCheck, int securityLevel, boolean save) {
         User res = new User();
         res.name = nameCheck;
+        res.securityLevel = securityLevel;
         res.multihash = multihash;
         res.save = save;
         return res;
     }
 
     private String name;
+    private int securityLevel;
+    private byte[] publicKey;
     private String multihash;
 
     private transient boolean save;
@@ -54,6 +62,14 @@ public class User {
 
     public String getName() {
         return name;
+    }
+
+    public int getSecurityLevel() {
+        return securityLevel;
+    }
+
+    public byte[] getPublicKey() {
+        return publicKey;
     }
 
     public String getMultihash() {
@@ -72,6 +88,30 @@ public class User {
         return userObject;
     }
 
+    public IPLDObject<org.projectjinxers.model.User> getOrLoadUserObject() throws Exception {
+        if (userObject == null) {
+            if (multihash == null) {
+                throw new IllegalStateException("can't load user without multihash");
+            }
+            IPLDObject<org.projectjinxers.model.User> tmp = new IPLDObject<>(multihash,
+                    LoaderFactory.USER.createLoader(),
+                    ModelController.getModelController(Config.getSharedInstance()).getContext(), null);
+            org.projectjinxers.model.User user = tmp.getMapped();
+            if (user == null) {
+                throw new IllegalStateException("failed to load user");
+            }
+            userObject = tmp;
+            String name = user.getUsername();
+            if (this.name == null) {
+                this.name = name;
+            }
+            else if (!this.name.equals(name)) {
+                throw new ValidationException("username mismatch");
+            }
+        }
+        return userObject;
+    }
+
     public boolean loadUserObject(Group group) throws Exception {
         ModelController controller = group.getController();
         if (controller != null) {
@@ -80,13 +120,15 @@ public class User {
                 IPLDObject<UserState> userState = currentValidatedState.getMapped().getUserState(multihash);
                 if (userState != null) {
                     userObject = userState.getMapped().getUser();
-                    String name = userObject.getMapped().getUsername();
+                    org.projectjinxers.model.User user = userObject.getMapped();
+                    String name = user.getUsername();
                     if (this.name == null) {
                         this.name = name;
                     }
                     else if (!this.name.equals(name)) {
                         throw new ValidationException("username mismatch");
                     }
+                    this.publicKey = user.getPublicKey();
                     return true;
                 }
             }
@@ -94,13 +136,14 @@ public class User {
         return false;
     }
 
-    public IPLDObject<org.projectjinxers.model.User> createNewUserObject(String password, int securityLevel) {
-        if (name == null) {
-            throw new IllegalStateException("can't create user without name");
+    public IPLDObject<org.projectjinxers.model.User> getOrCreateNewUserObject() {
+        if (userObject == null) {
+            if (name == null || publicKey == null) {
+                throw new IllegalStateException("can't create user without name or public key");
+            }
+            org.projectjinxers.model.User user = new org.projectjinxers.model.User(name, publicKey);
+            userObject = new IPLDObject<>(user);
         }
-        ECKey account = Users.createAccount(name, password, securityLevel);
-        org.projectjinxers.model.User user = new org.projectjinxers.model.User(name, account.getPubKey());
-        userObject = new IPLDObject<>(user);
         return userObject;
     }
 

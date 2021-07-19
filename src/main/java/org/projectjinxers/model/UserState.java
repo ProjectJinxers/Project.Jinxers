@@ -489,8 +489,8 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             throws IOException {
         writer.writeNumber(KEY_VERSION, version);
         writer.writeNumber(KEY_RATING, rating);
-        writer.writeLink(KEY_USER, user, signer, context, null);
-        writer.writeLink(KEY_PREVIOUS_VERSION, previousVersion, signer, context, null);
+        writer.writeLink(KEY_USER, user, signer, context, progressListener);
+        writer.writeLink(KEY_PREVIOUS_VERSION, previousVersion, null, null, null);
         writer.writeLinkObjects(KEY_DOCUMENTS, documents, null, null, null);
         writer.writeLinkObjects(KEY_REMOVED_DOCUMENTS, removedDocuments, null, null, null);
         writer.writeLinkObjects(KEY_FALSE_CLAIMS, falseClaims, null, null, null);

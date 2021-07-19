@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.ChoiceBox?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.control.Tooltip?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
+
+<VBox xmlns:fx="http://javafx.com/fxml/1">
+    <fx:define>
+        <Image fx:id="addIcon" url="images/add.png"/>
+        <Image fx:id="editIcon" url="images/edit.png"/>
+        <Image fx:id="clearIcon" url="images/clear.png"/>
+    </fx:define>
+    <HBox>
+        <Label text="Group"/>
+        <ChoiceBox fx:id="groupsBox"/>
+        <Button onAction="#onAddGroup">
+			<graphic>
+				<ImageView image="$addIcon"/>
+			</graphic>
+			<tooltip>
+				<Tooltip text="Add group"/>
+			</tooltip>
+		</Button>
+        <Label text="User"/>
+        <ChoiceBox fx:id="usersBox"/>
+        <Button onAction="#onAddUser">
+            <graphic>
+                <ImageView image="$addIcon"/>
+            </graphic>
+            <tooltip>
+                <Tooltip text="Add user"/>
+            </tooltip>
+        </Button>
+    </HBox>
+    <TextField fx:id="importField" promptText="URL or Multihash">
+        <tooltip>
+            <Tooltip text="Web URL, local file URL or Multihash"/>
+        </tooltip>
+    </TextField>
+    <TextField fx:id="titleField" promptText="Title"/>
+    <TextField fx:id="subtitleField" promptText="Subtitle"/>
+    <TextField fx:id="versionField" promptText="Version"/>
+    <TextField fx:id="tagsField" promptText="Tags"/>
+    <TextField fx:id="sourceField" promptText="Source"/>
+    <HBox>
+        <TextField fx:id="contentsField" editable="false" text="${controller.contentsIndicator}"/>
+        <Button fx:id="editButton" onAction="#onEditDocument">
+            <graphic>
+                <ImageView image="$editIcon"/>
+            </graphic>
+            <tooltip>
+                <Tooltip text="Edit document"/>
+            </tooltip>
+        </Button>
+        <Button fx:id="clearButton" onAction="#onClearDocument">
+            <graphic>
+                <ImageView image="$clearIcon"/>
+            </graphic>
+            <tooltip>
+                <Tooltip text="Clear abstract and contents"/>
+            </tooltip>
+        </Button>
+    </HBox>
+    <HBox fx:id="reviewPanel">
+        <CheckBox fx:id="truthInversionBox" text="Truth inversion" onAction="#truthInversionToggled"/>
+        <ChoiceBox fx:id="approvalBox"/>
+    </HBox>
+    <HBox>
+       <Button text="OK" onAction="#confirm"/>
+       <Button text="Cancel" onAction="#cancel"/>
+    </HBox>
+</VBox>
+

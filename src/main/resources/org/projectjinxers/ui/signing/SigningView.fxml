@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.control.PasswordField?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox xmlns:fx="http://javafx.com/fxml/1">
+    <TextField fx:id="usernameField" editable="false" text="${controller.username}"/>
+    <PasswordField fx:id="passwordField"  promptText="Password *"/>
+    <TextField fx:id="securityLevelField" editable="false" text="${controller.securityLevel}"/>
+	<HBox>
+       <Button text="OK" onAction="#confirm"/>
+       <Button text="Cancel" onAction="#cancel"/>
+    </HBox>
+</VBox>
+

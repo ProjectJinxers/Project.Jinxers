@@ -29,21 +29,58 @@ public class EditorPresenter extends PJPresenter<EditorPresenter.EditorView> {
 
     }
 
-    private String markdown;
+    public interface EditorListener {
 
-    protected EditorPresenter(EditorView view, String markdown, ProjectJinxers application) {
-        super(view, application);
-        this.markdown = markdown;
+        void didConfirm(String abstr, String contents);
+
+        void didCancel();
+
     }
 
-    public String getMarkdown() {
-        return markdown;
+    private String abstr;
+    private String contents;
+    private Scene previousScene;
+
+    private EditorListener listener;
+
+    protected EditorPresenter(EditorView view, String abstr, String contents, Scene previousScene,
+            ProjectJinxers application) {
+        super(view, application);
+        this.abstr = abstr;
+        this.contents = contents;
+        this.previousScene = previousScene;
+    }
+
+    public String getAbstract() {
+        return abstr;
+    }
+
+    public String getContents() {
+        return contents;
     }
 
     @Override
     protected Scene createScene() {
         Scene res = new EditorScene(this);
         return res;
+    }
+
+    public void setListener(EditorListener listener) {
+        this.listener = listener;
+    }
+
+    void confirm(String abstr, String contents) {
+        if (listener != null) {
+            listener.didConfirm(abstr, contents);
+        }
+        getStage().setScene(previousScene);
+    }
+
+    void cancel() {
+        if (listener != null) {
+            listener.didCancel();
+        }
+        getStage().setScene(previousScene);
     }
 
 }

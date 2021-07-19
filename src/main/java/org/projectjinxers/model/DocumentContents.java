@@ -57,6 +57,14 @@ public class DocumentContents implements IPLDSerializable, Loader<DocumentConten
         writer.writeString(KEY_CONTENTS, contents);
     }
 
+    public String getAbstract() {
+        return abstr;
+    }
+
+    public String getContents() {
+        return contents;
+    }
+
     @Override
     public DocumentContents getOrCreateDataInstance(IPLDReader reader, Metadata metadata) {
         return this;

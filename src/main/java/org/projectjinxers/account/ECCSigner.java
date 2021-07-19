@@ -13,6 +13,8 @@
  */
 package org.projectjinxers.account;
 
+import java.util.Arrays;
+
 import org.ethereum.crypto.ECKey;
 import org.ethereum.crypto.ECKey.ECDSASignature;
 
@@ -44,6 +46,10 @@ public class ECCSigner implements Signer {
     @Override
     public ECDSASignature signHash(byte[] hash) {
         return key.sign(hash);
+    }
+
+    public boolean checkPublicKey(byte[] publicKey) {
+        return Arrays.equals(key.getPubKey(), publicKey);
     }
 
 }

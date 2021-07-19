@@ -77,6 +77,14 @@ public class User implements IPLDSerializable, Loader<User> {
         return username;
     }
 
+    public Date getCreatedAt() {
+        return createdAt;
+    }
+
+    public byte[] getPublicKey() {
+        return publicKey;
+    }
+
     /**
      * Verifies the signature with this user's public key.
      * 

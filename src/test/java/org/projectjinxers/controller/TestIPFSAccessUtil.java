@@ -48,6 +48,8 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonParser;
 
+import static org.projectjinxers.util.ObjectUtility.isNullOrBlank;
+
 /**
  * Utility class that contains tests, which print JSON strings of objects, so they can be saved in a file, that can be
  * passed to a {@link TestIPFSAccess} instance. Tests are allowed to fail, since they are excluded from the gradle
@@ -437,7 +439,7 @@ class TestIPFSAccessUtil {
     void updateFileContentsForSingleObject()
             throws FileNotFoundException, IOException, IllegalArgumentException, IllegalAccessException {
         String filepath = UPDATE_FILE_CONTENTS_SINGLE_PATH;
-        boolean nonEmpty = filepath != null && !"".equals(filepath.trim());
+        boolean nonEmpty = !isNullOrBlank(filepath);
         System.out.printf(HEADER, "update single " + (nonEmpty ? filepath : "<n/a>"));
         if (nonEmpty) {
             updateObject(filepath, false);
@@ -449,7 +451,7 @@ class TestIPFSAccessUtil {
     void updateFileContentsForMultipleObjects()
             throws FileNotFoundException, IOException, IllegalArgumentException, IllegalAccessException {
         String filepath = UPDATE_FILE_CONTENTS_MULTIPLE_PATH;
-        boolean nonEmpty = filepath != null && !"".equals(filepath.trim());
+        boolean nonEmpty = !isNullOrBlank(filepath);
         System.out.printf(HEADER, "update multiple " + (nonEmpty ? filepath : "<n/a>"));
         if (nonEmpty) {
             updateObjects(filepath, false);
@@ -461,7 +463,7 @@ class TestIPFSAccessUtil {
     void replaceFileContentsForSingleObject()
             throws FileNotFoundException, IOException, IllegalArgumentException, IllegalAccessException {
         String filepath = REPLACE_FILE_CONTENTS_SINGLE_PATH;
-        boolean nonEmpty = filepath != null && !"".equals(filepath.trim());
+        boolean nonEmpty = !isNullOrBlank(filepath);
         System.out.printf(HEADER, "replace single " + (nonEmpty ? filepath : "<n/a>"));
         if (nonEmpty) {
             updateObject(filepath, true);
@@ -473,7 +475,7 @@ class TestIPFSAccessUtil {
     void replaceFileContentsForMultipleObjects()
             throws FileNotFoundException, IOException, IllegalArgumentException, IllegalAccessException {
         String filepath = REPLACE_FILE_CONTENTS_MULTIPLE_PATH;
-        boolean nonEmpty = filepath != null && !"".equals(filepath.trim());
+        boolean nonEmpty = !isNullOrBlank(filepath);
         System.out.printf(HEADER, "replace multiple " + (nonEmpty ? filepath : "<n/a>"));
         if (nonEmpty) {
             updateObjects(filepath, true);

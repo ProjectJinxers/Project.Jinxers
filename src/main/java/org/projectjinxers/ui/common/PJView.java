@@ -13,6 +13,8 @@
  */
 package org.projectjinxers.ui.common;
 
+import java.util.Optional;
+
 import org.projectjinxers.ui.common.PJPresenter.View;
 
 import javafx.scene.control.Alert;
@@ -31,6 +33,13 @@ public interface PJView<V extends View, P extends PJPresenter<V>> extends View {
     default void showMessage(String message) {
         Alert alert = new Alert(AlertType.INFORMATION, message, ButtonType.OK);
         alert.showAndWait();
+    }
+
+    @Override
+    default boolean askForConfirmation(String message) {
+        Alert alert = new Alert(AlertType.CONFIRMATION, message, ButtonType.YES, ButtonType.CANCEL);
+        Optional<ButtonType> showAndWait = alert.showAndWait();
+        return showAndWait.isPresent() && showAndWait.get() == ButtonType.YES;
     }
 
     @Override

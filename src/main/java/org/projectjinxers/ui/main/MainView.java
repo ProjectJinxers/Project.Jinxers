@@ -21,8 +21,8 @@ import java.util.Map;
 import java.util.ResourceBundle;
 
 import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.data.Document;
 import org.projectjinxers.data.Group;
-import org.projectjinxers.model.Document;
 import org.projectjinxers.model.OwnershipRequest;
 import org.projectjinxers.model.UnbanRequest;
 import org.projectjinxers.model.Voting;
@@ -60,7 +60,7 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
     private ListView<Group> groupsList;
 
     @FXML
-    private ListView<IPLDObject<Document>> documentsList;
+    private ListView<Document> documentsList;
 
     @FXML
     private ListView<IPLDObject<OwnershipRequest>> ownershipRequestsList;
@@ -108,6 +108,16 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
         updateGroups();
     }
 
+    @Override
+    public void didAddDocument(Document document) {
+        updateDocuments();
+    }
+
+    @Override
+    public void didUpdateDocument(Document document) {
+        documentsList.refresh();
+    }
+
     @FXML
     void onAddGroup(Event e) {
         mainPresenter.createGroup();
@@ -115,7 +125,7 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
 
     @FXML
     void onAddDocument(Event e) {
-        mainPresenter.createDocument("https://en.wikipedia.org/wiki/Carolin_Kebekus");
+        mainPresenter.createDocument();
     }
 
     private void updateGroups() {
@@ -123,6 +133,17 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
         List<Group> groupsList = new ArrayList<>(groups.values());
         Collections.sort(groupsList);
         this.groupsList.setItems(FXCollections.observableList(groupsList));
+    }
+
+    private void updateDocuments() {
+        Map<String, Document> allDocuments = mainPresenter.getAllDocuments();
+        if (allDocuments == null) {
+            documentsList.setItems(null);
+        }
+        else {
+            List<Document> documentsList = new ArrayList<>(allDocuments.values());
+            this.documentsList.setItems(FXCollections.observableList(documentsList));
+        }
     }
 
 }

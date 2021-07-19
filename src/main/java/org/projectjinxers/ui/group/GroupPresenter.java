@@ -21,6 +21,8 @@ import org.projectjinxers.ui.common.PJPresenter.View;
 
 import javafx.scene.Scene;
 
+import static org.projectjinxers.util.ObjectUtility.isNullOrBlank;
+
 /**
  * @author ProjectJinxers
  *
@@ -52,7 +54,7 @@ public class GroupPresenter extends DataPresenter<Group, GroupPresenter.GroupVie
     protected Group handleData(Group confirmed) {
         String name = confirmed.getName();
         String address = confirmed.getAddress();
-        if (name == null || name.trim().equals("") || address == null || address.trim().equals("")) {
+        if (isNullOrBlank(name) || isNullOrBlank(address)) {
             getView().showMessage("Please enter all required data.");
             return null;
         }

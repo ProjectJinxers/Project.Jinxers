@@ -13,9 +13,11 @@
  */
 package org.projectjinxers.ui.editor;
 
+import java.net.URL;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.ResourceBundle;
 
 import org.projectjinxers.ui.ProjectJinxers;
 import org.projectjinxers.ui.common.PJView;
@@ -38,8 +40,10 @@ import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
+import javafx.fxml.Initializable;
 import javafx.scene.Node;
 import javafx.scene.Parent;
+import javafx.scene.Scene;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SplitPane;
 import javafx.scene.image.ImageView;
@@ -48,26 +52,42 @@ import javafx.scene.image.ImageView;
  * @author ProjectJinxers
  *
  */
-public class EditorView implements PJView<EditorPresenter.EditorView, EditorPresenter>, EditorPresenter.EditorView {
+public class EditorView
+        implements PJView<EditorPresenter.EditorView, EditorPresenter>, EditorPresenter.EditorView, Initializable {
 
-    public static EditorPresenter createEditorPresenter(String markdown, ProjectJinxers application) {
+    public static EditorPresenter createEditorPresenter(String abstr, String contents, Scene previousScene,
+            ProjectJinxers application) {
         EditorView editorView = new EditorView();
-        EditorPresenter res = new EditorPresenter(editorView, markdown, application);
+        EditorPresenter res = new EditorPresenter(editorView, abstr, contents, previousScene, application);
         editorView.editorPresenter = res;
         return res;
     }
 
     @FXML
-    private MarkdownEditorControl editor;
+    private SplitPane editorsSplit;
+    @FXML
+    private MarkdownEditorControl abstractEditor;
+    @FXML
+    private MarkdownEditorControl contentsEditor;
 
     private EditorPresenter editorPresenter;
 
     private boolean addChangeListener = true;
 
     @Override
+    public EditorPresenter getPresenter() {
+        return editorPresenter;
+    }
+
+    @Override
+    public void initialize(URL location, ResourceBundle resources) {
+        editorsSplit.setDividerPosition(0, 0.25);
+    }
+
+    @Override
     public void updateView() {
         if (addChangeListener) {
-            editor.markdownProperty().addListener(new ChangeListener<String>() {
+            contentsEditor.markdownProperty().addListener(new ChangeListener<String>() {
                 @Override
                 public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
                     if (newValue != null && newValue.trim().length() > 0) {
@@ -79,18 +99,23 @@ public class EditorView implements PJView<EditorPresenter.EditorView, EditorPres
             });
             addChangeListener = false;
         }
-        editor.setMarkdown(editorPresenter.getMarkdown());
+        contentsEditor.setMarkdown(editorPresenter.getContents());
     }
 
-    @Override
-    public EditorPresenter getPresenter() {
-        return editorPresenter;
+    @FXML
+    void confirm() {
+        editorPresenter.confirm(abstractEditor.getMarkdown(), contentsEditor.getMarkdown());
+    }
+
+    @FXML
+    void cancel() {
+        editorPresenter.cancel();
     }
 
     private void applySkippedAttributes(String markdown) {
-        ViewMode viewMode = editor.getViewMode();
+        ViewMode viewMode = contentsEditor.getViewMode();
         if (viewMode != ViewMode.EDITOR_ONLY) {
-            MarkdownEditorSkin skin = (MarkdownEditorSkin) editor.getSkin();
+            MarkdownEditorSkin skin = (MarkdownEditorSkin) contentsEditor.getSkin();
             Parser parser = Parser.builder().extensions(Collections.singleton(AttributesExtension.create())).build();
 
             Document node = parser.parse(markdown);
