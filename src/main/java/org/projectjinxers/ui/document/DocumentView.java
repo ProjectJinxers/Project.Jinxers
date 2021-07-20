@@ -34,6 +34,8 @@ import org.projectjinxers.ui.common.PJView;
 
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.event.Event;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
@@ -158,7 +160,7 @@ public class DocumentView implements PJView<DocumentPresenter.DocumentView, Docu
     public void updateGroups(Group toSelect) {
         List<Group> groups = documentPresenter.getGroups();
         Collections.sort(groups);
-        groupsBox.getItems().addAll(groups);
+        groupsBox.setItems(FXCollections.observableList(groups));
         if (toSelect != null) {
             groupsBox.setValue(toSelect);
         }
@@ -168,8 +170,13 @@ public class DocumentView implements PJView<DocumentPresenter.DocumentView, Docu
     public void updateUsers(User toSelect) {
         List<User> users = documentPresenter.getUsers();
         if (users != null) {
-            usersBox.getItems().addAll(users);
-            if (toSelect != null) {
+            ObservableList<User> items = usersBox.getItems();
+            for (User user : users) {
+                if (user.getUserObject() != null && !items.contains(user)) {
+                    items.add(user);
+                }
+            }
+            if (toSelect != null && toSelect.getUserObject() != null) {
                 usersBox.setValue(toSelect);
             }
         }

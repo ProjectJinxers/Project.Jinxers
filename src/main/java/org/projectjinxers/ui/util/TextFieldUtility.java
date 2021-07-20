@@ -35,6 +35,16 @@ public class TextFieldUtility {
         return null;
     };
 
+    public static final UnaryOperator<Change> NUMBERS_FILTER = change -> {
+        String text = change.getText();
+
+        if (text.matches("[0-9\\n]*")) {
+            return change;
+        }
+
+        return null;
+    };
+
     public static void unfocus(TextField textField) {
         Platform.runLater(() -> {
             textField.getParent().requestFocus();

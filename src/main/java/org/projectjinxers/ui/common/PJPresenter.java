@@ -16,6 +16,7 @@ package org.projectjinxers.ui.common;
 import org.projectjinxers.ui.ProjectJinxers;
 
 import javafx.scene.Scene;
+import javafx.stage.Modality;
 import javafx.stage.Stage;
 
 /**
@@ -67,6 +68,16 @@ public abstract class PJPresenter<V extends PJPresenter.View> {
 
     public Stage getStage() {
         return (Stage) scene.getWindow();
+    }
+
+    public Stage presentModally(PJPresenter<?> target, String title, boolean lockApplication) {
+        Stage stage = new Stage();
+        stage.initOwner(getStage());
+        stage.initModality(lockApplication ? Modality.APPLICATION_MODAL : Modality.WINDOW_MODAL);
+        stage.setScene(target.getScene());
+        stage.setTitle(title);
+        stage.show();
+        return stage;
     }
 
 }

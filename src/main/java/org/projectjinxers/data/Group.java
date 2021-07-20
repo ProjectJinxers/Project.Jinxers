@@ -31,7 +31,7 @@ public class Group implements Comparable<Group> {
     private String name;
     private String address;
     private Long timestampTolerance;
-    private Integer secretObfuscationParam;
+    private long[] secretObfuscationParams;
     private Map<String, Document> standaloneDocuments;
     private boolean main;
 
@@ -52,11 +52,11 @@ public class Group implements Comparable<Group> {
         this.save = save;
     }
 
-    public Group(String name, String address, Long timestampTolerance, Integer secretObfuscationParam, boolean save) {
+    public Group(String name, String address, Long timestampTolerance, long[] secretObfuscationParams, boolean save) {
         this.name = name;
         this.address = address;
         this.timestampTolerance = timestampTolerance;
-        this.secretObfuscationParam = secretObfuscationParam;
+        this.secretObfuscationParams = secretObfuscationParams;
         this.save = save;
     }
 
@@ -72,8 +72,8 @@ public class Group implements Comparable<Group> {
         return timestampTolerance;
     }
 
-    public Integer getSecretObfuscationParam() {
-        return secretObfuscationParam;
+    public long[] getSecretObfuscationParams() {
+        return secretObfuscationParams;
     }
 
     public Map<String, Document> getStandaloneDocuments() {
@@ -114,8 +114,8 @@ public class Group implements Comparable<Group> {
     public SecretConfig getSecretConfig() {
         if (secretConfig == null) {
             secretConfig = SecretConfig.getSharedInstance();
-            if (secretObfuscationParam != null) {
-                secretConfig = secretConfig.subConfig(secretObfuscationParam);
+            if (secretObfuscationParams != null) {
+                secretConfig = secretConfig.subConfig(secretObfuscationParams);
             }
         }
         return secretConfig;
@@ -135,10 +135,10 @@ public class Group implements Comparable<Group> {
             this.timestampTolerance = timestampTolerance;
             this.config = null;
         }
-        Integer secretObfuscationParam = newValues.secretObfuscationParam;
-        if (!isEqual(secretObfuscationParam, this.secretObfuscationParam,
-                SecretConfig.getSharedInstance().getObfuscationParam())) {
-            this.secretObfuscationParam = secretObfuscationParam;
+        long[] secretObfuscationParams = newValues.secretObfuscationParams;
+        if (!isEqual(secretObfuscationParams, this.secretObfuscationParams,
+                SecretConfig.getSharedInstance().getObfuscationParams())) {
+            this.secretObfuscationParams = secretObfuscationParams;
             this.secretConfig = null;
         }
         if (controller != null && (config == null || secretConfig == null)) {

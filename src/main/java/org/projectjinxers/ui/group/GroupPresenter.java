@@ -22,6 +22,7 @@ import org.projectjinxers.ui.common.PJPresenter.View;
 import javafx.scene.Scene;
 
 import static org.projectjinxers.util.ObjectUtility.isNullOrBlank;
+import static org.projectjinxers.util.ObjectUtility.parseLongValues;;
 
 /**
  * @author ProjectJinxers
@@ -50,20 +51,34 @@ public class GroupPresenter extends DataPresenter<Group, GroupPresenter.GroupVie
         return res;
     }
 
-    @Override
-    protected Group handleData(Group confirmed) {
-        String name = confirmed.getName();
-        String address = confirmed.getAddress();
+    void confirm(String name, String address, Long timestampTolerance, String secretObfuscationParams, boolean save) {
         if (isNullOrBlank(name) || isNullOrBlank(address)) {
             getView().showMessage("Please enter all required data.");
-            return null;
         }
-        Group edited = getData();
-        if (edited == null) {
-            return confirmed;
+        else {
+            long[] obfuscationParams;
+            if (isNullOrBlank(secretObfuscationParams)) {
+                obfuscationParams = null;
+            }
+            else {
+                try {
+                    obfuscationParams = parseLongValues(secretObfuscationParams);
+                }
+                catch (NumberFormatException e) {
+                    getView().showMessage(
+                            "Failed to parse the secret obfuscation parameters. Please enter lines of positive long values without inner empty lines.");
+                    return;
+                }
+            }
+            Group edited = getData();
+            if (edited == null) {
+                confirmed(new Group(name, address, timestampTolerance, obfuscationParams, save));
+            }
+            else {
+                edited.update(new Group(name, address, timestampTolerance, obfuscationParams, save));
+                confirmed(edited);
+            }
         }
-        edited.update(confirmed);
-        return edited;
     }
 
 }

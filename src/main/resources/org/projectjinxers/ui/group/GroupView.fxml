@@ -3,6 +3,7 @@
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.CheckBox?>
 <?import javafx.scene.layout.HBox?>
+<?import javafx.scene.control.TextArea?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.control.Tooltip?>
 <?import javafx.scene.layout.VBox?>
@@ -11,7 +12,11 @@
 	<TextField fx:id="nameField" promptText="Name *"/>
 	<TextField fx:id="addressField" promptText="Address *"/>
 	<TextField fx:id="timestampToleranceField" promptText="Timestamp tolerance"/>
-	<TextField fx:id="secretObfuscationParamField" promptText="Secret obfuscation parameter"/>
+	<TextArea fx:id="secretObfuscationParamsField" promptText="Secret obfuscation parameters">
+	   <tooltip>
+           <Tooltip text="Lines of positive long values. Should not contain inner empty lines."/>
+       </tooltip>
+	</TextArea>
 	<CheckBox fx:id="saveBox" text="Save">
 	   <tooltip>
 	       <Tooltip text="Include this group in the saved file."/>

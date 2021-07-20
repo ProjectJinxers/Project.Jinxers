@@ -13,16 +13,21 @@
  */
 package org.projectjinxers.data;
 
+import java.io.IOException;
+
+import org.projectjinxers.account.Signer;
 import org.projectjinxers.config.Config;
 import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.controller.IPLDObject.ProgressTask;
 import org.projectjinxers.controller.ModelController;
 import org.projectjinxers.model.LoaderFactory;
+import org.projectjinxers.model.ModelState;
 
 /**
  * @author ProjectJinxers
  *
  */
-public class Document {
+public class Document extends ProgressObserver {
 
     public enum Kind {
 
@@ -35,9 +40,12 @@ public class Document {
     private String multihash;
     private transient String importURL;
     private transient IPLDObject<org.projectjinxers.model.Document> documentObject;
+    private transient IPLDObject<ModelState> modelStateObject;
     private Kind kind;
 
+
     public Document(Group group, IPLDObject<org.projectjinxers.model.Document> documentObject) {
+        super(true);
         this.group = group;
         this.multihash = documentObject.getMultihash();
         this.documentObject = documentObject;
@@ -45,6 +53,7 @@ public class Document {
     }
 
     public Document(Group group, String multihash) {
+        super(true);
         this.group = group;
         this.multihash = multihash;
         if (group != null) {
@@ -54,11 +63,13 @@ public class Document {
     }
 
     public Document(Group group, User user, IPLDObject<org.projectjinxers.model.Document> documentObject,
-            String importURL) {
+            String importURL, IPLDObject<ModelState> modelStateObject) {
+        super(true);
         this.group = group;
         this.user = user;
         this.documentObject = documentObject;
         this.importURL = importURL;
+        this.modelStateObject = modelStateObject;
         this.kind = Kind.NEW;
     }
 
@@ -82,20 +93,58 @@ public class Document {
         return documentObject;
     }
 
-    public IPLDObject<org.projectjinxers.model.Document> getOrLoadDocumentObject() throws Exception {
+    public IPLDObject<org.projectjinxers.model.Document> getOrLoadDocumentObject() {
         if (documentObject == null && multihash != null) {
-            ModelController controller = ModelController.getModelController(Config.getSharedInstance());
-            IPLDObject<org.projectjinxers.model.Document> documentObject = new IPLDObject<>(multihash,
-                    LoaderFactory.DOCUMENT.createLoader(), controller.getContext(), null);
-            if (documentObject.getMapped() != null) {
-                this.documentObject = documentObject;
-            }
+            startOperation(() -> {
+                getOrLoadDocumentObject();
+                return true;
+            });
+            startedTask(ProgressTask.LOAD, -1);
+            new Thread(() -> {
+                try {
+                    ModelController controller = ModelController.getModelController(Config.getSharedInstance());
+                    IPLDObject<org.projectjinxers.model.Document> documentObject = new IPLDObject<>(multihash,
+                            LoaderFactory.DOCUMENT.createLoader(), controller.getContext(), null);
+                    if (documentObject.getMapped() != null) {
+                        this.documentObject = documentObject;
+                    }
+                    finishedTask(ProgressTask.LOAD);
+                }
+                catch (Exception e) {
+                    failedTask(ProgressTask.LOAD, "Failed to load the document.", e);
+                }
+            }).start();
         }
         return documentObject;
     }
 
     public Kind getKind() {
         return kind;
+    }
+
+    public boolean save(ModelController controller, Signer signer) {
+        documentObject.setProgressListener(this);
+        IPLDObject<ModelState> currentValidatedState = controller.getCurrentValidatedState();
+        if (modelStateObject != currentValidatedState
+                && !documentObject.getMapped().updateModelState(currentValidatedState.getMapped())) {
+                failedTask(ProgressTask.SAVE,
+                        "The reviewed document has just been sealed. You can only add truth inversion reviews now.",
+                        null);
+            return false;
+        }
+        startOperation(() -> save(controller, signer));
+        new Thread(() -> {
+            try {
+                controller.saveDocument(documentObject, signer);
+                if (user.getMultihash() == null) {
+                    user.didSaveUserObject();
+                }
+            }
+            catch (IOException e) {
+
+            }
+        }).start();
+        return true;
     }
 
 }

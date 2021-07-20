@@ -28,7 +28,7 @@ public class SecretConfig extends YamlConfig<SecretConfig.Root> {
 
     static class Obfuscation {
 
-        public int param;
+        public long[] params;
 
     }
 
@@ -44,7 +44,7 @@ public class SecretConfig extends YamlConfig<SecretConfig.Root> {
         return sharedInstance;
     }
 
-    private Integer obfuscationParam;
+    private long[] obfuscationParams;
 
     private SecretConfig() {
         super("secret-config.yml", Root.class);
@@ -54,16 +54,16 @@ public class SecretConfig extends YamlConfig<SecretConfig.Root> {
         super(root);
     }
 
-    public int getObfuscationParam() {
-        if (obfuscationParam == null) {
-            obfuscationParam = root.obfuscation.param;
+    public long[] getObfuscationParams() {
+        if (obfuscationParams == null) {
+            obfuscationParams = root.obfuscation.params;
         }
-        return obfuscationParam;
+        return obfuscationParams;
     }
 
-    public SecretConfig subConfig(int obfuscationParam) {
+    public SecretConfig subConfig(long[] obfuscationParams) {
         SecretConfig res = new SecretConfig(root);
-        res.obfuscationParam = this.obfuscationParam;
+        res.obfuscationParams = this.obfuscationParams;
         return res;
     }
 

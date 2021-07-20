@@ -13,6 +13,8 @@
  */
 package org.projectjinxers.util;
 
+import java.util.Arrays;
+
 /**
  * @author ProjectJinxers
  *
@@ -30,12 +32,44 @@ public class ObjectUtility {
         return isEqual(o1 == null ? defaultValue : o1, o2 == null ? defaultValue : o2);
     }
 
+    public static boolean isEqual(long[] a1, long[] a2, long[] defaultValue) {
+        if (a1 == a2) {
+            return true;
+        }
+        return Arrays.equals(a1 == null ? defaultValue : a1, a2 == null ? defaultValue : a2);
+    }
+
     public static boolean isNullOrEmpty(String s) {
         return s == null || s.equals("");
     }
 
     public static boolean isNullOrBlank(String s) {
         return s == null || s.trim().equals("");
+    }
+
+    public static long[] parseLongValues(String valuesString) throws NumberFormatException {
+        String[] lines = valuesString.trim().split("\\R");
+        long[] res = new long[lines.length];
+        int i = 0;
+        for (String line : lines) {
+            res[i++] = Long.parseLong(line);
+        }
+        return res;
+    }
+
+    public static String createValuesString(long[] values) {
+        StringBuilder sb = new StringBuilder(values.length * 20);
+        boolean first = true;
+        for (long value : values) {
+            if (first) {
+                first = false;
+            }
+            else {
+                sb.append('\n');
+            }
+            sb.append(value);
+        }
+        return sb.toString();
     }
 
 }

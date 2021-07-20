@@ -14,6 +14,7 @@
 package org.projectjinxers.ui.group;
 
 import static org.projectjinxers.ui.util.TextFieldUtility.unfocus;
+import static org.projectjinxers.util.ObjectUtility.createValuesString;
 
 import java.net.URL;
 import java.util.ResourceBundle;
@@ -31,10 +32,10 @@ import javafx.event.Event;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextFormatter;
 import javafx.scene.control.Tooltip;
-import javafx.util.converter.IntegerStringConverter;
 import javafx.util.converter.LongStringConverter;
 
 /**
@@ -60,12 +61,11 @@ public class GroupView
     @FXML
     private TextField timestampToleranceField;
     @FXML
-    private TextField secretObfuscationParamField;
+    private TextArea secretObfuscationParamsField;
     @FXML
     private CheckBox saveBox;
 
     private ObjectProperty<Long> timestampTolerance;
-    private ObjectProperty<Integer> secretObfuscationParam;
 
     @Override
     public GroupPresenter getPresenter() {
@@ -87,16 +87,13 @@ public class GroupView
         timestampToleranceField
                 .setTooltip(new Tooltip("The timestamp tolerance in milliseconds. If empty, the default value ("
                         + Config.DEFAULT_TIMESTAMP_TOLERANCE / 1000 + " seconds) will be used."));
-        TextFormatter<Integer> fmt = new TextFormatter<>(new IntegerStringConverter(), null,
-                TextFieldUtility.NUMBER_FILTER);
-        secretObfuscationParamField.setTextFormatter(fmt);
-        Integer secretInitialValue = group == null ? null : group.getSecretObfuscationParam();
-        secretObfuscationParam = new SimpleObjectProperty<>(secretInitialValue);
-        secretObfuscationParam.bind(fmt.valueProperty());
-        if (secretInitialValue != null) {
-            secretObfuscationParamField.setText(String.valueOf(secretInitialValue));
+        TextFormatter<Integer> fmt = new TextFormatter<>(null, null, TextFieldUtility.NUMBERS_FILTER);
+        secretObfuscationParamsField.setTextFormatter(fmt);
+        long[] secretInitialValues = group == null ? null : group.getSecretObfuscationParams();
+        if (secretInitialValues != null) {
+            secretObfuscationParamsField.setText(createValuesString(secretInitialValues));
         }
-        secretObfuscationParamField.setTooltip(
+        secretObfuscationParamsField.setTooltip(
                 new Tooltip("The secret obfuscation param (int). If empty, the default value will be used."));
         unfocus(nameField);
         if (group == null) {
@@ -114,8 +111,8 @@ public class GroupView
 
     @FXML
     void confirm(Event e) {
-        groupPresenter.confirmed(new Group(nameField.getText(), addressField.getText(), timestampTolerance.get(),
-                secretObfuscationParam.get(), saveBox.isSelected()));
+        groupPresenter.confirm(nameField.getText(), addressField.getText(), timestampTolerance.get(),
+                secretObfuscationParamsField.getText(), saveBox.isSelected());
     }
 
     @FXML

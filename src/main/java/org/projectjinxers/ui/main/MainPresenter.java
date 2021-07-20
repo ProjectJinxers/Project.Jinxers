@@ -38,8 +38,6 @@ import org.projectjinxers.ui.group.GroupPresenter;
 import org.projectjinxers.ui.group.GroupView;
 
 import javafx.scene.Scene;
-import javafx.stage.Modality;
-import javafx.stage.Stage;
 
 /**
  * @author ProjectJinxers
@@ -224,11 +222,7 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> {
             };
         }
         groupPresenter.setListener(groupListener);
-        Stage stage = new Stage();
-        stage.initOwner(getStage());
-        stage.initModality(Modality.WINDOW_MODAL);
-        stage.setScene(groupPresenter.getScene());
-        stage.show();
+        presentModally(groupPresenter, group == null ? "Add group" : "Edit group", false);
     }
 
     void createDocument() {
@@ -255,11 +249,7 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> {
                 };
             }
             documentPresenter.setListener(documentListener);
-            Stage stage = new Stage();
-            stage.initOwner(getStage());
-            stage.initModality(Modality.WINDOW_MODAL);
-            stage.setScene(documentPresenter.getScene());
-            stage.show();
+            presentModally(documentPresenter, document == null ? "Add document" : "Edit document", false);
         }
         catch (Exception e) {
             getView().showError("Error showing document details", e);

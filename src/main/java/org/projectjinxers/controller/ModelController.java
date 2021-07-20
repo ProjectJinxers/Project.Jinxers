@@ -117,6 +117,13 @@ public class ModelController {
         }
 
         @Override
+        public void failedTask(ProgressTask task, String message, Throwable failure) {
+            for (ProgressListener listener : listeners) {
+                listener.failedTask(task, message, failure);
+            }
+        }
+
+        @Override
         public void enqueued() {
             for (ProgressListener listener : listeners) {
                 listener.enqueued();
@@ -290,7 +297,7 @@ public class ModelController {
     }
 
     void subscribeToModelStatesTopic() {
-        new Thread(new Runnable() {
+        Thread t = new Thread(new Runnable() {
             @Override
             public void run() {
                 boolean subscribedSuccessfully = false;
@@ -314,11 +321,13 @@ public class ModelController {
                     }
                 }
             }
-        }).start();
+        });
+        t.setDaemon(true);
+        t.start();
     }
 
     void subscribeToOwnershipRequestsTopic() {
-        new Thread(new Runnable() {
+        Thread t = new Thread(new Runnable() {
             @Override
             public void run() {
                 boolean subscribedSuccessfully = false;
@@ -343,7 +352,9 @@ public class ModelController {
                     }
                 }
             }
-        }).start();
+        });
+        t.setDaemon(true);
+        t.start();
     }
 
     /**

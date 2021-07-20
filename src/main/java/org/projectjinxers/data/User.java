@@ -13,10 +13,13 @@
  */
 package org.projectjinxers.data;
 
+import java.text.DateFormat;
+
 import org.ethereum.crypto.ECKey;
 import org.projectjinxers.account.Users;
 import org.projectjinxers.config.Config;
 import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.controller.IPLDObject.ProgressTask;
 import org.projectjinxers.controller.ModelController;
 import org.projectjinxers.controller.ValidationException;
 import org.projectjinxers.model.LoaderFactory;
@@ -27,7 +30,7 @@ import org.projectjinxers.model.UserState;
  * @author ProjectJinxers
  *
  */
-public class User {
+public class User extends ProgressObserver {
 
     public static User createNewUser(String name, String password, int securityLevel, boolean save) {
         User res = new User();
@@ -56,7 +59,10 @@ public class User {
     private transient boolean save;
     private transient IPLDObject<org.projectjinxers.model.User> userObject;
 
+    private transient String fullString;
+
     User() {
+        super(false);
         this.save = true;
     }
 
@@ -88,52 +94,79 @@ public class User {
         return userObject;
     }
 
-    public IPLDObject<org.projectjinxers.model.User> getOrLoadUserObject() throws Exception {
+    public IPLDObject<org.projectjinxers.model.User> getOrLoadUserObject() {
         if (userObject == null) {
             if (multihash == null) {
                 throw new IllegalStateException("can't load user without multihash");
             }
-            IPLDObject<org.projectjinxers.model.User> tmp = new IPLDObject<>(multihash,
-                    LoaderFactory.USER.createLoader(),
-                    ModelController.getModelController(Config.getSharedInstance()).getContext(), null);
-            org.projectjinxers.model.User user = tmp.getMapped();
-            if (user == null) {
-                throw new IllegalStateException("failed to load user");
-            }
-            userObject = tmp;
-            String name = user.getUsername();
-            if (this.name == null) {
-                this.name = name;
-            }
-            else if (!this.name.equals(name)) {
-                throw new ValidationException("username mismatch");
-            }
+            startOperation(() -> {
+                getOrLoadUserObject();
+                return true;
+            });
+            startedTask(ProgressTask.LOAD, -1);
+            new Thread(() -> {
+                try {
+                    IPLDObject<org.projectjinxers.model.User> tmp = new IPLDObject<>(multihash,
+                            LoaderFactory.USER.createLoader(),
+                            ModelController.getModelController(Config.getSharedInstance()).getContext(), null);
+                    org.projectjinxers.model.User user = tmp.getMapped();
+                    if (user == null) {
+                        failedTask(ProgressTask.LOAD, "Failed to load the user.", null);
+                    }
+                    else {
+                        String name = user.getUsername();
+                        if (this.name == null) {
+                            this.name = name;
+                        }
+                        else if (!this.name.equals(name)) {
+                            throw new ValidationException("username mismatch");
+                        }
+                        this.publicKey = user.getPublicKey();
+                        userObject = tmp;
+                        finishedTask(ProgressTask.LOAD);
+                    }
+                }
+                catch (Exception e) {
+                    failedTask(ProgressTask.LOAD, "Failed to load the user.", e);
+                }
+            }).start();
         }
         return userObject;
     }
 
-    public boolean loadUserObject(Group group) throws Exception {
-        ModelController controller = group.getController();
-        if (controller != null) {
-            IPLDObject<ModelState> currentValidatedState = controller.getCurrentValidatedState();
-            if (currentValidatedState != null) {
-                IPLDObject<UserState> userState = currentValidatedState.getMapped().getUserState(multihash);
-                if (userState != null) {
-                    userObject = userState.getMapped().getUser();
-                    org.projectjinxers.model.User user = userObject.getMapped();
-                    String name = user.getUsername();
-                    if (this.name == null) {
-                        this.name = name;
+    public void loadUserObject(Group group) {
+        startOperation(() -> {
+            loadUserObject(group);
+            return true;
+        });
+        startedTask(ProgressTask.LOAD, -1);
+        new Thread(() -> {
+            try {
+                ModelController controller = group.getController();
+                if (controller != null) {
+                    IPLDObject<ModelState> currentValidatedState = controller.getCurrentValidatedState();
+                    if (currentValidatedState != null) {
+                        IPLDObject<UserState> userState = currentValidatedState.getMapped().getUserState(multihash);
+                        if (userState != null) {
+                            userObject = userState.getMapped().getUser();
+                            org.projectjinxers.model.User user = userObject.getMapped();
+                            String name = user.getUsername();
+                            if (this.name == null) {
+                                this.name = name;
+                            }
+                            else if (!this.name.equals(name)) {
+                                failedTask(ProgressTask.LOAD, "username mismatch", null);
+                                return;
+                            }
+                            this.publicKey = user.getPublicKey();
+                        }
                     }
-                    else if (!this.name.equals(name)) {
-                        throw new ValidationException("username mismatch");
-                    }
-                    this.publicKey = user.getPublicKey();
-                    return true;
                 }
             }
-        }
-        return false;
+            catch (Exception e) {
+                failedTask(ProgressTask.LOAD, "Failed to load the user.", e);
+            }
+        }).start();
     }
 
     public IPLDObject<org.projectjinxers.model.User> getOrCreateNewUserObject() {
@@ -149,6 +182,22 @@ public class User {
 
     public void didSaveUserObject() {
         this.multihash = userObject.getMultihash();
+    }
+
+    @Override
+    public String toString() {
+        if (name == null) {
+            return multihash + " (lvl " + securityLevel + ")";
+        }
+        if (userObject == null) {
+            return name + " (lvl " + securityLevel + ")";
+        }
+        if (fullString == null) {
+            org.projectjinxers.model.User user = userObject.getMapped();
+            fullString = name + " (" + DateFormat.getDateInstance(DateFormat.MEDIUM).format(user.getCreatedAt())
+                    + ", lvl " + securityLevel + ")";
+        }
+        return fullString;
     }
 
 }

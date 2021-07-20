@@ -32,7 +32,7 @@ public class IPLDObject<D extends IPLDSerializable> {
 
     public enum ProgressTask {
 
-        INIT, SAVE, SIGN, LINK_USER, LINK_MODEL
+        INIT, SAVE, SIGN, LINK_USER, LINK_MODEL, LOAD
 
     }
 
@@ -45,6 +45,8 @@ public class IPLDObject<D extends IPLDSerializable> {
         void nextStep();
 
         void finishedTask(ProgressTask task);
+
+        void failedTask(ProgressTask task, String message, Throwable failure);
 
         void enqueued();
 
@@ -146,8 +148,8 @@ public class IPLDObject<D extends IPLDSerializable> {
                     }
                 }
             }
-            catch (Exception e) {
-                e.printStackTrace();
+            catch (IOException e) {
+                throw new RuntimeException(e);
             }
         }
         return mapped;
@@ -208,7 +210,21 @@ public class IPLDObject<D extends IPLDSerializable> {
                 this.progressListener.startedTask(ProgressTask.SAVE, -1);
             }
         }
-        this.multihash = context.saveObject(this, signer, progressListener);
+        try {
+            this.multihash = context.saveObject(this, signer, progressListener);
+        }
+        catch (IOException e) {
+            if (this.progressListener != null) {
+                this.progressListener.failedTask(ProgressTask.SAVE, "Failed to save the object in IPFS.", e);
+            }
+            throw e;
+        }
+        catch (RuntimeException e) {
+            if (this.progressListener != null) {
+                this.progressListener.failedTask(ProgressTask.SAVE, "Failed to save the object in IPFS.", e);
+            }
+            throw e;
+        }
         if (this.progressListener != null) {
             this.progressListener.finishedTask(ProgressTask.SAVE);
         }

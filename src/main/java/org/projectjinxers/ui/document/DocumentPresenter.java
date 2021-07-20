@@ -46,16 +46,16 @@ import org.projectjinxers.ui.editor.EditorView;
 import org.projectjinxers.ui.group.GroupPresenter;
 import org.projectjinxers.ui.group.GroupView;
 import org.projectjinxers.ui.signing.SigningPresenter;
-import org.projectjinxers.ui.signing.SigningView;
 import org.projectjinxers.ui.signing.SigningPresenter.SigningListener;
+import org.projectjinxers.ui.signing.SigningView;
+import org.projectjinxers.ui.user.UserPresenter;
+import org.projectjinxers.ui.user.UserView;
 
 import com.overzealous.remark.Remark;
 
 import javafx.application.Platform;
 import javafx.concurrent.Task;
 import javafx.scene.Scene;
-import javafx.stage.Modality;
-import javafx.stage.Stage;
 
 /**
  * @author ProjectJinxers
@@ -83,13 +83,10 @@ public class DocumentPresenter extends DataPresenter<Document, DocumentPresenter
     private String contents;
 
     private DataListener<Group> groupListener;
+    private DataListener<User> userListener;
 
     private ModelController controller;
-    private Group group;
-    private User user;
-    private String importURL;
-    private IPLDObject<ModelState> modelStateObject;
-    private IPLDObject<org.projectjinxers.model.Document> toSave;
+    private Document toSave;
 
     protected DocumentPresenter(DocumentView view, Document document,
             IPLDObject<org.projectjinxers.model.Document> reviewed, Data data, ProjectJinxers application)
@@ -156,21 +153,8 @@ public class DocumentPresenter extends DataPresenter<Document, DocumentPresenter
 
     @Override
     public void didCreateSigner(Signer signer) {
-        IPLDObject<ModelState> currentValidatedState = controller.getCurrentValidatedState();
-        if (modelStateObject != currentValidatedState) {
-            if (!toSave.getMapped().updateModelState(currentValidatedState.getMapped())) {
-                getView().showMessage(
-                        "The reviewed document has just been sealed. You can only add truth inversion reviews now.");
-                return;
-            }
-        }
-        try {
-            controller.saveDocument(toSave, signer);
-            confirmed(new Document(group, user, toSave, importURL));
-        }
-        catch (IOException e) {
-            getView().showError("Failed to save document", e);
-        }
+        toSave.save(controller, signer);
+        confirmed(toSave);
     }
 
     void addGroup() {
@@ -191,15 +175,37 @@ public class DocumentPresenter extends DataPresenter<Document, DocumentPresenter
             };
         }
         groupPresenter.setListener(groupListener);
-        Stage stage = new Stage();
-        stage.initOwner(getStage());
-        stage.initModality(Modality.WINDOW_MODAL);
-        stage.setScene(groupPresenter.getScene());
-        stage.show();
+        presentModally(groupPresenter, "Add group", false);
     }
 
     void addUser() {
-
+        UserPresenter userPresenter = UserView.createUserPresenter(null, data.getSettings(), getApplication());
+        if (userListener == null) {
+            userListener = new DataListener<User>() {
+                @Override
+                public boolean didConfirmData(User user) {
+                    data.addUser(user);
+                    boolean saveUser = user.isSave();
+                    if (saveUser || data.getSettings().isSaveUsers()) {
+                        data.getSettings().setSaveUsers(saveUser);
+                        saveData();
+                    }
+                    user.setProgressChangeListener(() -> {
+                        if (user.getUserObject() != null) {
+                            getView().updateUsers(user);
+                        }
+                        else if (user.getFailedTask() != null) {
+                            user.setProgressChangeListener(null);
+                            getView().showError(user.getFailureMessage(), user.getFailure());
+                        }
+                    });
+                    user.getOrLoadUserObject();
+                    return true;
+                }
+            };
+        }
+        userPresenter.setListener(userListener);
+        presentModally(userPresenter, "Add user", false);
     }
 
     void showEditor(String importValue) {
@@ -251,7 +257,7 @@ public class DocumentPresenter extends DataPresenter<Document, DocumentPresenter
                                 markdown = sb.toString();
                             }
                             catch (Exception e) {
-                                getView().showError("Failed to read the local file", e);
+                                getView().showError("Failed to read the local file.", e);
                                 return null;
                             }
                             finally {
@@ -344,23 +350,12 @@ public class DocumentPresenter extends DataPresenter<Document, DocumentPresenter
                     userState = modelState.expectUserState(userHash);
                 }
                 if (userState == null) {
-                    try {
-                        userState = new IPLDObject<>(new UserState(user.getOrLoadUserObject()));
-                    }
-                    catch (Exception e) {
-                        if (user.loadUserObject(group)) {
-                            userState = new IPLDObject<>(new UserState(user.getUserObject()));
-                        }
-                        else {
-                            getView().showError("Failed to load user", e);
-                            return;
-                        }
-                    }
+                    userState = new IPLDObject<>(new UserState(user.getUserObject()));
                 }
             }
         }
         catch (Exception e) {
-            getView().showError("Failed to save document", e);
+            getView().showError("Failed to save the document.", e);
             return;
         }
         IPLDObject<org.projectjinxers.model.Document> toSave;
@@ -392,18 +387,10 @@ public class DocumentPresenter extends DataPresenter<Document, DocumentPresenter
             toSave = new IPLDObject<>(updated);
         }
         this.controller = controller;
-        this.group = group;
-        this.user = user;
-        this.importURL = importURL;
-        this.modelStateObject = modelStateObject;
-        this.toSave = toSave;
+        this.toSave = new Document(group, user, toSave, importURL, modelStateObject);
         SigningPresenter signingPresenter = SigningView.createSigningPresenter(user, getApplication());
         signingPresenter.setListener(this);
-        Stage stage = new Stage();
-        stage.initOwner(getStage());
-        stage.initModality(Modality.WINDOW_MODAL);
-        stage.setScene(signingPresenter.getScene());
-        stage.show();
+        presentModally(signingPresenter, "Sign document", false);
     }
 
     private void saveData() {
