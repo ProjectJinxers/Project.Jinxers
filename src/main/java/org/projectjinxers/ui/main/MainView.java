@@ -82,7 +82,7 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
         groupsList.setCellFactory(param -> new GroupCell(mainPresenter));
-        documentsList.setCellFactory(param -> new DocumentCell());
+        documentsList.setCellFactory(param -> new DocumentCell(mainPresenter));
         ownershipRequestsList.setCellFactory(param -> new OwnershipRequestCell());
         unbanRequestsList.setCellFactory(param -> new UnbanRequestCell());
         votingsList.setCellFactory(param -> new VotingCell());

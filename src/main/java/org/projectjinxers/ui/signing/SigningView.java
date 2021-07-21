@@ -57,8 +57,16 @@ public class SigningView
         return username;
     }
 
+    public String getUsername() {
+        return username.get();
+    }
+
     public StringProperty securityLevelProperty() {
         return securityLevel;
+    }
+
+    public String getSecurityLevel() {
+        return securityLevel.get();
     }
 
     @Override

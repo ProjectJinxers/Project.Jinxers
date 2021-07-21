@@ -163,6 +163,13 @@ public class DocumentPresenter extends DataPresenter<Document, DocumentPresenter
             groupListener = new DataListener<Group>() {
                 @Override
                 public boolean didConfirmData(Group group) {
+                    try {
+                        group.getController();
+                    }
+                    catch (Exception e) {
+                        getView().showError("Failed to create group", e);
+                        return false;
+                    }
                     Group replaced = data.addGroup(group);
                     boolean saveGroup = group.isSave();
                     if (saveGroup || replaced != null && replaced.isSave() || data.getSettings().isSaveGroups()) {
@@ -190,16 +197,22 @@ public class DocumentPresenter extends DataPresenter<Document, DocumentPresenter
                         data.getSettings().setSaveUsers(saveUser);
                         saveData();
                     }
-                    user.setProgressChangeListener(() -> {
-                        if (user.getUserObject() != null) {
-                            getView().updateUsers(user);
-                        }
-                        else if (user.getFailedTask() != null) {
-                            user.setProgressChangeListener(null);
-                            getView().showError(user.getFailureMessage(), user.getFailure());
-                        }
-                    });
-                    user.getOrLoadUserObject();
+                    if (user.getMultihash() == null) {
+                        user.getOrCreateNewUserObject();
+                    }
+                    else {
+                        user.setProgressChangeListener(() -> {
+                            if (user.getUserObject() != null) {
+                                getView().updateUsers(user);
+                            }
+                            else if (user.getFailedTask() != null) {
+                                user.setProgressChangeListener(null);
+                                getView().showError(user.getFailureMessage(), user.getFailure());
+                            }
+                        });
+                        user.getOrLoadUserObject();
+                    }
+                    getView().updateUsers(user);
                     return true;
                 }
             };

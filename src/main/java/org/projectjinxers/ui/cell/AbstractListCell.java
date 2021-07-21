@@ -14,7 +14,6 @@
 package org.projectjinxers.ui.cell;
 
 import java.io.IOException;
-import java.io.InputStream;
 
 import javafx.fxml.FXMLLoader;
 import javafx.scene.control.ContextMenu;
@@ -53,11 +52,12 @@ public abstract class AbstractListCell<T> extends ListCell<T> {
         }
         else {
             if (loader == null) {
-                loader = new FXMLLoader();
+                loader = new FXMLLoader(getClass().getResource(fxmlPath));
                 loader.setController(this);
                 try {
-                    InputStream is = getClass().getResource(fxmlPath).openStream();
-                    loader.load(is);
+                    loader.load();
+                    // InputStream is = getClass().getResource(fxmlPath).openStream();
+                    // loader.load(is);
                 }
                 catch (IOException e) {
                     throw new RuntimeException(e);

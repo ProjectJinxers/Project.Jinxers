@@ -43,6 +43,7 @@ public class Document extends ProgressObserver {
     private transient IPLDObject<ModelState> modelStateObject;
     private Kind kind;
 
+    private boolean loading;
 
     public Document(Group group, IPLDObject<org.projectjinxers.model.Document> documentObject) {
         super(true);
@@ -94,7 +95,8 @@ public class Document extends ProgressObserver {
     }
 
     public IPLDObject<org.projectjinxers.model.Document> getOrLoadDocumentObject() {
-        if (documentObject == null && multihash != null) {
+        if ((documentObject == null || !documentObject.isMapped()) && !loading && multihash != null) {
+            loading = true;
             startOperation(() -> {
                 getOrLoadDocumentObject();
                 return true;
@@ -102,17 +104,21 @@ public class Document extends ProgressObserver {
             startedTask(ProgressTask.LOAD, -1);
             new Thread(() -> {
                 try {
-                    ModelController controller = ModelController.getModelController(Config.getSharedInstance());
-                    IPLDObject<org.projectjinxers.model.Document> documentObject = new IPLDObject<>(multihash,
-                            LoaderFactory.DOCUMENT.createLoader(), controller.getContext(), null);
-                    if (documentObject.getMapped() != null) {
+                    if (documentObject == null) {
+                        ModelController controller = group == null
+                                ? ModelController.getModelController(Config.getSharedInstance())
+                                : group.getController();
+                        IPLDObject<org.projectjinxers.model.Document> documentObject = new IPLDObject<>(multihash,
+                                LoaderFactory.DOCUMENT.createLoader(), controller.getContext(), null);
                         this.documentObject = documentObject;
                     }
+                    documentObject.getMapped();
                     finishedTask(ProgressTask.LOAD);
                 }
                 catch (Exception e) {
                     failedTask(ProgressTask.LOAD, "Failed to load the document.", e);
                 }
+                loading = false;
             }).start();
         }
         return documentObject;

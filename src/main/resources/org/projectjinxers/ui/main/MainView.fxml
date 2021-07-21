@@ -38,7 +38,7 @@
 	           <VBox>
 	               <HBox>
 	                   <TextField fx:id="filterField"/>
-	                   <CheckBox fx:id="myDocuments"/>
+	                   <CheckBox fx:id="myDocuments" text="My documents"/>
 	                   <Button onAction="#onAddDocument">
                            <graphic>
                                <ImageView image="$addIcon"/>

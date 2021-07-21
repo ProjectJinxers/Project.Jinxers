@@ -44,6 +44,7 @@ public class SigningPresenter extends PJPresenter<SigningPresenter.SigningView> 
 
     public SigningPresenter(SigningView view, User user, ProjectJinxers application) {
         super(view, application);
+        this.user = user;
     }
 
     @Override

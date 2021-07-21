@@ -123,6 +123,10 @@ public class IPLDObject<D extends IPLDSerializable> {
         return multihash;
     }
 
+    public boolean isMapped() {
+        return mapped != null;
+    }
+
     /**
      * If the data instance has not been resolved, yet, it is loaded with the help of the context, that had been passed
      * to the constructor.
@@ -131,9 +135,18 @@ public class IPLDObject<D extends IPLDSerializable> {
      */
     public D getMapped() {
         if (mapped == null && multihash != null) {
+            ProgressListener progressListener = this.progressListener;
+            if (progressListener != null) {
+                progressListener.startedTask(ProgressTask.LOAD, -1);
+            }
             try {
                 LoadResult result = context.loadObject(this);
-                if (result != null) {
+                if (result == null) {
+                    if (progressListener != null) {
+                        progressListener.failedTask(ProgressTask.LOAD, "Failed to load object.", null);
+                    }
+                }
+                else {
                     IPLDObject<?> fromCache = result.getFromCache();
                     if (fromCache == null) {
                         this.metadata = result.getLoadedMetadata();
@@ -146,9 +159,15 @@ public class IPLDObject<D extends IPLDSerializable> {
                         mapped.loadedFromCache();
                         this.mapped = mapped;
                     }
+                    if (progressListener != null) {
+                        progressListener.finishedTask(ProgressTask.LOAD);
+                    }
                 }
             }
             catch (IOException e) {
+                if (progressListener != null) {
+                    progressListener.failedTask(ProgressTask.LOAD, "Failed to load object.", e);
+                }
                 throw new RuntimeException(e);
             }
         }
@@ -183,6 +202,12 @@ public class IPLDObject<D extends IPLDSerializable> {
 
     public ProgressListener getProgressListener() {
         return progressListener;
+    }
+
+    public void removeProgressListener(ProgressListener listener) {
+        if (this.progressListener == listener) {
+            this.progressListener = null;
+        }
     }
 
     /**
