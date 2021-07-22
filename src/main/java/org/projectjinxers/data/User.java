@@ -185,6 +185,11 @@ public class User extends ProgressObserver {
     }
 
     @Override
+    public String getStatusMessagePrefix() {
+        return null;
+    }
+
+    @Override
     public String toString() {
         if (name == null) {
             return multihash + " (lvl " + securityLevel + ")";

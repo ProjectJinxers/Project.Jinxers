@@ -14,7 +14,6 @@
 package org.projectjinxers.ui.common;
 
 import java.io.IOException;
-import java.io.InputStream;
 
 import org.projectjinxers.ui.common.PJPresenter.View;
 
@@ -31,11 +30,10 @@ import javafx.scene.paint.Paint;
 public abstract class PJScene<V extends View, P extends PJPresenter<V>> extends Scene {
 
     private static Parent loadRoot(String fxmlPath, PJPresenter<?> presenter) {
-        FXMLLoader loader = new FXMLLoader();
+        FXMLLoader loader = new FXMLLoader(presenter.getClass().getResource(fxmlPath));
         loader.setController(presenter.getView());
         try {
-            InputStream is = presenter.getClass().getResource(fxmlPath).openStream();
-            loader.load(is);
+            loader.load();
         }
         catch (IOException e) {
             throw new ExceptionInInitializerError(e);

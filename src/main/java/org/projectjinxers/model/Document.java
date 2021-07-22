@@ -31,6 +31,7 @@ import org.projectjinxers.controller.OwnershipTransferController;
 import org.projectjinxers.controller.ValidationContext;
 import org.projectjinxers.controller.ValidationException;
 
+import static org.projectjinxers.util.ObjectUtility.checkNotBlank;
 import static org.projectjinxers.util.ObjectUtility.isEqual;
 
 /**
@@ -282,18 +283,18 @@ public class Document implements IPLDSerializable {
         return firstVersion == null ? this : firstVersion.getMapped();
     }
 
-    public boolean checkUnchanged(Document other) {
+    public boolean checkUnchanged(Document other, String abstr, String contents) {
         if (isEqual(title, other.title) && isEqual(subtitle, other.subtitle) && isEqual(version, other.version)
                 && isEqual(tags, other.tags) && isEqual(date, other.date) && isEqual(source, other.source)) {
-            if (contents == null && other.contents == null) {
+            if (this.contents == null && abstr == null && contents == null) {
                 return true;
             }
-            if (contents == null || other.contents == null) {
+            if (this.contents == null || abstr == null && contents == null) {
                 return false;
             }
-            DocumentContents dc1 = contents.getMapped();
-            DocumentContents dc2 = other.contents.getMapped();
-            return isEqual(dc1.getAbstract(), dc2.getAbstract()) && isEqual(dc1.getContents(), dc2.getContents());
+            DocumentContents dc = this.contents.getMapped();
+            return isEqual(checkNotBlank(dc.getAbstract()), abstr)
+                    && isEqual(checkNotBlank(dc.getContents()), contents);
         }
         return false;
     }

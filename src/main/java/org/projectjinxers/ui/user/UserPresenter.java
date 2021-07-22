@@ -13,9 +13,6 @@
  */
 package org.projectjinxers.ui.user;
 
-import static org.projectjinxers.util.ObjectUtility.isNullOrBlank;
-import static org.projectjinxers.util.ObjectUtility.isNullOrEmpty;
-
 import org.projectjinxers.data.User;
 import org.projectjinxers.ui.ProjectJinxers;
 import org.projectjinxers.ui.common.DataPresenter;
@@ -44,8 +41,8 @@ public class UserPresenter extends DataPresenter<User, UserPresenter.UserView> {
     }
 
     void confirm(String multihash, String username, String password, Integer securityLevel, boolean save) {
-        if (isNullOrBlank(multihash)) {
-            if (isNullOrBlank(username) || isNullOrEmpty(password)) {
+        if (multihash == null) {
+            if (username == null || password == null) {
                 getView().showMessage("Please enter a multihash or a valid username and a password");
             }
             else {

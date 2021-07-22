@@ -47,6 +47,14 @@ public class ObjectUtility {
         return s == null || s.trim().equals("");
     }
 
+    public static String checkNotEmpty(String s) {
+        return s == null || s.equals("") ? null : s;
+    }
+
+    public static String checkNotBlank(String s) {
+        return s == null || s.trim().equals("") ? null : s;
+    }
+
     public static long[] parseLongValues(String valuesString) throws NumberFormatException {
         String[] lines = valuesString.trim().split("\\R");
         long[] res = new long[lines.length];

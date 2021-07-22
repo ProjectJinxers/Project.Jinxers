@@ -14,6 +14,12 @@
 package org.projectjinxers.ui.cell;
 
 import java.io.IOException;
+import java.util.Collection;
+
+import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.model.IPLDSerializable;
+import org.projectjinxers.ui.util.ModelLoadingUtility;
+import org.projectjinxers.ui.util.ModelLoadingUtility.CompletionHandler;
 
 import javafx.fxml.FXMLLoader;
 import javafx.scene.control.ContextMenu;
@@ -56,8 +62,6 @@ public abstract class AbstractListCell<T> extends ListCell<T> {
                 loader.setController(this);
                 try {
                     loader.load();
-                    // InputStream is = getClass().getResource(fxmlPath).openStream();
-                    // loader.load(is);
                 }
                 catch (IOException e) {
                     throw new RuntimeException(e);
@@ -85,6 +89,25 @@ public abstract class AbstractListCell<T> extends ListCell<T> {
 
     protected void updateContextMenu(ContextMenu contextMenu) {
 
+    }
+
+    public <O extends IPLDSerializable> void loadObject(IPLDObject<O> object, CompletionHandler completionHandler) {
+        final Object item = getItem();
+        ModelLoadingUtility.loadObject(object, (successCount) -> {
+            if (item == getItem()) {
+                completionHandler.completed(successCount);
+            }
+        });
+    }
+
+    public <O extends IPLDSerializable> void loadObjects(Collection<IPLDObject<O>> objects,
+            CompletionHandler completionHandler) {
+        final Object item = getItem();
+        ModelLoadingUtility.loadObjects(objects, (successCount) -> {
+            if (item == getItem()) {
+                completionHandler.completed(successCount);
+            }
+        });
     }
 
 }

@@ -29,6 +29,7 @@ import org.projectjinxers.data.Settings;
 import org.projectjinxers.data.User;
 import org.projectjinxers.model.ModelState;
 import org.projectjinxers.ui.ProjectJinxers;
+import org.projectjinxers.ui.cell.ObjectStatusView.StatusChangeListener;
 import org.projectjinxers.ui.common.DataPresenter.DataListener;
 import org.projectjinxers.ui.common.PJPresenter;
 import org.projectjinxers.ui.common.PJPresenter.View;
@@ -45,7 +46,7 @@ import javafx.scene.Scene;
  */
 public class MainPresenter extends PJPresenter<MainPresenter.MainView> {
 
-    interface MainView extends View {
+    public interface MainView extends View, StatusChangeListener {
 
         void didAddGroup(Group group);
 

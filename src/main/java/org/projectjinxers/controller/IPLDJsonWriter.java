@@ -38,10 +38,12 @@ import com.google.gson.stream.JsonWriter;
 public class IPLDJsonWriter implements IPLDWriter {
 
     private boolean compact;
+    private boolean bigSignaturePartsAsString;
     private JsonWriter jsonWriter;
 
-    IPLDJsonWriter(boolean compact) {
+    IPLDJsonWriter(boolean compact, boolean bigSignaturePartsAsString) {
         this.compact = compact;
+        this.bigSignaturePartsAsString = bigSignaturePartsAsString;
     }
 
     @Override
@@ -282,8 +284,15 @@ public class IPLDJsonWriter implements IPLDWriter {
                 .value(metadata.getVersion());
         ECDSASignature signature = metadata.getSignature();
         if (signature != null) {
-            jsonWriter.name(IPLDJsonReader.KEY_SIGNATURE_R).value(signature.r).name(IPLDJsonReader.KEY_SIGNATURE_S)
-                    .value(signature.s).name(IPLDJsonReader.KEY_SIGNATURE_V).value(signature.v);
+            if (bigSignaturePartsAsString) {
+                jsonWriter.name(IPLDJsonReader.KEY_SIGNATURE_R).value(signature.r.toString())
+                        .name(IPLDJsonReader.KEY_SIGNATURE_S).value(signature.s.toString())
+                        .name(IPLDJsonReader.KEY_SIGNATURE_V).value(signature.v);
+            }
+            else {
+                jsonWriter.name(IPLDJsonReader.KEY_SIGNATURE_R).value(signature.r).name(IPLDJsonReader.KEY_SIGNATURE_S)
+                        .value(signature.s).name(IPLDJsonReader.KEY_SIGNATURE_V).value(signature.v);
+            }
         }
         jsonWriter.endObject();
     }

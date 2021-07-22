@@ -44,6 +44,7 @@ public class Document extends ProgressObserver {
     private Kind kind;
 
     private boolean loading;
+    private boolean saveCalled;
 
     public Document(Group group, IPLDObject<org.projectjinxers.model.Document> documentObject) {
         super(true);
@@ -83,6 +84,9 @@ public class Document extends ProgressObserver {
     }
 
     public String getMultihash() {
+        if (multihash == null && documentObject != null) {
+            multihash = documentObject.getMultihash();
+        }
         return multihash;
     }
 
@@ -97,6 +101,7 @@ public class Document extends ProgressObserver {
     public IPLDObject<org.projectjinxers.model.Document> getOrLoadDocumentObject() {
         if ((documentObject == null || !documentObject.isMapped()) && !loading && multihash != null) {
             loading = true;
+            saveCalled = false;
             startOperation(() -> {
                 getOrLoadDocumentObject();
                 return true;
@@ -104,6 +109,7 @@ public class Document extends ProgressObserver {
             startedTask(ProgressTask.LOAD, -1);
             new Thread(() -> {
                 try {
+                    Thread.sleep(2000);
                     if (documentObject == null) {
                         ModelController controller = group == null
                                 ? ModelController.getModelController(Config.getSharedInstance())
@@ -128,14 +134,22 @@ public class Document extends ProgressObserver {
         return kind;
     }
 
+    public boolean isLoading() {
+        return loading;
+    }
+
+    public boolean isSaveCalled() {
+        return saveCalled;
+    }
+
     public boolean save(ModelController controller, Signer signer) {
+        saveCalled = true;
         documentObject.setProgressListener(this);
         IPLDObject<ModelState> currentValidatedState = controller.getCurrentValidatedState();
         if (modelStateObject != currentValidatedState
                 && !documentObject.getMapped().updateModelState(currentValidatedState.getMapped())) {
-                failedTask(ProgressTask.SAVE,
-                        "The reviewed document has just been sealed. You can only add truth inversion reviews now.",
-                        null);
+            failedTask(ProgressTask.SAVE,
+                    "The reviewed document has just been sealed. You can only add truth inversion reviews now.", null);
             return false;
         }
         startOperation(() -> save(controller, signer));
@@ -151,6 +165,14 @@ public class Document extends ProgressObserver {
             }
         }).start();
         return true;
+    }
+
+    @Override
+    public String getStatusMessagePrefix() {
+        if (saveCalled && getMultihash() != null) {
+            return "Saved as " + multihash;
+        }
+        return null;
     }
 
 }

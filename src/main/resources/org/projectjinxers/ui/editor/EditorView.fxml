@@ -8,14 +8,14 @@
 
 <VBox xmlns:fx="http://javafx.com/fxml/1">
     <SplitPane fx:id="editorsSplit" orientation="VERTICAL" >
-	    <MarkdownEditorControl fx:id="abstractEditor">
-	    </MarkdownEditorControl>
-	    <MarkdownEditorControl fx:id="contentsEditor">
-	    </MarkdownEditorControl>
+        <MarkdownEditorControl fx:id="abstractEditor">
+        </MarkdownEditorControl>
+        <MarkdownEditorControl fx:id="contentsEditor">
+        </MarkdownEditorControl>
     </SplitPane>
     <HBox>
-       <Button text="OK" onAction="#confirm"/>
-       <Button text="Cancel" onAction="#cancel"/>
+        <Button text="OK" onAction="#confirm"/>
+        <Button text="Cancel" onAction="#cancel"/>
     </HBox>
 </VBox>
 

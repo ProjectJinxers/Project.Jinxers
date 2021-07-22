@@ -85,7 +85,7 @@ public class IPLDContext {
      */
     public byte[] serializeObject(IPLDObject<?> object, Signer signer, ProgressListener progressListener)
             throws IOException {
-        IPLDWriter writer = in.createWriter();
+        IPLDWriter writer = out.createWriter();
         return writer.write(this, object, signer, progressListener);
     }
 
@@ -147,7 +147,7 @@ public class IPLDContext {
      * @param user     the user
      */
     public void verifySignature(IPLDObject<?> object, Signer verifier, User user) {
-        IPLDWriter writer = in.createWriter();
+        IPLDWriter writer = out.createWriter();
         try {
             byte[] hashBase = object.getMapped().hashBase(writer, this);
             ECDSASignature signature = object.getMetadata().getSignature();
@@ -169,7 +169,7 @@ public class IPLDContext {
      * @param publicKey the public key
      */
     public void verifySignature(IPLDObject<?> object, Signer verifier, byte[] publicKey) {
-        IPLDWriter writer = in.createWriter();
+        IPLDWriter writer = out.createWriter();
         try {
             byte[] hashBase = object.getMapped().hashBase(writer, this);
             ECDSASignature signature = object.getMetadata().getSignature();

@@ -6,14 +6,14 @@
 <?import javafx.scene.layout.VBox?>
 
 <VBox xmlns:fx="http://javafx.com/fxml/1">
-	<Label text="${controller.name}"/>
-	<Label text="${controller.address}"/>
-	<Label text="${controller.timestampTolerance}"/>
-	<CheckBox fx:id="saveBox" text="Save" onAction="#saveToggled"/>
-	<Label text="${controller.validModelState}">
-	   <tooltip>
-	       <Tooltip text="${controller.multihash}"/>
-	   </tooltip>
-	</Label>
+    <Label text="${controller.name}"/>
+    <Label text="${controller.address}"/>
+    <Label text="${controller.timestampTolerance}"/>
+    <CheckBox fx:id="saveBox" text="Save" onAction="#saveToggled"/>
+    <Label text="${controller.validModelState}">
+       <tooltip>
+           <Tooltip text="${controller.multihash}"/>
+       </tooltip>
+    </Label>
 </VBox>
 

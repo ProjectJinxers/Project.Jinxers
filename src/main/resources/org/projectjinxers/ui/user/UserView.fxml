@@ -28,13 +28,13 @@
         </valueFactory>
     </Spinner>
     <CheckBox fx:id="saveBox" text="Save">
-       <tooltip>
-           <Tooltip text="Include this user in the saved file. This includes the name and the multihash, if the data is saved after the user has been loaded or saved - even if not set here - the security level and the public key, but excludes the password."/>
-       </tooltip>
+        <tooltip>
+            <Tooltip text="Include this user in the saved file. This includes the name and the multihash, if the data is saved after the user has been loaded or saved - even if not set here - the security level and the public key, but excludes the password."/>
+        </tooltip>
     </CheckBox>
-	<HBox>
-       <Button text="OK" onAction="#confirm"/>
-       <Button text="Cancel" onAction="#cancel"/>
+    <HBox>
+        <Button text="OK" onAction="#confirm"/>
+        <Button text="Cancel" onAction="#cancel"/>
     </HBox>
 </VBox>
 

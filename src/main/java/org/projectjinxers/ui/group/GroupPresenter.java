@@ -13,16 +13,15 @@
  */
 package org.projectjinxers.ui.group;
 
+import static org.projectjinxers.util.ObjectUtility.parseLongValues;
+
 import org.projectjinxers.data.Group;
 import org.projectjinxers.data.Settings;
 import org.projectjinxers.ui.ProjectJinxers;
 import org.projectjinxers.ui.common.DataPresenter;
 import org.projectjinxers.ui.common.PJPresenter.View;
 
-import javafx.scene.Scene;
-
-import static org.projectjinxers.util.ObjectUtility.isNullOrBlank;
-import static org.projectjinxers.util.ObjectUtility.parseLongValues;;
+import javafx.scene.Scene;;
 
 /**
  * @author ProjectJinxers
@@ -52,12 +51,12 @@ public class GroupPresenter extends DataPresenter<Group, GroupPresenter.GroupVie
     }
 
     void confirm(String name, String address, Long timestampTolerance, String secretObfuscationParams, boolean save) {
-        if (isNullOrBlank(name) || isNullOrBlank(address)) {
+        if (name == null || address == null) {
             getView().showMessage("Please enter all required data.");
         }
         else {
             long[] obfuscationParams;
-            if (isNullOrBlank(secretObfuscationParams)) {
+            if (secretObfuscationParams == null) {
                 obfuscationParams = null;
             }
             else {

@@ -13,6 +13,7 @@
  */
 package org.projectjinxers.ui.document;
 
+import static org.projectjinxers.util.ObjectUtility.checkNotBlank;
 import static org.projectjinxers.util.ObjectUtility.isEqual;
 import static org.projectjinxers.util.ObjectUtility.isNullOrBlank;
 
@@ -103,8 +104,8 @@ public class DocumentPresenter extends DataPresenter<Document, DocumentPresenter
                     if (contentsObject != null) {
                         DocumentContents contents = contentsObject.getMapped();
                         if (contents != null) {
-                            this.abstr = contents.getAbstract();
-                            this.contents = contents.getContents();
+                            this.abstr = checkNotBlank(contents.getAbstract());
+                            this.contents = checkNotBlank(contents.getContents());
                         }
                     }
                 }
@@ -141,8 +142,8 @@ public class DocumentPresenter extends DataPresenter<Document, DocumentPresenter
 
     @Override
     public void didConfirm(String abstr, String contents) {
-        this.abstr = abstr;
-        this.contents = contents;
+        this.abstr = checkNotBlank(abstr);
+        this.contents = checkNotBlank(contents);
         getView().updateContentsIndicator();
     }
 
@@ -201,7 +202,7 @@ public class DocumentPresenter extends DataPresenter<Document, DocumentPresenter
                         user.getOrCreateNewUserObject();
                     }
                     else {
-                        user.setProgressChangeListener(() -> {
+                        user.setProgressChangeListener((progressObserver) -> {
                             if (user.getUserObject() != null) {
                                 getView().updateUsers(user);
                             }
@@ -305,7 +306,7 @@ public class DocumentPresenter extends DataPresenter<Document, DocumentPresenter
     void confirmed(String importValue, Group group) {
         Document edited = getData();
         if (edited == null || edited.getMultihash() == null || edited.getDocumentObject() == null) {
-            if (isNullOrBlank(importValue)) {
+            if (importValue == null) {
                 getView().showMessage(
                         "Please enter the multihash of the document to load, or a valid URL and/or click the edit button.");
             }
@@ -334,13 +335,12 @@ public class DocumentPresenter extends DataPresenter<Document, DocumentPresenter
             getView().showMessage("Please select a group and a user.");
             return;
         }
-        boolean hasAbstract = !isNullOrBlank(abstr);
-        boolean hasContents = !isNullOrBlank(contents);
-        if (!hasAbstract && !hasContents && (reviewed == null || !Boolean.TRUE.equals(((Review) data).getApprove()))) {
+        if (abstr == null && contents == null
+                && (reviewed == null || !Boolean.TRUE.equals(((Review) data).getApprove()))) {
             getView().showMessage("Document without mandatory abstract or contents.");
             return;
         }
-        if (didNotConfirmContents && !isNullOrBlank(importURL) && !getView().askForConfirmation(
+        if (didNotConfirmContents && importURL != null && !getView().askForConfirmation(
                 "There is an editable import location, but you haven't confirmed the imported contents. Do you really want to save this review?")) {
             return;
         }
@@ -373,29 +373,29 @@ public class DocumentPresenter extends DataPresenter<Document, DocumentPresenter
         }
         IPLDObject<org.projectjinxers.model.Document> toSave;
         if (documentObject == null) {
-            if (hasAbstract || hasContents) {
-                toSave = new IPLDObject<>(
-                        data.update(new IPLDObject<>(new DocumentContents(abstr, contents)), userState));
+            if (abstr == null && contents == null) {
+                toSave = new IPLDObject<>(data.update(null, userState));
             }
             else {
-                toSave = new IPLDObject<>(data.update(null, userState));
+                toSave = new IPLDObject<>(
+                        data.update(new IPLDObject<>(new DocumentContents(abstr, contents)), userState));
             }
         }
         else {
             org.projectjinxers.model.Document document = documentObject.getMapped();
-            if (document.checkUnchanged(data)) {
+            if (document.checkUnchanged(data, abstr, contents)) {
                 // TODO: when implementing links, save a flag and show this message after the user selected the links
                 // and there are still no changes.
                 getView().showMessage("No changes.");
                 return;
             }
             org.projectjinxers.model.Document updated;
-            if (hasAbstract || hasContents) {
-                updated = document.update(data, new IPLDObject<>(new DocumentContents(abstr, contents)), documentObject,
-                        userState);
+            if (abstr == null && contents == null) {
+                updated = document.update(data, null, documentObject, userState);
             }
             else {
-                updated = document.update(data, null, documentObject, userState);
+                updated = document.update(data, new IPLDObject<>(new DocumentContents(abstr, contents)), documentObject,
+                        userState);
             }
             toSave = new IPLDObject<>(updated);
         }

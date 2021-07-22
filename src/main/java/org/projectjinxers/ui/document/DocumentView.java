@@ -13,6 +13,8 @@
  */
 package org.projectjinxers.ui.document;
 
+import static org.projectjinxers.ui.util.TextFieldUtility.checkNotBlank;
+import static org.projectjinxers.ui.util.TextFieldUtility.checkNotEmpty;
 import static org.projectjinxers.ui.util.TextFieldUtility.unfocus;
 import static org.projectjinxers.util.ObjectUtility.isEqual;
 import static org.projectjinxers.util.ObjectUtility.isNullOrBlank;
@@ -107,7 +109,7 @@ public class DocumentView implements PJView<DocumentPresenter.DocumentView, Docu
     public void initialize(URL location, ResourceBundle resources) {
         Document data = documentPresenter.getData();
         IPLDObject<org.projectjinxers.model.Document> documentObject = data == null ? null : data.getDocumentObject();
-        if (documentObject == null || documentObject.getMultihash() == null) {
+        if (documentObject == null || documentObject.getMultihash() == null || data.getGroup() == null) {
             updateGroups(null);
         }
         else {
@@ -202,8 +204,7 @@ public class DocumentView implements PJView<DocumentPresenter.DocumentView, Docu
                 contentsIndicator.set("Contents only");
             }
             clearButton.setDisable(false);
-            String source = sourceField.getText();
-            if (isNullOrBlank(source)) {
+            if (checkNotBlank(sourceField) == null) {
                 sourceField.setText(importField.getText());
             }
         }
@@ -264,14 +265,14 @@ public class DocumentView implements PJView<DocumentPresenter.DocumentView, Docu
     void confirm(Event e) {
         boolean didNotConfirmContents = importField.isEditable();
         if (didNotConfirmContents && documentPresenter.getReviewed() == null) {
-            documentPresenter.confirmed(importField.getText(), groupsBox.getValue());
+            documentPresenter.confirmed(checkNotBlank(importField), groupsBox.getValue());
         }
         else {
             org.projectjinxers.model.Document data;
             IPLDObject<org.projectjinxers.model.Document> reviewed = documentPresenter.getReviewed();
             if (reviewed == null) {
-                data = new org.projectjinxers.model.Document(titleField.getText(), subtitleField.getText(),
-                        versionField.getText(), tagsField.getText(), sourceField.getText(), null, null);
+                data = new org.projectjinxers.model.Document(checkNotEmpty(titleField), checkNotEmpty(subtitleField),
+                        checkNotEmpty(versionField), checkNotEmpty(tagsField), checkNotEmpty(sourceField), null, null);
             }
             else {
                 String approvalValue = approvalBox.getValue();
@@ -282,11 +283,11 @@ public class DocumentView implements PJView<DocumentPresenter.DocumentView, Docu
                 else {
                     approve = approvalValue.equals(APPROVAL_YES);
                 }
-                data = new Review(titleField.getText(), subtitleField.getText(), versionField.getText(),
-                        tagsField.getText(), sourceField.getText(), null, reviewed, truthInversionBox.isSelected(),
-                        approve, null);
+                data = new Review(checkNotEmpty(titleField), checkNotEmpty(subtitleField), checkNotEmpty(versionField),
+                        checkNotEmpty(tagsField), checkNotEmpty(sourceField), null, reviewed,
+                        truthInversionBox.isSelected(), approve, null);
             }
-            documentPresenter.confirmed(data, groupsBox.getValue(), usersBox.getValue(), importField.getText(),
+            documentPresenter.confirmed(data, groupsBox.getValue(), usersBox.getValue(), checkNotBlank(importField),
                     didNotConfirmContents);
         }
     }

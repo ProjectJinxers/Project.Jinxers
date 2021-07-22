@@ -18,6 +18,10 @@ import java.util.function.UnaryOperator;
 import javafx.application.Platform;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextFormatter.Change;
+import javafx.scene.control.TextInputControl;
+
+import static org.projectjinxers.util.ObjectUtility.isNullOrBlank;
+import static org.projectjinxers.util.ObjectUtility.isNullOrEmpty;
 
 /**
  * @author ProjectJinxers
@@ -49,6 +53,16 @@ public class TextFieldUtility {
         Platform.runLater(() -> {
             textField.getParent().requestFocus();
         });
+    }
+
+    public static String checkNotBlank(TextInputControl textField) {
+        String check = textField.getText();
+        return isNullOrBlank(check) ? null : check;
+    }
+
+    public static String checkNotEmpty(TextInputControl textField) {
+        String check = textField.getText();
+        return isNullOrEmpty(check) ? null : check;
     }
 
 }

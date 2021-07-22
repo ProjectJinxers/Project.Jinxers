@@ -21,13 +21,13 @@
         <Label text="Group"/>
         <ChoiceBox fx:id="groupsBox"/>
         <Button onAction="#onAddGroup">
-			<graphic>
-				<ImageView image="$addIcon"/>
-			</graphic>
-			<tooltip>
-				<Tooltip text="Add group"/>
-			</tooltip>
-		</Button>
+            <graphic>
+                <ImageView image="$addIcon"/>
+            </graphic>
+            <tooltip>
+                <Tooltip text="Add group"/>
+            </tooltip>
+        </Button>
         <Label text="User"/>
         <ChoiceBox fx:id="usersBox"/>
         <Button onAction="#onAddUser">

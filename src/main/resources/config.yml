@@ -6,3 +6,6 @@ ipfs:
 iota:
    main:
       address: blah
+      
+   validHashes:
+      blah: zdpuAywtTC6RSFayLKCGHS2XfqKPzmPmu2ifWFaTehSFbeWVG

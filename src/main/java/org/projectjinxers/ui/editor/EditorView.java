@@ -82,6 +82,7 @@ public class EditorView
     @Override
     public void initialize(URL location, ResourceBundle resources) {
         editorsSplit.setDividerPosition(0, 0.25);
+        abstractEditor.setMarkdown(editorPresenter.getAbstract());
     }
 
     @Override

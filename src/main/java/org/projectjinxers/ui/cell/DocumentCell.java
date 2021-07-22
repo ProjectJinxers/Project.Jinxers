@@ -13,9 +13,6 @@
  */
 package org.projectjinxers.ui.cell;
 
-import static org.projectjinxers.ui.util.ModelLoadingUtility.loadObject;
-import static org.projectjinxers.ui.util.ModelLoadingUtility.loadObjects;
-
 import java.net.URL;
 import java.text.DateFormat;
 import java.util.ArrayList;
@@ -30,12 +27,14 @@ import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.ModelController;
 import org.projectjinxers.data.Document;
 import org.projectjinxers.data.Group;
+import org.projectjinxers.data.ProgressObserver;
 import org.projectjinxers.data.User;
 import org.projectjinxers.model.LoaderFactory;
 import org.projectjinxers.model.ModelState;
 import org.projectjinxers.model.Review;
 import org.projectjinxers.model.SealedDocument;
 import org.projectjinxers.model.UserState;
+import org.projectjinxers.ui.cell.ObjectStatusView.StatusChangeListener;
 import org.projectjinxers.ui.main.MainPresenter;
 
 import javafx.beans.property.SimpleStringProperty;
@@ -51,7 +50,7 @@ import javafx.scene.image.ImageView;
  * @author ProjectJinxers
  *
  */
-public class DocumentCell extends AbstractListCell<Document> implements Initializable {
+public class DocumentCell extends AbstractListCell<Document> implements Initializable, StatusChangeListener {
 
     private static final long ONE_MINUTE = 1000L * 60;
     private static final long ONE_HOUR = ONE_MINUTE * 60;
@@ -80,7 +79,7 @@ public class DocumentCell extends AbstractListCell<Document> implements Initiali
     @FXML
     private ImageView truthImage;
     @FXML
-    private ObjectStatusView objectStatusView;
+    private ObjectStatusView objectStatusViewController;
 
     private StringProperty age = new SimpleStringProperty();
     private StringProperty time = new SimpleStringProperty();
@@ -226,7 +225,7 @@ public class DocumentCell extends AbstractListCell<Document> implements Initiali
 
     @Override
     protected void update(Document item) {
-        item.setProgressChangeListener(objectStatusView);
+        objectStatusViewController.setProgressObserver(item, this);
         IPLDObject<org.projectjinxers.model.Document> documentObject = item.getDocumentObject();
         org.projectjinxers.model.Document document = documentObject == null || !documentObject.isMapped() ? null
                 : documentObject.getMapped();
@@ -281,6 +280,15 @@ public class DocumentCell extends AbstractListCell<Document> implements Initiali
             tags.set(document.getTags());
             source.set(document.getSource());
             updateReviewsInfo();
+        }
+    }
+
+    @Override
+    public void statusChanged(ProgressObserver progressObserver) {
+        Document item = getItem();
+        if (progressObserver == item) {
+            update(item);
+            mainPresenter.getView().statusChanged(progressObserver);
         }
     }
 

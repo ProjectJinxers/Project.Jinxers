@@ -23,6 +23,7 @@ import java.util.ResourceBundle;
 import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.data.Document;
 import org.projectjinxers.data.Group;
+import org.projectjinxers.data.ProgressObserver;
 import org.projectjinxers.model.OwnershipRequest;
 import org.projectjinxers.model.UnbanRequest;
 import org.projectjinxers.model.Voting;
@@ -33,6 +34,8 @@ import org.projectjinxers.ui.cell.OwnershipRequestCell;
 import org.projectjinxers.ui.cell.UnbanRequestCell;
 import org.projectjinxers.ui.cell.VotingCell;
 import org.projectjinxers.ui.common.PJView;
+import org.projectjinxers.ui.document.DocumentDetailsPresenter;
+import org.projectjinxers.ui.document.DocumentDetailsView;
 
 import javafx.collections.FXCollections;
 import javafx.event.Event;
@@ -74,6 +77,8 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
     @FXML
     private VBox detailViewContainer;
 
+    private DocumentDetailsPresenter documentDetailsPresenter;
+
     @Override
     public MainPresenter getPresenter() {
         return mainPresenter;
@@ -86,6 +91,21 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
         ownershipRequestsList.setCellFactory(param -> new OwnershipRequestCell());
         unbanRequestsList.setCellFactory(param -> new UnbanRequestCell());
         votingsList.setCellFactory(param -> new VotingCell());
+
+        documentsList.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal == null) {
+                if (documentDetailsPresenter != null) {
+                    documentDetailsPresenter.setDocument(null);
+                }
+            }
+            else {
+                if (documentDetailsPresenter == null) {
+                    documentDetailsPresenter = DocumentDetailsView.createDocumentDetailsPresenter(mainPresenter,
+                            detailViewContainer);
+                }
+                documentDetailsPresenter.setDocument(newVal);
+            }
+        });
     }
 
     @Override
@@ -116,6 +136,13 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
     @Override
     public void didUpdateDocument(Document document) {
         documentsList.refresh();
+    }
+
+    @Override
+    public void statusChanged(ProgressObserver progressObserver) {
+        if (documentDetailsPresenter != null && progressObserver == documentDetailsPresenter.getDocument()) {
+            documentDetailsPresenter.getView().updateView();
+        }
     }
 
     @FXML

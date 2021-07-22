@@ -19,6 +19,8 @@ import org.projectjinxers.ui.common.PJPresenter.View;
 
 import javafx.scene.Scene;
 
+import static org.projectjinxers.util.ObjectUtility.isNullOrEmpty;
+
 /**
  * @author ProjectJinxers
  *
@@ -46,8 +48,8 @@ public class EditorPresenter extends PJPresenter<EditorPresenter.EditorView> {
     protected EditorPresenter(EditorView view, String abstr, String contents, Scene previousScene,
             ProjectJinxers application) {
         super(view, application);
-        this.abstr = abstr;
-        this.contents = contents;
+        this.abstr = abstr == null ? "" : abstr;
+        this.contents = contents == null ? "" : contents;
         this.previousScene = previousScene;
     }
 

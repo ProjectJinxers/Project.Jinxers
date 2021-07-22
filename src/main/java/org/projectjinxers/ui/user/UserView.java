@@ -13,6 +13,10 @@
  */
 package org.projectjinxers.ui.user;
 
+import static org.projectjinxers.ui.util.TextFieldUtility.checkNotBlank;
+import static org.projectjinxers.ui.util.TextFieldUtility.checkNotEmpty;
+import static org.projectjinxers.ui.util.TextFieldUtility.unfocus;
+
 import java.net.URL;
 import java.util.ResourceBundle;
 
@@ -29,14 +33,11 @@ import javafx.scene.control.PasswordField;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.TextField;
 
-import static org.projectjinxers.ui.util.TextFieldUtility.unfocus;
-
 /**
  * @author ProjectJinxers
  *
  */
-public class UserView
-        implements PJView<UserPresenter.UserView, UserPresenter>, UserPresenter.UserView, Initializable {
+public class UserView implements PJView<UserPresenter.UserView, UserPresenter>, UserPresenter.UserView, Initializable {
 
     public static UserPresenter createUserPresenter(User user, Settings settings, ProjectJinxers application) {
         UserView userView = new UserView();
@@ -76,7 +77,7 @@ public class UserView
 
     @FXML
     void confirm(Event e) {
-        userPresenter.confirm(multihashField.getText(), usernameField.getText(), passwordField.getText(),
+        userPresenter.confirm(checkNotBlank(multihashField), checkNotBlank(usernameField), checkNotEmpty(passwordField),
                 securityLevelField.getValue(), saveBox.isSelected());
     }
 

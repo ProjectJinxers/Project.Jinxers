@@ -124,8 +124,8 @@ public class Review extends Document implements DocumentAction, Loader<Review> {
     }
 
     @Override
-    public boolean checkUnchanged(Document other) {
-        return isEqual(approve, ((Review) other).approve) && super.checkUnchanged(other);
+    public boolean checkUnchanged(Document other, String abstr, String contents) {
+        return isEqual(approve, ((Review) other).approve) && super.checkUnchanged(other, abstr, contents);
     }
 
     /**

@@ -13,6 +13,7 @@
  */
 package org.projectjinxers.ui.group;
 
+import static org.projectjinxers.ui.util.TextFieldUtility.checkNotBlank;
 import static org.projectjinxers.ui.util.TextFieldUtility.unfocus;
 import static org.projectjinxers.util.ObjectUtility.createValuesString;
 
@@ -111,8 +112,8 @@ public class GroupView
 
     @FXML
     void confirm(Event e) {
-        groupPresenter.confirm(nameField.getText(), addressField.getText(), timestampTolerance.get(),
-                secretObfuscationParamsField.getText(), saveBox.isSelected());
+        groupPresenter.confirm(checkNotBlank(nameField), checkNotBlank(addressField), timestampTolerance.get(),
+                checkNotBlank(secretObfuscationParamsField), saveBox.isSelected());
     }
 
     @FXML

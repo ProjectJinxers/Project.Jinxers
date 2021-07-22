@@ -307,6 +307,7 @@ public class ModelController {
                     stream.forEach(map -> {
                         try {
                             String pubSubData = (String) map.get(PUBSUB_SUB_KEY_DATA);
+                            System.out.println("Received pubsub message: " + map);
                             handleIncomingModelState(pubSubData, System.currentTimeMillis());
                         }
                         catch (Exception e) {

@@ -10,9 +10,9 @@
     <TextField fx:id="usernameField" editable="false" text="${controller.username}"/>
     <PasswordField fx:id="passwordField"  promptText="Password *"/>
     <TextField fx:id="securityLevelField" editable="false" text="${controller.securityLevel}"/>
-	<HBox>
-       <Button text="OK" onAction="#confirm"/>
-       <Button text="Cancel" onAction="#cancel"/>
+    <HBox>
+        <Button text="OK" onAction="#confirm"/>
+        <Button text="Cancel" onAction="#cancel"/>
     </HBox>
 </VBox>
 

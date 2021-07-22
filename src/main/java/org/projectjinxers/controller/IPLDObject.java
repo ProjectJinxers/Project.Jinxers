@@ -32,7 +32,30 @@ public class IPLDObject<D extends IPLDSerializable> {
 
     public enum ProgressTask {
 
-        INIT, SAVE, SIGN, LINK_USER, LINK_MODEL, LOAD
+        INIT(0, 5, "Initializing…"), SAVE(1, 5, "Saving…"), SIGN(2, 5, "Signing…"), LINK_USER(3, 5, "Linking to user…"),
+        LINK_MODEL(4, 5, "Linking to model…"), LOAD(0, 1, "Loading…");
+
+        private int totalProgressTask;
+        private int totalProgressTasks;
+        private String progressMessage;
+
+        private ProgressTask(int totalProgressTask, int totalProgressTasks, String progressMessage) {
+            this.totalProgressTask = totalProgressTask;
+            this.totalProgressTasks = totalProgressTasks;
+            this.progressMessage = progressMessage;
+        }
+
+        public int getTotalProgressTask() {
+            return totalProgressTask;
+        }
+
+        public int getTotalProgressTasks() {
+            return totalProgressTasks;
+        }
+
+        public String getProgressMessage() {
+            return progressMessage;
+        }
 
     }
 
