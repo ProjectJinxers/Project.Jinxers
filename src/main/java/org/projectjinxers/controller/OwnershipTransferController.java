@@ -40,7 +40,7 @@ import org.projectjinxers.util.ModelUtility;
 public class OwnershipTransferController {
 
     private static final int REQUIRED_RATING = 40;
-    private static final long REQUIRED_INACTIVITY = 1000L * 60 * 60 * 24 * 30;
+    public static final long REQUIRED_INACTIVITY = 1000L * 60 * 60 * 24 * 30;
     private static final long MIN_REQUEST_PHASE_DURATION = 1000L * 60 * 60 * 24 * 10;
 
     private static final String PUBSUB_MESSAGE_OWNERSHIP_REQUEST_MAIN_SEPARATOR = "|";

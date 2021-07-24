@@ -31,7 +31,7 @@
                     <ImageView fx:id="approvalImage"/>
                 </right>
             </BorderPane>
-            <Hyperlink text="${controller.reviewed}" onAction="#showReviewed">
+            <Hyperlink fx:id="reviewedLink" text="${controller.reviewed}" onAction="#showReviewed">
                  <tooltip>
                     <Tooltip text="${controller.reviewedDetails}"/>
                 </tooltip>

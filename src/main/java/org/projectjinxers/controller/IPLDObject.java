@@ -32,17 +32,21 @@ public class IPLDObject<D extends IPLDSerializable> {
 
     public enum ProgressTask {
 
-        INIT(0, 5, "Initializing…"), SAVE(1, 5, "Saving…"), SIGN(2, 5, "Signing…"), LINK_USER(3, 5, "Linking to user…"),
-        LINK_MODEL(4, 5, "Linking to model…"), LOAD(0, 1, "Loading…");
+        INIT(0, 5, "Initializing…", null), SAVE(1, 5, "Saving…", "Deleting…"),
+        SIGN(2, 5, "Signing…", "Signing removal…"), LINK_USER(3, 5, "Linking to user…", "Linking removal to user…"),
+        LINK_MODEL(4, 5, "Linking to model…", "Linking removal to model…"), LOAD(0, 1, "Loading…", null);
 
         private int totalProgressTask;
         private int totalProgressTasks;
-        private String progressMessage;
+        private String progressMessageDefault;
+        private String progressMessageDestroy;
 
-        private ProgressTask(int totalProgressTask, int totalProgressTasks, String progressMessage) {
+        private ProgressTask(int totalProgressTask, int totalProgressTasks, String progressMessageDefault,
+                String progressMessageDestroy) {
             this.totalProgressTask = totalProgressTask;
             this.totalProgressTasks = totalProgressTasks;
-            this.progressMessage = progressMessage;
+            this.progressMessageDefault = progressMessageDefault;
+            this.progressMessageDestroy = progressMessageDestroy;
         }
 
         public int getTotalProgressTask() {
@@ -53,8 +57,16 @@ public class IPLDObject<D extends IPLDSerializable> {
             return totalProgressTasks;
         }
 
-        public String getProgressMessage() {
-            return progressMessage;
+        public String getProgressMessageCreate() {
+            return progressMessageDefault;
+        }
+
+        public String getProgressMessageDestroy() {
+            return progressMessageDestroy == null ? progressMessageDefault : progressMessageDestroy;
+        }
+
+        public String getProgressMessage(boolean destroying) {
+            return destroying && progressMessageDestroy != null ? progressMessageDestroy : progressMessageDefault;
         }
 
     }

@@ -77,8 +77,10 @@ public class DocumentPresenter extends DataPresenter<Document, DocumentPresenter
 
     }
 
-    private IPLDObject<org.projectjinxers.model.Document> reviewed;
+    private Document reviewed;
     private Data data;
+    private boolean truthInversion;
+    private Boolean approval;
 
     private String abstr;
     private String contents;
@@ -89,12 +91,13 @@ public class DocumentPresenter extends DataPresenter<Document, DocumentPresenter
     private ModelController controller;
     private Document toSave;
 
-    protected DocumentPresenter(DocumentView view, Document document,
-            IPLDObject<org.projectjinxers.model.Document> reviewed, Data data, ProjectJinxers application)
-            throws Exception {
+    protected DocumentPresenter(DocumentView view, Document document, Document reviewed, Data data,
+            boolean truthInversion, Boolean approval, ProjectJinxers application) throws Exception {
         super(view, document, application);
         this.reviewed = reviewed;
         this.data = data;
+        this.truthInversion = truthInversion;
+        this.approval = approval;
         if (document != null) {
             IPLDObject<org.projectjinxers.model.Document> documentObject = document.getDocumentObject();
             if (documentObject != null) {
@@ -113,8 +116,16 @@ public class DocumentPresenter extends DataPresenter<Document, DocumentPresenter
         }
     }
 
-    public IPLDObject<org.projectjinxers.model.Document> getReviewed() {
+    public Document getReviewed() {
         return reviewed;
+    }
+
+    public boolean isTruthInversion() {
+        return truthInversion;
+    }
+
+    public Boolean getApproval() {
+        return approval;
     }
 
     public List<Group> getGroups() {

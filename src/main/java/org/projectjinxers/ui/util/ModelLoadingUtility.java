@@ -64,7 +64,7 @@ public class ModelLoadingUtility {
                 if (object.isMapped()) {
                     int successCount = successCounter.incrementAndGet();
                     if (finishCounter.incrementAndGet() == totalAttempts) {
-                        completionHandler.completed(successCount);
+                        Platform.runLater(() -> completionHandler.completed(successCount));
                     }
                 }
                 else {
@@ -76,7 +76,7 @@ public class ModelLoadingUtility {
                                 successCounter.incrementAndGet();
                             }
                             if (finishCounter.incrementAndGet() == totalAttempts) {
-                                completionHandler.completed(successCounter.get());
+                                Platform.runLater(() -> completionHandler.completed(successCounter.get()));
                             }
                         }
                     });

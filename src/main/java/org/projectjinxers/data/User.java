@@ -185,6 +185,11 @@ public class User extends ProgressObserver {
     }
 
     @Override
+    public boolean isDestroying() {
+        return false;
+    }
+
+    @Override
     public String getStatusMessagePrefix() {
         return null;
     }

@@ -20,6 +20,7 @@ import org.projectjinxers.config.Config;
 import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.IPLDObject.ProgressTask;
 import org.projectjinxers.controller.ModelController;
+import org.projectjinxers.model.DocumentRemoval;
 import org.projectjinxers.model.LoaderFactory;
 import org.projectjinxers.model.ModelState;
 
@@ -45,6 +46,7 @@ public class Document extends ProgressObserver {
 
     private boolean loading;
     private boolean saveCalled;
+    private boolean removeCalled;
 
     public Document(Group group, IPLDObject<org.projectjinxers.model.Document> documentObject) {
         super(true);
@@ -167,12 +169,59 @@ public class Document extends ProgressObserver {
         return true;
     }
 
+    public void delete(Signer signer) {
+        DocumentRemoval removal = new DocumentRemoval(documentObject);
+        IPLDObject<DocumentRemoval> removalObject = new IPLDObject<>(removal);
+        removalObject.setProgressListener(this);
+        ModelController controller = null;
+        try {
+            controller = group.getController();
+        }
+        catch (Exception e) { // this method can't be called if the controller has not been initialized (no menu item)
+            throw new Error(e);
+        }
+        requestRemoval(controller, removalObject, signer);
+    }
+
+    @Override
+    public boolean isDestroying() {
+        return removeCalled;
+    }
+
     @Override
     public String getStatusMessagePrefix() {
         if (saveCalled && getMultihash() != null) {
             return "Saved as " + multihash;
         }
         return null;
+    }
+
+    private boolean requestRemoval(ModelController controller, IPLDObject<DocumentRemoval> removal, Signer signer) {
+        removeCalled = true;
+        IPLDObject<ModelState> currentValidatedState = controller.getCurrentValidatedState();
+        if (modelStateObject != currentValidatedState) {
+            ModelState validState = currentValidatedState.getMapped();
+            if (validState.expectUserState(user.getMultihash()).getMapped().getDocument(multihash) == null) {
+                failedTask(ProgressTask.SAVE,
+                        "You are not the owner of the document, anymore. If you want to delete it,"
+                                + "you have to request ownership.",
+                        null);
+                return false;
+            }
+        }
+        startOperation(() -> requestRemoval(controller, removal, signer));
+        new Thread(() -> {
+            try {
+                controller.requestDocumentRemoval(removal, signer);
+            }
+            catch (IOException e) {
+
+            }
+            finally {
+
+            }
+        }).start();
+        return true;
     }
 
 }

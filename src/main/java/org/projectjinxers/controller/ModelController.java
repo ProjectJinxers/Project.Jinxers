@@ -69,6 +69,8 @@ public class ModelController {
 
     public interface ModelControllerListener {
 
+        void onModelStateValidated();
+
         void handleInvalidSettlement(Set<String> invalidHashes);
 
         void handleRemoved();
@@ -365,6 +367,10 @@ public class ModelController {
         return context;
     }
 
+    public long getTimestampTolerance() {
+        return timestampTolerance;
+    }
+
     /**
      * @return the current fully validated (or trusted) model state
      */
@@ -398,6 +404,9 @@ public class ModelController {
             if (currentLocalHashes.containsKey(multihash)) {
                 if (currentValidatedState == null || !multihash.equals(currentValidatedState.getMultihash())) {
                     this.currentValidatedState = loadModelState(multihash, false);
+                    if (listener != null) {
+                        listener.onModelStateValidated();
+                    }
                     SettlementController localSettlement = currentLocalHashes.get(multihash);
                     if (localSettlement != null) {
                         this.currentSnapshot = localSettlement;

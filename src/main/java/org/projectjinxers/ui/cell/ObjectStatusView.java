@@ -28,6 +28,7 @@ import javafx.event.Event;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.control.Button;
+import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.layout.VBox;
 
@@ -46,7 +47,11 @@ public class ObjectStatusView implements Initializable, ProgressChangeListener {
     @FXML
     private VBox root;
     @FXML
+    private Label currentTaskLabel;
+    @FXML
     private ProgressBar totalProgressBar;
+    @FXML
+    private ProgressBar taskProgressBar;
     @FXML
     private Button cancelButton;
     @FXML
@@ -60,16 +65,34 @@ public class ObjectStatusView implements Initializable, ProgressChangeListener {
     private ProgressObserver progressObserver;
     private StatusChangeListener statusChangeListener;
 
+    private boolean retrying;
+
+    public StringProperty currentTaskProperty() {
+        return currentTask;
+    }
+
     public String getCurrentTask() {
         return currentTask.get();
+    }
+
+    public DoubleProperty totalProgressProperty() {
+        return totalProgress;
     }
 
     public double getTotalProgress() {
         return totalProgress.get();
     }
 
+    public DoubleProperty progressProperty() {
+        return progress;
+    }
+
     public double getProgress() {
         return progress.get();
+    }
+
+    public StringProperty statusMessageProperty() {
+        return statusMessage;
     }
 
     public String getStatusMessage() {
@@ -78,19 +101,25 @@ public class ObjectStatusView implements Initializable, ProgressChangeListener {
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
+        currentTaskLabel.managedProperty().bind(currentTaskLabel.visibleProperty());
+        totalProgressBar.managedProperty().bind(totalProgressBar.visibleProperty());
+        taskProgressBar.managedProperty().bind(taskProgressBar.visibleProperty());
+        cancelButton.managedProperty().bind(cancelButton.visibleProperty());
+        retryButton.managedProperty().bind(retryButton.visibleProperty());
         root.managedProperty().bind(root.visibleProperty());
     }
 
     @Override
     public void progressChanged(ProgressObserver observer) {
         if (observer == progressObserver) {
-            updateProgress();
+            updateProgress(true);
         }
     }
 
     public void setProgressObserver(ProgressObserver progressObserver, StatusChangeListener statusChangeListener) {
         this.progressObserver = progressObserver;
         this.statusChangeListener = statusChangeListener;
+        updateProgress(false);
         progressObserver.setProgressChangeListener(this);
     }
 
@@ -102,12 +131,13 @@ public class ObjectStatusView implements Initializable, ProgressChangeListener {
 
     @FXML
     void retry(Event e) {
+        retrying = true;
         if (!progressObserver.retry()) {
             setStatusMessage(progressObserver.getStatusMessagePrefix(), "Retry failed");
         }
     }
 
-    private void updateProgress() {
+    private void updateProgress(boolean changed) {
         boolean hide = false;
         ProgressTask currentTask = progressObserver.getCurrentTask();
         int totalProgressTasks = currentTask == null ? 0 : currentTask.getTotalProgressTasks();
@@ -122,54 +152,64 @@ public class ObjectStatusView implements Initializable, ProgressChangeListener {
             totalProgressBar.setVisible(false);
             finalTask = false;
         }
+        if (retrying && changed && statusChangeListener != null) {
+            retrying = false;
+            statusChangeListener.statusChanged(progressObserver);
+        }
         String statusMessagePrefix = progressObserver.getStatusMessagePrefix();
+        ProgressTask failedTask = progressObserver.getFailedTask();
         int totalTaskSteps = progressObserver.getTotalTaskSteps();
         int executedTaskSteps = progressObserver.getExecutedTaskSteps();
         if (totalTaskSteps > 0) {
             progress.set(executedTaskSteps * 1.0 / totalTaskSteps);
             if (finalTask && executedTaskSteps == totalTaskSteps) {
                 totalProgress.set(1);
-                if (statusChangeListener != null) {
+                if (changed && statusChangeListener != null) {
                     statusChangeListener.statusChanged(progressObserver);
                 }
                 this.currentTask.set(null);
                 cancelButton.setVisible(false);
-                if (statusMessagePrefix == null) {
+                if (statusMessagePrefix == null && failedTask == null) {
                     hide = true;
                 }
             }
             else {
-                this.currentTask.set(currentTask == null ? null : currentTask.getProgressMessage());
+                this.currentTask.set(
+                        currentTask == null ? null : currentTask.getProgressMessage(progressObserver.isDestroying()));
                 cancelButton.setVisible(true);
             }
         }
         else if (executedTaskSteps == 0) {
-            this.currentTask.set(currentTask == null ? null : currentTask.getProgressMessage());
+            this.currentTask
+                    .set(currentTask == null ? null : currentTask.getProgressMessage(progressObserver.isDestroying()));
             progress.set(-1);
             cancelButton.setVisible(true);
         }
         else {
-            if (statusChangeListener != null) {
+            if (changed && statusChangeListener != null) {
                 statusChangeListener.statusChanged(progressObserver);
             }
             this.currentTask.set(null);
             cancelButton.setVisible(false);
-            if (statusMessagePrefix == null) {
+            if (statusMessagePrefix == null && failedTask == null) {
                 hide = true;
             }
         }
-        ProgressTask failedTask = progressObserver.getFailedTask();
         if (failedTask == null) {
+            if (!totalProgressBar.isVisible()) {
+                currentTaskLabel.setVisible(true);
+            }
+            taskProgressBar.setVisible(true);
             retryButton.setVisible(false);
             if (progressObserver.isPaused()) {
                 setStatusMessage(statusMessagePrefix, "Paused");
-                if (statusChangeListener != null) {
+                if (changed && statusChangeListener != null) {
                     statusChangeListener.statusChanged(progressObserver);
                 }
             }
             else if (progressObserver.isObsolete()) {
                 setStatusMessage(statusMessagePrefix, "Obsolete");
-                if (statusChangeListener != null) {
+                if (changed && statusChangeListener != null) {
                     statusChangeListener.statusChanged(progressObserver);
                 }
             }
@@ -178,15 +218,25 @@ public class ObjectStatusView implements Initializable, ProgressChangeListener {
             }
         }
         else {
+            if (!totalProgressBar.isVisible()) {
+                currentTaskLabel.setVisible(false);
+            }
+            taskProgressBar.setVisible(false);
             cancelButton.setVisible(false);
             retryButton.setVisible(true);
             String failureMessage = progressObserver.getFailureMessage();
             setStatusMessage(statusMessagePrefix, failureMessage == null ? "Unknown failure" : failureMessage);
-            if (statusChangeListener != null) {
+            if (changed && statusChangeListener != null) {
                 statusChangeListener.statusChanged(progressObserver);
             }
         }
-        root.setVisible(!hide);
+        if (hide) {
+            root.setVisible(false);
+            statusChangeListener = null;
+        }
+        else {
+            root.setVisible(true);
+        }
     }
 
     private void setStatusMessage(String prefix, String statusMessage) {

@@ -142,8 +142,8 @@ public class Document implements IPLDSerializable {
         this.version = reader.readString(KEY_VERSION);
         this.tags = reader.readString(KEY_TAGS);
         long time = reader.readNumber(KEY_DATE).longValue();
-        if (validationContext != null) {
-            validationContext.validateTimestamp(time);
+        if (validationContext != null && time == 0) {
+            throw new ValidationException("expected non-zero time value");
         }
         this.date = new Date(time);
         this.source = reader.readString(KEY_SOURCE);
@@ -285,7 +285,7 @@ public class Document implements IPLDSerializable {
 
     public boolean checkUnchanged(Document other, String abstr, String contents) {
         if (isEqual(title, other.title) && isEqual(subtitle, other.subtitle) && isEqual(version, other.version)
-                && isEqual(tags, other.tags) && isEqual(date, other.date) && isEqual(source, other.source)) {
+                && isEqual(tags, other.tags) && isEqual(source, other.source)) {
             if (this.contents == null && abstr == null && contents == null) {
                 return true;
             }

@@ -1,17 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
+<?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.control.SplitPane?>
 <?import javafx.scene.control.TextField?>
-<?import javafx.scene.layout.VBox?>
 <?import com.dansoftware.mdeditor.MarkdownEditorControl?>
 
-<fx:root xmlns:fx="http://javafx.com/fxml/1" type="VBox">
-    <TextField text="${controller.statusLine}" editable="false"/>
-    <SplitPane fx:id="editorsSplit" orientation="VERTICAL" >
-        <MarkdownEditorControl fx:id="abstractEditor" viewMode="PREVIEW_ONLY">
-        </MarkdownEditorControl>
-        <MarkdownEditorControl fx:id="contentsEditor" viewMode="PREVIEW_ONLY">
-        </MarkdownEditorControl>
-    </SplitPane>
+<fx:root xmlns:fx="http://javafx.com/fxml/1" type="BorderPane">
+    <top>
+        <TextField text="${controller.statusLine}" editable="false"/>
+    </top>
+    <center>
+        <SplitPane fx:id="editorsSplit" orientation="VERTICAL" >
+            <MarkdownEditorControl fx:id="abstractEditor" viewMode="PREVIEW_ONLY">
+            </MarkdownEditorControl>
+            <MarkdownEditorControl fx:id="contentsEditor" viewMode="PREVIEW_ONLY">
+            </MarkdownEditorControl>
+        </SplitPane>
+    </center>
 </fx:root>
 

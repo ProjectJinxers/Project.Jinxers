@@ -71,6 +71,8 @@ public class DocumentDetailsView
     @Override
     public void initialize(URL location, ResourceBundle resources) {
         editorsSplit.setDividerPosition(0, DEFAULT_DIVIDER_POSITION);
+        abstractEditor.managedProperty().bind(abstractEditor.visibleProperty());
+        contentsEditor.managedProperty().bind(contentsEditor.visibleProperty());
     }
 
     @Override
@@ -81,11 +83,13 @@ public class DocumentDetailsView
             abstractEditor.setMarkdown("");
             contentsEditor.setMarkdown("");
             editorsSplit.setDividerPosition(0, DEFAULT_DIVIDER_POSITION);
+            abstractEditor.setVisible(true);
+            contentsEditor.setVisible(true);
             return;
         }
         String multihash = document.getMultihash();
         IPLDObject<org.projectjinxers.model.Document> documentObject = document.getDocumentObject();
-        if (documentObject == null) {
+        if (documentObject == null || !documentObject.isMapped()) {
             if (document.isLoading()) {
                 statusLine.set("Loading " + multihash + "…");
             }
@@ -94,47 +98,51 @@ public class DocumentDetailsView
             }
             abstractEditor.setMarkdown("");
             contentsEditor.setMarkdown("");
+            editorsSplit.setDividerPosition(0, DEFAULT_DIVIDER_POSITION);
+            abstractEditor.setVisible(true);
+            contentsEditor.setVisible(true);
         }
         else {
-            statusLine.set(multihash);
-            if (documentObject.isMapped()) {
-                org.projectjinxers.model.Document doc = documentObject.getMapped();
-                IPLDObject<DocumentContents> contentsObject = doc.getContents();
-                if (contentsObject == null) {
-                    statusLine.set(multihash + " - No contents");
-                }
-                else if (contentsObject.isMapped()) {
-                    statusLine.set(multihash + " - Loaded");
-                    DocumentContents contents = contentsObject.getMapped();
-                    String abstr = contents.getAbstract();
-                    String contentsMarkdown = contents.getContents();
-                    if (isNullOrBlank(abstr)) {
-                        if (isNullOrBlank(contentsMarkdown)) {
-                            statusLine.set(multihash + " - No contents");
-                            editorsSplit.setDividerPosition(0, DEFAULT_DIVIDER_POSITION);
-                            contentsEditor.setMarkdown("");
-                        }
-                        else {
-                            editorsSplit.setDividerPosition(0, 0);
-                            contentsEditor.setMarkdown(contentsMarkdown);
-                        }
-                        abstractEditor.setMarkdown("");
+            org.projectjinxers.model.Document doc = documentObject.getMapped();
+            IPLDObject<DocumentContents> contentsObject = doc.getContents();
+            if (contentsObject == null) {
+                statusLine.set(multihash + " - No contents");
+            }
+            else if (contentsObject.isMapped()) {
+                statusLine.set(multihash + " - Loaded");
+                DocumentContents contents = contentsObject.getMapped();
+                String abstr = contents.getAbstract();
+                String contentsMarkdown = contents.getContents();
+                if (isNullOrBlank(abstr)) {
+                    if (isNullOrBlank(contentsMarkdown)) {
+                        statusLine.set(multihash + " - No contents");
+                        editorsSplit.setDividerPosition(0, DEFAULT_DIVIDER_POSITION);
+                        abstractEditor.setVisible(true);
+                        contentsEditor.setMarkdown("");
                     }
                     else {
-                        if (isNullOrBlank(contentsMarkdown)) {
-                            editorsSplit.setDividerPosition(0, 1);
-                            contentsEditor.setMarkdown("");
-                        }
-                        else {
-                            editorsSplit.setDividerPosition(0, DEFAULT_DIVIDER_POSITION);
-                            contentsEditor.setMarkdown(contentsMarkdown);
-                        }
-                        abstractEditor.setMarkdown(abstr);
+                        editorsSplit.setDividerPosition(0, 0);
+                        abstractEditor.setVisible(false);
+                        contentsEditor.setMarkdown(contentsMarkdown);
                     }
+                    abstractEditor.setMarkdown("");
                 }
                 else {
-                    loadObject(contentsObject, (successCount) -> updateView());
+                    if (isNullOrBlank(contentsMarkdown)) {
+                        editorsSplit.setDividerPosition(0, 1);
+                        contentsEditor.setVisible(false);
+                    }
+                    else {
+                        editorsSplit.setDividerPosition(0, DEFAULT_DIVIDER_POSITION);
+                        contentsEditor.setVisible(true);
+                        contentsEditor.setMarkdown(contentsMarkdown);
+                    }
+                    abstractEditor.setVisible(true);
+                    abstractEditor.setMarkdown(abstr);
                 }
+            }
+            else {
+                loadObject(contentsObject, (successCount) -> updateView());
             }
         }
     }

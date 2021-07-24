@@ -58,11 +58,11 @@ public class DocumentView implements PJView<DocumentPresenter.DocumentView, Docu
     private static final String APPROVAL_NO = "Decline";
     private static final String APPROVAL_NEUTRAL = "Neutral";
 
-    public static DocumentPresenter createDocumentPresenter(Document document,
-            IPLDObject<org.projectjinxers.model.Document> reviewed, Data data, ProjectJinxers application)
-            throws Exception {
+    public static DocumentPresenter createDocumentPresenter(Document document, Document reviewed, Data data,
+            boolean truthInversion, Boolean approval, ProjectJinxers application) throws Exception {
         DocumentView documentView = new DocumentView();
-        DocumentPresenter res = new DocumentPresenter(documentView, document, reviewed, data, application);
+        DocumentPresenter res = new DocumentPresenter(documentView, document, reviewed, data, truthInversion, approval,
+                application);
         documentView.documentPresenter = res;
         return res;
     }
@@ -108,9 +108,17 @@ public class DocumentView implements PJView<DocumentPresenter.DocumentView, Docu
     @Override
     public void initialize(URL location, ResourceBundle resources) {
         Document data = documentPresenter.getData();
+        Document reviewed = documentPresenter.getReviewed();
         IPLDObject<org.projectjinxers.model.Document> documentObject = data == null ? null : data.getDocumentObject();
         if (documentObject == null || documentObject.getMultihash() == null || data.getGroup() == null) {
-            updateGroups(null);
+            Group group = reviewed == null ? null : reviewed.getGroup();
+            if (group == null) {
+                updateGroups(null);
+            }
+            else {
+                updateGroups(group);
+                groupsBox.setDisable(true);
+            }
         }
         else {
             updateGroups(data.getGroup());
@@ -125,7 +133,16 @@ public class DocumentView implements PJView<DocumentPresenter.DocumentView, Docu
             reviewPanel.setVisible(false);
         }
         org.projectjinxers.model.Document document = documentObject == null ? null : documentObject.getMapped();
-        if (document != null) {
+        if (document == null) {
+            Boolean approval = documentPresenter.getApproval();
+            if (approval == null) {
+                approvalBox.setValue(APPROVAL_NEUTRAL);
+            }
+            else {
+                approvalBox.setValue(approval ? APPROVAL_YES : APPROVAL_NO);
+            }
+        }
+        else {
             titleField.setText(document.getTitle());
             subtitleField.setText(document.getSubtitle());
             versionField.setText(document.getVersion());
@@ -269,7 +286,7 @@ public class DocumentView implements PJView<DocumentPresenter.DocumentView, Docu
         }
         else {
             org.projectjinxers.model.Document data;
-            IPLDObject<org.projectjinxers.model.Document> reviewed = documentPresenter.getReviewed();
+            Document reviewed = documentPresenter.getReviewed();
             if (reviewed == null) {
                 data = new org.projectjinxers.model.Document(checkNotEmpty(titleField), checkNotEmpty(subtitleField),
                         checkNotEmpty(versionField), checkNotEmpty(tagsField), checkNotEmpty(sourceField), null, null);
@@ -284,7 +301,7 @@ public class DocumentView implements PJView<DocumentPresenter.DocumentView, Docu
                     approve = approvalValue.equals(APPROVAL_YES);
                 }
                 data = new Review(checkNotEmpty(titleField), checkNotEmpty(subtitleField), checkNotEmpty(versionField),
-                        checkNotEmpty(tagsField), checkNotEmpty(sourceField), null, reviewed,
+                        checkNotEmpty(tagsField), checkNotEmpty(sourceField), null, reviewed.getDocumentObject(),
                         truthInversionBox.isSelected(), approve, null);
             }
             documentPresenter.confirmed(data, groupsBox.getValue(), usersBox.getValue(), checkNotBlank(importField),

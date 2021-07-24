@@ -63,7 +63,7 @@ public abstract class ProgressObserver implements ProgressListener {
     @Override
     public void startedTask(ProgressTask task, int steps) {
         this.currentTask = task;
-        this.totalTaskSteps = steps;
+        this.totalTaskSteps = steps > 0 ? steps : -1;
         this.executedTaskSteps = 0;
         fireProgressChanged();
     }
@@ -77,7 +77,7 @@ public abstract class ProgressObserver implements ProgressListener {
     @Override
     public void finishedTask(ProgressTask task) {
         if (executedTaskSteps != totalTaskSteps) {
-            this.executedTaskSteps = totalTaskSteps <= 0 ? 1 : totalTaskSteps;
+            this.executedTaskSteps = totalTaskSteps < 0 ? 1 : totalTaskSteps;
             fireProgressChanged();
         }
     }
@@ -172,6 +172,8 @@ public abstract class ProgressObserver implements ProgressListener {
         this.canceled = false;
         return retry.retry();
     }
+
+    public abstract boolean isDestroying();
 
     public abstract String getStatusMessagePrefix();
 

@@ -17,16 +17,24 @@ import static org.projectjinxers.util.ObjectUtility.isEqual;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 import org.projectjinxers.config.Config;
 import org.projectjinxers.config.SecretConfig;
 import org.projectjinxers.controller.ModelController;
+import org.projectjinxers.controller.ModelController.ModelControllerListener;
 
 /**
  * @author ProjectJinxers
  *
  */
-public class Group implements Comparable<Group> {
+public class Group implements ModelControllerListener, Comparable<Group> {
+
+    public interface GroupListener {
+
+        void onGroupUpdated(Group group);
+
+    }
 
     private String name;
     private String address;
@@ -39,6 +47,8 @@ public class Group implements Comparable<Group> {
     private transient Config config;
     private transient SecretConfig secretConfig;
     private transient ModelController controller;
+
+    private GroupListener listener;
 
     Group() {
         this.save = true;
@@ -58,6 +68,23 @@ public class Group implements Comparable<Group> {
         this.timestampTolerance = timestampTolerance;
         this.secretObfuscationParams = secretObfuscationParams;
         this.save = save;
+    }
+
+    @Override
+    public void onModelStateValidated() {
+        if (listener != null) {
+            listener.onGroupUpdated(this);
+        }
+    }
+
+    @Override
+    public void handleInvalidSettlement(Set<String> invalidHashes) {
+
+    }
+
+    @Override
+    public void handleRemoved() {
+
     }
 
     public String getName() {
@@ -124,8 +151,13 @@ public class Group implements Comparable<Group> {
     public ModelController getController() throws Exception {
         if (controller == null) {
             controller = ModelController.getModelController(getConfig(), getSecretConfig());
+            controller.setListener(this);
         }
         return controller;
+    }
+
+    public void setListener(GroupListener listener) {
+        this.listener = listener;
     }
 
     public void update(Group newValues) {

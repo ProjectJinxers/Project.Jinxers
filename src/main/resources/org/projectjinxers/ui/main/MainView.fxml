@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
+<?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.CheckBox?>
 <?import javafx.scene.layout.HBox?>
@@ -9,74 +10,95 @@
 <?import javafx.scene.control.TabPane?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.control.Tooltip?>
-<?import javafx.scene.layout.VBox?>
 <?import javafx.scene.image.Image?>
 <?import javafx.scene.image.ImageView?>
 
-<VBox xmlns:fx="http://javafx.com/fxml/1">
-    <SplitPane orientation="HORIZONTAL">
-        <TabPane fx:id="masterTabView">
-            <fx:define>
-                <Image fx:id="addIcon" url="images/add.png"/>
-            </fx:define>
-            <Tab fx:id="groupsTab" closable="false" text="Groups">
-                <VBox>
-                    <HBox>
-                        <Button onAction="#onAddGroup">
-                            <graphic>
-                                <ImageView image="$addIcon"/>
-                            </graphic>
-                            <tooltip>
-                                <Tooltip text="Add group"/>
-                            </tooltip>
-                        </Button>
-                    </HBox>
-                    <ListView fx:id="groupsList" fixedCellSize="84"/>
-                </VBox>
-            </Tab>
-            <Tab fx:id="documentsTab" closable="false" text="Documents">
-                <VBox>
-                    <HBox>
-                        <TextField fx:id="filterField"/>
-                        <CheckBox fx:id="myDocuments" text="My documents"/>
-                        <Button onAction="#onAddDocument">
-                            <graphic>
-                                <ImageView image="$addIcon"/>
-                            </graphic>
-                            <tooltip>
-                                <Tooltip text="Create new document"/>
-                            </tooltip>
-                        </Button>
-                    </HBox>
-                    <ListView fx:id="documentsList" fixedCellSize="200"/>
-                </VBox>
-            </Tab>
-            <Tab fx:id="ownershipRequestsTab" closable="false" text="Ownership Requests">
-                <VBox>
-                    <HBox>
-                        <CheckBox fx:id="myOwnershipRequests"/>
-                    </HBox>
-                    <ListView fx:id="ownershipRequestsList" fixedCellSize="200"/>
-                </VBox>
-            </Tab>
-            <Tab fx:id="unbanRequestsTab" closable="false" text="Unban Requests">
-                <VBox>
-                    <HBox>
-                        <CheckBox fx:id="myUnbanRequests"/>
-                    </HBox>
-                    <ListView fx:id="unbanRequestsList" fixedCellSize="200"/>
-                </VBox>
-            </Tab>
-            <Tab fx:id="votingsTab" closable="false" text="Votings">
-                <VBox>
-                    <HBox>
-                        <CheckBox fx:id="myVotings"/>
-                    </HBox>
-	            </VBox>
-                <ListView fx:id="votingsList" fixedCellSize="80"/>
-            </Tab>
-        </TabPane>
-        <VBox fx:id="detailViewContainer"/>
-    </SplitPane>
-</VBox>
+<BorderPane xmlns:fx="http://javafx.com/fxml/1">
+    <center>
+	    <SplitPane orientation="HORIZONTAL">
+	        <TabPane fx:id="masterTabView">
+	            <fx:define>
+	                <Image fx:id="addIcon" url="images/add.png"/>
+	            </fx:define>
+	            <Tab fx:id="groupsTab" closable="false" text="Groups">
+	                <BorderPane>
+	                    <top>
+	                        <HBox>
+	                            <Button onAction="#onAddGroup">
+	                                <graphic>
+	                                    <ImageView image="$addIcon"/>
+	                                </graphic>
+	                                <tooltip>
+	                                    <Tooltip text="Add group"/>
+	                                </tooltip>
+	                            </Button>
+	                        </HBox>
+	                    </top>
+	                    <center>
+	                        <ListView fx:id="groupsList" fixedCellSize="84"/>
+	                    </center>
+	                </BorderPane>
+	            </Tab>
+	            <Tab fx:id="documentsTab" closable="false" text="Documents">
+	                <BorderPane>
+	                    <top>
+		                    <HBox>
+		                        <TextField fx:id="filterField"/>
+		                        <CheckBox fx:id="myDocuments" text="My documents"/>
+		                        <Button onAction="#onAddDocument">
+		                            <graphic>
+		                                <ImageView image="$addIcon"/>
+		                            </graphic>
+		                            <tooltip>
+		                                <Tooltip text="Create new document"/>
+		                            </tooltip>
+		                        </Button>
+		                    </HBox>
+	                    </top>
+	                    <center>
+    	                    <ListView fx:id="documentsList" fixedCellSize="200"/>
+	                    </center>
+	                </BorderPane>
+	            </Tab>
+	            <Tab fx:id="ownershipRequestsTab" closable="false" text="Ownership Requests">
+	                <BorderPane>
+	                    <top>
+		                    <HBox>
+		                        <CheckBox fx:id="myOwnershipRequests"/>
+		                    </HBox>
+	                    </top>
+	                    <center>
+		                    <ListView fx:id="ownershipRequestsList" fixedCellSize="200"/>
+	                    </center>
+	                </BorderPane>
+	            </Tab>
+	            <Tab fx:id="unbanRequestsTab" closable="false" text="Unban Requests">
+	                <BorderPane>
+	                    <top>
+		                    <HBox>
+		                        <CheckBox fx:id="myUnbanRequests"/>
+		                    </HBox>
+	                    </top>
+	                    <center>
+		                    <ListView fx:id="unbanRequestsList" fixedCellSize="200"/>
+	                    </center>
+	                </BorderPane>
+	            </Tab>
+	            <Tab fx:id="votingsTab" closable="false" text="Votings">
+	                <BorderPane>
+	                    <top>
+		                    <HBox>
+		                        <CheckBox fx:id="myVotings"/>
+		                    </HBox>
+	                    </top>
+	                    <center>
+		                    <ListView fx:id="votingsList" fixedCellSize="80"/>
+	                    </center>
+		            </BorderPane>
+	            </Tab>
+	        </TabPane>
+	        <BorderPane fx:id="detailViewContainer"/>
+	    </SplitPane>
+    </center>
+</BorderPane>
 

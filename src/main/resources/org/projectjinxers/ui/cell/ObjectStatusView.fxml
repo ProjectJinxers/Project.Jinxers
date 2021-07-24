@@ -10,31 +10,31 @@
 <?import javafx.scene.layout.VBox?>
 
 <VBox xmlns:fx="http://javafx.com/fxml/1" fx:controller="org.projectjinxers.ui.cell.ObjectStatusView" fx:id="root">
-    <Label text="${controller.currentTask}"/>
+    <Label fx:id="currentTaskLabel" text="${controller.currentTask}"/>
     <ProgressBar fx:id="totalProgressBar" progress="${controller.totalProgress}"/>
-    <ProgressBar progress="${controller.progress}"/>
     <HBox>
         <fx:define>
            <Image fx:id="cancelIcon" url="images/clear.png"/>
            <Image fx:id="retryIcon" url="images/retry.png"/>
-       </fx:define>
-       <Label text="${controller.statusMessage}"/>
-       <Button fx:id="cancelButton" onAction="#cancel">
-           <graphic>
-               <ImageView image="$cancelIcon"/>
-           </graphic>
-           <tooltip>
-               <Tooltip text="Cancel"/>
-           </tooltip>
-       </Button>
-       <Button fx:id="retryButton" onAction="#retry">
-           <graphic>
-               <ImageView image="$retryIcon"/>
-           </graphic>
-           <tooltip>
-               <Tooltip text="Retry"/>
-           </tooltip>
-       </Button>
+        </fx:define>
+        <ProgressBar fx:id="taskProgressBar" progress="${controller.progress}"/>
+        <Button fx:id="cancelButton" onAction="#cancel">
+            <graphic>
+                <ImageView image="$cancelIcon"/>
+            </graphic>
+            <tooltip>
+                <Tooltip text="Cancel"/>
+            </tooltip>
+        </Button>
+        <Button fx:id="retryButton" onAction="#retry">
+            <graphic>
+                <ImageView image="$retryIcon"/>
+            </graphic>
+            <tooltip>
+                <Tooltip text="Retry"/>
+            </tooltip>
+        </Button>
     </HBox>
+    <Label text="${controller.statusMessage}"/>
 </VBox>
 

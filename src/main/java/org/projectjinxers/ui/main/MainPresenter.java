@@ -18,6 +18,8 @@ import java.text.DateFormat;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Timer;
+import java.util.TimerTask;
 
 import org.projectjinxers.config.Config;
 import org.projectjinxers.controller.IPLDObject;
@@ -25,6 +27,7 @@ import org.projectjinxers.controller.ModelController;
 import org.projectjinxers.data.Data;
 import org.projectjinxers.data.Document;
 import org.projectjinxers.data.Group;
+import org.projectjinxers.data.Group.GroupListener;
 import org.projectjinxers.data.Settings;
 import org.projectjinxers.data.User;
 import org.projectjinxers.model.ModelState;
@@ -37,16 +40,23 @@ import org.projectjinxers.ui.document.DocumentPresenter;
 import org.projectjinxers.ui.document.DocumentView;
 import org.projectjinxers.ui.group.GroupPresenter;
 import org.projectjinxers.ui.group.GroupView;
+import org.projectjinxers.ui.signing.SigningPresenter;
+import org.projectjinxers.ui.signing.SigningView;
 
+import javafx.application.Platform;
 import javafx.scene.Scene;
 
 /**
  * @author ProjectJinxers
  *
  */
-public class MainPresenter extends PJPresenter<MainPresenter.MainView> {
+public class MainPresenter extends PJPresenter<MainPresenter.MainView> implements GroupListener {
+
+    private static final long TIME_REFRESH_INTERVAL = 1000L * 60;
 
     public interface MainView extends View, StatusChangeListener {
+
+        void didUpdateGroup(Group group);
 
         void didAddGroup(Group group);
 
@@ -58,6 +68,12 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> {
 
         void didUpdateDocument(Document document);
 
+        void didReplaceDocument(Document old, Document updated);
+
+        void didRemoveStandaloneDocument(Document document);
+
+        void refreshTime();
+
     }
 
     private Data data;
@@ -66,7 +82,9 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> {
     private boolean editing;
 
     private DataListener<Group> groupListener;
-    private DataListener<Document> documentListener;
+
+    private Timer timeRefreshTimer;
+    private TimerTask timeRefreshTask;
 
     public MainPresenter(MainView view, ProjectJinxers application) {
         super(view, application);
@@ -84,12 +102,19 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> {
         else {
             Group mainGroup = data.getGroup(mainAddress);
             if (mainGroup != null && mainGroup.isMain()) {
+                mainGroup.setListener(this);
                 return;
             }
         }
         Group mainGroup = new Group("Main", mainAddress, config.getConfiguredTimestampTolerance(),
                 data.getSettings().isSaveGroups());
+        mainGroup.setListener(this);
         data.addGroup(mainGroup);
+    }
+
+    @Override
+    public void onGroupUpdated(Group group) {
+        getView().didUpdateGroup(group);
     }
 
     public Settings getSettings() {
@@ -216,6 +241,7 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> {
                         getView().didEditGroup(data);
                     }
                     else {
+                        data.setListener(MainPresenter.this);
                         getView().didAddGroup(data);
                     }
                     return true;
@@ -228,29 +254,63 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> {
 
     void createDocument() {
         editing = false;
-        showDocumentScene(null, null);
+        showDocumentScene(null, null, false, null);
     }
 
-    private void showDocumentScene(Document document, IPLDObject<org.projectjinxers.model.Document> reviewed) {
+    public void editDocument(Document document) {
+        editing = true;
+        showDocumentScene(document, null, false, null);
+    }
+
+    public void removeStandaloneDocument(Document document) {
+        String multihash = document.getMultihash();
+        allDocuments.remove(multihash);
+        Group group = document.getGroup();
+        group.removeStandaloneDocument(multihash);
+        if (group.isSave()) {
+            saveData();
+        }
+        getView().didRemoveStandaloneDocument(document);
+    }
+
+    public void deleteDocument(Document document) {
+        SigningPresenter signingPresenter = SigningView.createSigningPresenter(document.getUser(), getApplication());
+        signingPresenter.setListener((signer) -> document.delete(signer));
+        presentModally(signingPresenter, "Sign removal", false);
+    }
+
+    public void createReview(Document reviewed, Boolean approval) {
+        editing = false;
+        showDocumentScene(null, reviewed, false, approval);
+    }
+
+    public void createTruthInversion(Document lie) {
+        editing = false;
+        showDocumentScene(null, lie, true, Boolean.FALSE);
+    }
+
+    private void showDocumentScene(final Document document, Document reviewed, boolean truthInversion,
+            Boolean approval) {
         try {
             DocumentPresenter documentPresenter = DocumentView.createDocumentPresenter(document, reviewed, data,
-                    getApplication());
-            if (documentListener == null) {
-                documentListener = new DataListener<Document>() {
-                    @Override
-                    public boolean didConfirmData(Document data) {
-                        if (editing) {
-                            handleUpdatedDocument(document, data);
-                        }
-                        else {
-                            handleNewDocument(data);
-                        }
-                        return true;
-                    }
-                };
+                    truthInversion, approval, getApplication());
+            documentPresenter.setListener((data) -> {
+                if (editing) {
+                    handleUpdatedDocument(document, data);
+                }
+                else {
+                    handleNewDocument(data);
+                }
+                return true;
+            });
+            String title;
+            if (reviewed == null) {
+                title = document == null ? "Add document" : "Edit document";
             }
-            documentPresenter.setListener(documentListener);
-            presentModally(documentPresenter, document == null ? "Add document" : "Edit document", false);
+            else {
+                title = truthInversion ? "Invert truth" : "Review document";
+            }
+            presentModally(documentPresenter, title, false);
         }
         catch (Exception e) {
             getView().showError("Error showing document details", e);
@@ -258,6 +318,7 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> {
     }
 
     void handleNewDocument(Document document) {
+        // TODO: new reviews might not have an import URL (multhihash is null until saved, as well)
         String multihash = document.getMultihash();
         String key = multihash == null ? document.getImportURL() : multihash;
         if (allDocuments == null) {
@@ -265,11 +326,38 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> {
         }
         allDocuments.put(key, document);
         getView().didAddDocument(document);
+        ensureTimeRefresh();
     }
 
     void handleUpdatedDocument(Document old, Document updated) {
-        // TODO: check if key changed and update allDocuments accordingly if so, otherwise replace document in map and
-        // update listview
+        String oldHash = old.getMultihash();
+        String newHash = updated.getMultihash();
+        if (newHash == null) {
+            if (oldHash == null) {
+                if (old == updated) {
+                    getView().didUpdateDocument(updated);
+                }
+                else {
+                    String oldKey = old.getImportURL();
+                    String newKey = updated.getImportURL();
+                    allDocuments.remove(oldKey);
+                    allDocuments.put(newKey, updated);
+                    getView().didReplaceDocument(old, updated);
+                }
+            }
+            else {
+                allDocuments.put(oldHash, updated);
+                getView().didReplaceDocument(old, updated);
+            }
+        }
+        else if (old == updated) {
+            getView().didUpdateDocument(updated);
+        }
+        else {
+            allDocuments.remove(oldHash);
+            allDocuments.put(newHash, updated);
+            getView().didReplaceDocument(old, updated);
+        }
     }
 
     public void saveData() {
@@ -278,6 +366,19 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> {
         }
         catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+
+    private void ensureTimeRefresh() {
+        if (timeRefreshTimer == null) {
+            timeRefreshTimer = new Timer(true);
+            timeRefreshTask = new TimerTask() {
+                @Override
+                public void run() {
+                    Platform.runLater(() -> getView().refreshTime());
+                }
+            };
+            timeRefreshTimer.schedule(timeRefreshTask, TIME_REFRESH_INTERVAL, TIME_REFRESH_INTERVAL);
         }
     }
 

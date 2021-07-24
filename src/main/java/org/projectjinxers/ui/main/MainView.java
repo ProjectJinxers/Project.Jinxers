@@ -42,7 +42,7 @@ import javafx.event.Event;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.control.ListView;
-import javafx.scene.layout.VBox;
+import javafx.scene.layout.BorderPane;
 
 /**
  * @author ProjectJinxers
@@ -75,7 +75,7 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
     private ListView<IPLDObject<Voting>> votingsList;
 
     @FXML
-    private VBox detailViewContainer;
+    private BorderPane detailViewContainer;
 
     private DocumentDetailsPresenter documentDetailsPresenter;
 
@@ -114,6 +114,15 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
     }
 
     @Override
+    public void didUpdateGroup(Group group) {
+        groupsList.refresh();
+        documentsList.refresh();
+        ownershipRequestsList.refresh();
+        unbanRequestsList.refresh();
+        votingsList.refresh();
+    }
+
+    @Override
     public void didAddGroup(Group group) {
         updateGroups();
     }
@@ -135,6 +144,21 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
 
     @Override
     public void didUpdateDocument(Document document) {
+        documentsList.refresh();
+    }
+
+    @Override
+    public void didReplaceDocument(Document old, Document updated) {
+        updateDocuments();
+    }
+
+    @Override
+    public void didRemoveStandaloneDocument(Document document) {
+        updateDocuments();
+    }
+
+    @Override
+    public void refreshTime() {
         documentsList.refresh();
     }
 
