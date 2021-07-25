@@ -394,7 +394,9 @@ public class DocumentCell extends AbstractListCell<Document> implements Initiali
 
     @FXML
     void showReviewed(Event e) {
-
+        Document item = getItem();
+        mainPresenter.showLinked(item.getGroup(),
+                ((Review) item.getDocumentObject().getMapped()).getDocument().getMultihash());
     }
 
     private void updateUser(User user) {
@@ -498,7 +500,8 @@ public class DocumentCell extends AbstractListCell<Document> implements Initiali
             org.projectjinxers.model.Document reviewed = reviewedObject.getMapped();
             String title = reviewed.getTitle();
             this.reviewed.set(title == null ? reviewedObject.getMultihash() : title);
-            reviewedDetails.set(title == null ? "Reviewed untitled document" : "Reviewed document");
+            reviewedDetails.set((title == null ? "Reviewed untitled document - " : "Reviewed document - ")
+                    + reviewedObject.getMultihash());
         }
         else {
             reviewed.set(null);

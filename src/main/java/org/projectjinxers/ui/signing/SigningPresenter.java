@@ -53,18 +53,22 @@ public class SigningPresenter extends PJPresenter<SigningPresenter.SigningView> 
         return res;
     }
 
+    public int getSecurityLevel() {
+        return user.getSecurityLevel();
+    }
+
     public void setListener(SigningListener listener) {
         this.listener = listener;
     }
 
-    void confirm(String password) {
-        ECCSigner signer = new ECCSigner(user.getName(), password, user.getSecurityLevel());
+    void confirm(String password, Integer securityLevel) {
+        ECCSigner signer = new ECCSigner(user.getName(), password, securityLevel == null ? 0 : securityLevel);
         if (signer.checkPublicKey(user.getPublicKey())) {
             listener.didCreateSigner(signer);
             getStage().close();
         }
         else {
-            getView().showMessage("Incorrect password");
+            getView().showMessage("Incorrect password or security level");
         }
     }
 

@@ -72,6 +72,8 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
 
         void didRemoveStandaloneDocument(Document document);
 
+        void selectDocument(int index);
+
         void refreshTime();
 
     }
@@ -252,6 +254,20 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
         presentModally(groupPresenter, group == null ? "Add group" : "Edit group", false);
     }
 
+    public void showLinked(Group group, String multihash) {
+        int idx = 0;
+        for (Document document : allDocuments) {
+            if (multihash.equals(document.getMultihash())) {
+                getView().selectDocument(idx);
+                return;
+            }
+            idx++;
+        }
+        Document document = new Document(group, multihash);
+        allDocuments.add(document);
+        getView().didAddDocument(document);
+    }
+
     void createDocument() {
         editing = false;
         showDocumentScene(null, null, false, null);
@@ -273,7 +289,35 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
     }
 
     public void deleteDocument(Document document) {
-        SigningPresenter signingPresenter = SigningView.createSigningPresenter(document.getUser(), getApplication());
+        User user = document.getUser();
+        if (user == null) {
+            IPLDObject<org.projectjinxers.model.User> userObject = document.getDocumentObject().getMapped()
+                    .expectUserState().getUser();
+            user = new User(userObject);
+        }
+        if (user.getUserObject() == null || !user.getUserObject().isMapped()) {
+            final User finalUser = user;
+            user.setProgressChangeListener((observer) -> {
+                if (observer.getFailedTask() != null) {
+                    finalUser.setProgressChangeListener(null);
+                    getView().showError(observer.getFailureMessage(), observer.getFailure());
+                }
+                else {
+                    IPLDObject<org.projectjinxers.model.User> userObject = finalUser.getUserObject();
+                    if (userObject != null && userObject.isMapped()) {
+                        finalUser.setProgressChangeListener(null);
+                        deleteDocument(document, finalUser);
+                    }
+                }
+            });
+        }
+        else {
+            deleteDocument(document, user);
+        }
+    }
+
+    private void deleteDocument(Document document, User user) {
+        SigningPresenter signingPresenter = SigningView.createSigningPresenter(user, getApplication());
         signingPresenter.setListener((signer) -> document.delete(signer));
         presentModally(signingPresenter, "Sign removal", false);
     }

@@ -140,7 +140,7 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
 
     @Override
     public void didAddDocument(Document document) {
-        updateDocuments();
+        updateDocuments(document, -1);
     }
 
     @Override
@@ -150,12 +150,18 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
 
     @Override
     public void didReplaceDocument(Document old, Document updated) {
-        updateDocuments();
+        updateDocuments(updated, -1);
     }
 
     @Override
     public void didRemoveStandaloneDocument(Document document) {
-        updateDocuments();
+        updateDocuments(null, -1);
+    }
+
+    @Override
+    public void selectDocument(int index) {
+        documentsList.scrollTo(index);
+        documentsList.getSelectionModel().select(index);
     }
 
     @Override
@@ -187,13 +193,19 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
         this.groupsList.setItems(FXCollections.observableList(groupsList));
     }
 
-    private void updateDocuments() {
+    private void updateDocuments(Document toSelect, int indexToSelect) {
         Collection<Document> allDocuments = mainPresenter.getAllDocuments();
         if (allDocuments == null) {
             documentsList.getItems().clear();
         }
         else {
-            this.documentsList.getItems().setAll(allDocuments);
+            documentsList.getItems().setAll(allDocuments);
+            if (toSelect != null) {
+                documentsList.getSelectionModel().select(toSelect);
+            }
+            else if (indexToSelect >= 0) {
+                documentsList.getSelectionModel().select(indexToSelect);
+            }
         }
     }
 

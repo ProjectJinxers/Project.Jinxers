@@ -66,6 +66,15 @@ public class User extends ProgressObserver {
         this.save = true;
     }
 
+    public User(IPLDObject<org.projectjinxers.model.User> userObject) {
+        super(false);
+        this.multihash = userObject.getMultihash();
+        org.projectjinxers.model.User user = userObject.getMapped();
+        this.name = user.getUsername();
+        this.publicKey = user.getPublicKey();
+        this.userObject = userObject;
+    }
+
     public String getName() {
         return name;
     }
@@ -95,7 +104,7 @@ public class User extends ProgressObserver {
     }
 
     public IPLDObject<org.projectjinxers.model.User> getOrLoadUserObject() {
-        if (userObject == null && multihash != null) {
+        if ((userObject == null || !userObject.isMapped()) && multihash != null) {
             startOperation(() -> {
                 getOrLoadUserObject();
                 return true;
@@ -103,9 +112,11 @@ public class User extends ProgressObserver {
             startedTask(ProgressTask.LOAD, -1);
             new Thread(() -> {
                 try {
-                    IPLDObject<org.projectjinxers.model.User> tmp = new IPLDObject<>(multihash,
-                            LoaderFactory.USER.createLoader(),
-                            ModelController.getModelController(Config.getSharedInstance()).getContext(), null);
+                    IPLDObject<org.projectjinxers.model.User> tmp = userObject;
+                    if (tmp == null) {
+                        tmp = new IPLDObject<>(multihash, LoaderFactory.USER.createLoader(),
+                                ModelController.getModelController(Config.getSharedInstance()).getContext(), null);
+                    }
                     org.projectjinxers.model.User user = tmp.getMapped();
                     if (user == null) {
                         failedTask(ProgressTask.LOAD, "Failed to load the user.", null);

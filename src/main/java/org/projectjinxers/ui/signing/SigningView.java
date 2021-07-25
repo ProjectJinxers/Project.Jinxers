@@ -13,6 +13,9 @@
  */
 package org.projectjinxers.ui.signing;
 
+import java.net.URL;
+import java.util.ResourceBundle;
+
 import org.projectjinxers.data.User;
 import org.projectjinxers.ui.ProjectJinxers;
 import org.projectjinxers.ui.common.PJView;
@@ -21,7 +24,9 @@ import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import javafx.event.Event;
 import javafx.fxml.FXML;
+import javafx.fxml.Initializable;
 import javafx.scene.control.PasswordField;
+import javafx.scene.control.Spinner;
 import javafx.scene.control.TextField;
 
 /**
@@ -29,14 +34,13 @@ import javafx.scene.control.TextField;
  *
  */
 public class SigningView
-        implements PJView<SigningPresenter.SigningView, SigningPresenter>, SigningPresenter.SigningView {
+        implements PJView<SigningPresenter.SigningView, SigningPresenter>, SigningPresenter.SigningView, Initializable {
 
     public static SigningPresenter createSigningPresenter(User user, ProjectJinxers application) {
         SigningView signingView = new SigningView();
         SigningPresenter res = new SigningPresenter(signingView, user, application);
         signingView.signingPresenter = res;
         signingView.username = new SimpleStringProperty(user.getName());
-        signingView.securityLevel = new SimpleStringProperty(String.valueOf(user.getSecurityLevel()));
         return res;
     }
 
@@ -47,11 +51,9 @@ public class SigningView
     @FXML
     private PasswordField passwordField;
     @FXML
-    private TextField securityLevelField;
+    private Spinner<Integer> securityLevelField;
 
     private StringProperty username;
-
-    private StringProperty securityLevel;
 
     public StringProperty usernameProperty() {
         return username;
@@ -61,12 +63,9 @@ public class SigningView
         return username.get();
     }
 
-    public StringProperty securityLevelProperty() {
-        return securityLevel;
-    }
-
-    public String getSecurityLevel() {
-        return securityLevel.get();
+    @Override
+    public void initialize(URL location, ResourceBundle resources) {
+        securityLevelField.getValueFactory().setValue(signingPresenter.getSecurityLevel());
     }
 
     @Override
@@ -76,7 +75,7 @@ public class SigningView
 
     @FXML
     void confirm(Event e) {
-        signingPresenter.confirm(passwordField.getText());
+        signingPresenter.confirm(passwordField.getText(), securityLevelField.getValue());
     }
 
     @FXML
