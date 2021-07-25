@@ -95,10 +95,7 @@ public class User extends ProgressObserver {
     }
 
     public IPLDObject<org.projectjinxers.model.User> getOrLoadUserObject() {
-        if (userObject == null) {
-            if (multihash == null) {
-                throw new IllegalStateException("can't load user without multihash");
-            }
+        if (userObject == null && multihash != null) {
             startOperation(() -> {
                 getOrLoadUserObject();
                 return true;

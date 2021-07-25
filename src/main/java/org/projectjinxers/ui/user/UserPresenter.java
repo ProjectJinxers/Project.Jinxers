@@ -40,10 +40,14 @@ public class UserPresenter extends DataPresenter<User, UserPresenter.UserView> {
         return res;
     }
 
-    void confirm(String multihash, String username, String password, Integer securityLevel, boolean save) {
+    void confirm(String multihash, String username, String password, String repeatPassword, Integer securityLevel,
+            boolean save) {
         if (multihash == null) {
             if (username == null || password == null) {
-                getView().showMessage("Please enter a multihash or a valid username and a password");
+                getView().showMessage("Please enter a multihash or a valid username and a password.");
+            }
+            else if (!password.equals(repeatPassword)) {
+                getView().showMessage("Passwords don't match.");
             }
             else {
                 confirmed(User.createNewUser(username, password, securityLevel == null ? 0 : securityLevel, save));

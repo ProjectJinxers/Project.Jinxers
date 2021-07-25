@@ -695,6 +695,18 @@ public class ValidationContext {
                     && currentValidLocalState.getMapped().isSealedDocument(review.getDocument().getMultihash())) {
                 throw new ValidationException("reviewing sealed document (no truth inversion)");
             }
+            // the next block changes the doc and review references - place missing validation code, which depends on
+            // those references here
+            if (doc.getPreviousVersion() == null) {
+                String reviewedHash = review.getDocument().getMultihash();
+                for (IPLDObject<Document> documentObject : userState.getAllDocuments().values()) {
+                    doc = documentObject.getMapped();
+                    if (documentObject != document && doc instanceof Review && doc.getPreviousVersion() == null
+                            && reviewedHash.equals(((Review) doc).getDocument().getMultihash())) {
+                        throw new ValidationException("already reviewed");
+                    }
+                }
+            }
         }
         context.verifySignature(document, Signer.VERIFIER, user);
     }

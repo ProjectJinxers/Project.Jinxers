@@ -26,6 +26,7 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.controller.IPLDObject;
@@ -372,6 +373,21 @@ public class DocumentPresenter extends DataPresenter<Document, DocumentPresenter
                 if (modelStateObject != null) {
                     ModelState modelState = modelStateObject.getMapped();
                     userState = modelState.expectUserState(userHash);
+                    if (userState != null && reviewed != null) {
+                        Map<String, IPLDObject<org.projectjinxers.model.Document>> docs = userState.getMapped()
+                                .getAllDocuments();
+                        if (docs != null) {
+                            String reviewedHash = reviewed.getMultihash();
+                            for (IPLDObject<org.projectjinxers.model.Document> doc : docs.values()) {
+                                org.projectjinxers.model.Document mapped = doc.getMapped();
+                                if (mapped instanceof Review
+                                        && reviewedHash.equals(((Review) mapped).getDocument().getMultihash())) {
+                                    getView().showMessage("The user has already reviewed the document.");
+                                    return;
+                                }
+                            }
+                        }
+                    }
                 }
                 if (userState == null) {
                     userState = new IPLDObject<>(new UserState(user.getUserObject()));

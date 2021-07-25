@@ -58,6 +58,8 @@ public class UserView implements PJView<UserPresenter.UserView, UserPresenter>, 
     @FXML
     private PasswordField passwordField;
     @FXML
+    private PasswordField repeatPasswordField;
+    @FXML
     private Spinner<Integer> securityLevelField;
     @FXML
     private CheckBox saveBox;
@@ -78,7 +80,7 @@ public class UserView implements PJView<UserPresenter.UserView, UserPresenter>, 
     @FXML
     void confirm(Event e) {
         userPresenter.confirm(checkNotBlank(multihashField), checkNotBlank(usernameField), checkNotEmpty(passwordField),
-                securityLevelField.getValue(), saveBox.isSelected());
+                checkNotEmpty(repeatPasswordField), securityLevelField.getValue(), saveBox.isSelected());
     }
 
     @FXML

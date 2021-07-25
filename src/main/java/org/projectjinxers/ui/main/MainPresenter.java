@@ -263,10 +263,9 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
     }
 
     public void removeStandaloneDocument(Document document) {
-        String multihash = document.getMultihash();
-        allDocuments.remove(multihash);
+        allDocuments.remove(document);
         Group group = document.getGroup();
-        group.removeStandaloneDocument(multihash);
+        group.removeStandaloneDocument(document.getMultihash());
         if (group.isSave()) {
             saveData();
         }
@@ -318,13 +317,18 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
     }
 
     void handleNewDocument(Document document, Document reviewed) {
-        String multihash = document.getMultihash();
-        String key = multihash == null ? document.getImportURL() : multihash;
-        if (key == null) {
-            key = getNewReviewKey(document, reviewed);
-        }
         if (allDocuments == null) {
             allDocuments = new ArrayList<>();
+        }
+        else if (reviewed == null) {
+            String multihash = document.getMultihash();
+            if (multihash != null) {
+                for (Document doc : allDocuments) {
+                    if (multihash.equals(doc.getMultihash())) {
+                        return;
+                    }
+                }
+            }
         }
         allDocuments.add(document);
         getView().didAddDocument(document);
@@ -340,10 +344,6 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
             allDocuments.add(updated);
             getView().didReplaceDocument(old, updated);
         }
-    }
-
-    private String getNewReviewKey(Document review, Document reviewed) {
-        return reviewed.getMultihash() + "#" + review.getDocumentObject().getMapped().getDate().getTime();
     }
 
     public void saveData() {

@@ -22,6 +22,11 @@
             <Tooltip text="This is ignored if the multihash is set."/>
         </tooltip>
     </PasswordField>
+    <PasswordField fx:id="repeatPasswordField" promptText="Repeat password">
+        <tooltip>
+            <Tooltip text="This is ignored if the multihash is set."/>
+        </tooltip>
+    </PasswordField>
     <Spinner fx:id="securityLevelField" promptText="Security level">
         <valueFactory>
             <SpinnerValueFactory.IntegerSpinnerValueFactory min="0" max="1"/>

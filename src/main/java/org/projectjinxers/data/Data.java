@@ -45,7 +45,12 @@ public class Data {
             try {
                 Data res = GSON.fromJson(br, Data.class);
                 res.allGroups = res.groups;
-                res.allUsers = res.users;
+                if (res.users != null) {
+                    res.allUsers = res.users;
+                    for (User user : res.users) {
+                        user.getOrLoadUserObject();
+                    }
+                }
                 res.groups = null;
                 res.users = null;
                 return res;

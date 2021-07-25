@@ -33,9 +33,15 @@ public abstract class PJPresenter<V extends PJPresenter.View> {
 
         void showMessage(String message);
 
+        void showMessage(String message, String title, String header);
+
         boolean askForConfirmation(String message);
 
-        void showError(String message, Throwable exception);
+        boolean askForConfirmation(String message, String title, String header);
+
+        void showError(String message, Throwable throwable);
+
+        void showError(String message, String title, String header, Throwable throwable);
 
     }
 

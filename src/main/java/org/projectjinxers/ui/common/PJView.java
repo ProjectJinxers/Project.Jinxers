@@ -37,24 +37,57 @@ public interface PJView<V extends View, P extends PJPresenter<V>> extends View {
 
     @Override
     default void showMessage(String message) {
+        showMessage(message, "Info", "Info");
+    }
+
+    @Override
+    default void showMessage(String message, String title, String header) {
         Alert alert = new Alert(AlertType.INFORMATION, message, ButtonType.OK);
+        if (title != null) {
+            alert.setTitle(title);
+        }
+        if (header != null) {
+            alert.setHeaderText(header);
+        }
         alert.showAndWait();
     }
 
     @Override
     default boolean askForConfirmation(String message) {
+        return askForConfirmation(message, null, null);
+    }
+
+    @Override
+    default boolean askForConfirmation(String message, String title, String header) {
         Alert alert = new Alert(AlertType.CONFIRMATION, message, ButtonType.YES, ButtonType.CANCEL);
+        if (title != null) {
+            alert.setTitle(title);
+        }
+        if (header != null) {
+            alert.setHeaderText(header);
+        }
         Optional<ButtonType> showAndWait = alert.showAndWait();
         return showAndWait.isPresent() && showAndWait.get() == ButtonType.YES;
     }
 
     @Override
-    default void showError(String message, Throwable exception) {
+    default void showError(String message, Throwable throwable) {
+        showError(message, null, null, throwable);
+    }
+
+    @Override
+    default void showError(String message, String title, String header, Throwable throwable) {
         Alert alert = new Alert(AlertType.ERROR, message, ButtonType.OK);
-        if (exception != null) {
+        if (title != null) {
+            alert.setTitle(title);
+        }
+        if (header != null) {
+            alert.setHeaderText(header);
+        }
+        if (throwable != null) {
             StringWriter sw = new StringWriter();
             PrintWriter pw = new PrintWriter(sw);
-            exception.printStackTrace(pw);
+            throwable.printStackTrace(pw);
             String exceptionText = sw.toString();
 
             Label label = new Label("The exception stacktrace was:");

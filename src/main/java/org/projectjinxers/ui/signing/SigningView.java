@@ -81,7 +81,7 @@ public class SigningView
 
     @FXML
     void cancel(Event e) {
-
+        signingPresenter.cancel();
     }
 
 }
