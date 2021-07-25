@@ -43,6 +43,7 @@ import javafx.event.Event;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.control.ListView;
+import javafx.scene.control.MultipleSelectionModel;
 import javafx.scene.layout.BorderPane;
 
 /**
@@ -200,11 +201,16 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
         }
         else {
             documentsList.getItems().setAll(allDocuments);
+            MultipleSelectionModel<Document> selectionModel = documentsList.getSelectionModel();
             if (toSelect != null) {
-                documentsList.getSelectionModel().select(toSelect);
+                selectionModel.select(toSelect);
+                int selectedIndex = selectionModel.getSelectedIndex();
+                if (selectedIndex >= 0) {
+                    documentsList.scrollTo(selectedIndex);
+                }
             }
             else if (indexToSelect >= 0) {
-                documentsList.getSelectionModel().select(indexToSelect);
+                selectionModel.select(indexToSelect);
             }
         }
     }

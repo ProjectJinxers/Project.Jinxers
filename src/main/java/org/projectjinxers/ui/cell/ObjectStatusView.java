@@ -213,6 +213,7 @@ public class ObjectStatusView implements Initializable, ProgressChangeListener {
             root.setVisible(true);
             if (done) {
                 retryButton.setVisible(false);
+                statusMessage.set(statusMessagePrefix);
             }
             else {
                 if (failedTask == null) {

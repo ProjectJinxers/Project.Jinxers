@@ -148,7 +148,11 @@ public class Group implements ModelControllerListener, Comparable<Group> {
         return secretConfig;
     }
 
-    public ModelController getController() throws Exception {
+    public ModelController getController() {
+        return controller;
+    }
+
+    public ModelController getOrCreateController() throws Exception {
         if (controller == null) {
             controller = ModelController.getModelController(getConfig(), getSecretConfig());
             controller.setListener(this);

@@ -23,6 +23,7 @@ import org.projectjinxers.controller.ModelController;
 import org.projectjinxers.model.DocumentRemoval;
 import org.projectjinxers.model.LoaderFactory;
 import org.projectjinxers.model.ModelState;
+import org.projectjinxers.model.UserState;
 
 /**
  * @author ProjectJinxers
@@ -47,6 +48,7 @@ public class Document extends ProgressObserver {
     private boolean loading;
     private boolean saveCalled;
     private boolean removeCalled;
+    private boolean removed;
 
     public Document(Group group, IPLDObject<org.projectjinxers.model.Document> documentObject) {
         super(true);
@@ -115,13 +117,45 @@ public class Document extends ProgressObserver {
                     if (documentObject == null) {
                         ModelController controller = group == null
                                 ? ModelController.getModelController(Config.getSharedInstance())
-                                : group.getController();
+                                : group.getOrCreateController();
                         IPLDObject<org.projectjinxers.model.Document> documentObject = new IPLDObject<>(multihash,
                                 LoaderFactory.DOCUMENT.createLoader(), controller.getContext(), null);
                         this.documentObject = documentObject;
                     }
-                    documentObject.getMapped();
-                    finishedTask(ProgressTask.LOAD);
+                    org.projectjinxers.model.Document mapped = documentObject.getMapped();
+                    if (mapped == null) {
+                        failedTask(ProgressTask.LOAD, "Failed to load the document.", null);
+                    }
+                    else {
+                        if (group != null) {
+                            String userHash = mapped.expectUserState().getUser().getMultihash();
+                            try {
+                                this.modelStateObject = group.getOrCreateController().getCurrentValidatedState();
+                                IPLDObject<UserState> userState = modelStateObject.getMapped()
+                                        .expectUserState(userHash);
+                                if (userState == null) {
+                                    failedTask(ProgressTask.LOAD,
+                                            "The document is not contained in the selected group.", null);
+                                    this.group = null;
+                                    return;
+                                }
+                                String firstVersionHash = mapped.getFirstVersionHash();
+                                if (firstVersionHash == null) {
+                                    firstVersionHash = multihash;
+                                }
+                                if (userState.getMapped().isRemoved(firstVersionHash)) {
+                                    removed = true;
+                                }
+                            }
+                            catch (Exception e) {
+                                failedTask(ProgressTask.LOAD,
+                                        "Failed to check if the document is contained in the selected group.", null);
+                                this.group = null;
+                                return;
+                            }
+                        }
+                        finishedTask(ProgressTask.LOAD);
+                    }
                 }
                 catch (Exception e) {
                     failedTask(ProgressTask.LOAD, "Failed to load the document.", e);
@@ -142,6 +176,10 @@ public class Document extends ProgressObserver {
 
     public boolean isSaveCalled() {
         return saveCalled;
+    }
+
+    public boolean isRemoved() {
+        return removed;
     }
 
     public boolean save(ModelController controller, Signer signer) {
@@ -169,18 +207,34 @@ public class Document extends ProgressObserver {
         return true;
     }
 
-    public void delete(Signer signer) {
+    public void delete(User user, Signer signer) {
         DocumentRemoval removal = new DocumentRemoval(documentObject);
         IPLDObject<DocumentRemoval> removalObject = new IPLDObject<>(removal);
         removalObject.setProgressListener(this);
-        ModelController controller = null;
-        try {
-            controller = group.getController();
+        ModelController controller = group.getController();
+        requestRemoval(controller, removalObject, user, signer);
+    }
+
+    public void checkRemoved(Group group, ModelState valid) {
+        if (this.group == group) {
+            if (documentObject != null && documentObject.isMapped()) {
+                org.projectjinxers.model.Document mapped = documentObject.getMapped();
+                IPLDObject<UserState> userStateObject = mapped.getUserState();
+                if (userStateObject != null) {
+                    String userHash = userStateObject.getMapped().getUser().getMultihash();
+                    IPLDObject<UserState> userState = valid.expectUserState(userHash);
+                    if (userState != null) {
+                        String firstVersionHash = mapped.getFirstVersionHash();
+                        if (firstVersionHash == null) {
+                            firstVersionHash = multihash;
+                        }
+                        if (userState.getMapped().isRemoved(firstVersionHash)) {
+                            removed = true;
+                        }
+                    }
+                }
+            }
         }
-        catch (Exception e) { // this method can't be called if the controller has not been initialized (no menu item)
-            throw new Error(e);
-        }
-        requestRemoval(controller, removalObject, signer);
     }
 
     @Override
@@ -190,13 +244,20 @@ public class Document extends ProgressObserver {
 
     @Override
     public String getStatusMessagePrefix() {
+        if (removed) {
+            return "Removed";
+        }
+        if (removeCalled) {
+            return "Removal requested";
+        }
         if (saveCalled && getMultihash() != null) {
             return "Saved as " + multihash;
         }
         return null;
     }
 
-    private boolean requestRemoval(ModelController controller, IPLDObject<DocumentRemoval> removal, Signer signer) {
+    private boolean requestRemoval(ModelController controller, IPLDObject<DocumentRemoval> removal, User user,
+            Signer signer) {
         removeCalled = true;
         IPLDObject<ModelState> currentValidatedState = controller.getCurrentValidatedState();
         if (modelStateObject != currentValidatedState) {
@@ -206,10 +267,11 @@ public class Document extends ProgressObserver {
                         "You are not the owner of the document, anymore. If you want to delete it,"
                                 + "you have to request ownership.",
                         null);
+                removeCalled = false;
                 return false;
             }
         }
-        startOperation(() -> requestRemoval(controller, removal, signer));
+        startOperation(() -> requestRemoval(controller, removal, user, signer));
         new Thread(() -> {
             try {
                 controller.requestDocumentRemoval(removal, signer);

@@ -25,10 +25,12 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 import org.projectjinxers.config.Config;
+import org.spongycastle.util.encoders.Base64;
 
 import io.ipfs.api.IPFS;
 import io.ipfs.api.MerkleNode;
 import io.ipfs.cid.Cid;
+import io.ipfs.multibase.Base58;
 
 /**
  * Provides access to the IPFS API.
@@ -41,6 +43,8 @@ public class IPFSAccess {
      * The access to the IPFS API.
      */
     private IPFS ipfs;
+
+    private String peerIDBase64;
 
     /**
      * Constructor.
@@ -71,6 +75,19 @@ public class IPFSAccess {
                 ipfs = new IPFS(config.getIPFSHost(), config.getIPFSPort(), version, config.isIPFSSecure());
             }
         }
+        try {
+            Map<?, ?> id = ipfs.id();
+            String peerID = (String) id.get("ID");
+            byte[] decoded = Base58.decode(peerID);
+            this.peerIDBase64 = Base64.toBase64String(decoded);
+        }
+        catch (IOException e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
+
+    public String getPeerIDBase64() {
+        return peerIDBase64;
     }
 
     /**

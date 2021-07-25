@@ -323,12 +323,12 @@ public class DocumentCell extends AbstractListCell<Document> implements Initiali
             menuItems.add(getUpdateItem());
             menuItems.add(getRemoveItem());
         }
-        else if (group != null && item.getMultihash() != null) {
+        else if (group != null && item.getMultihash() != null && !item.isDestroying() && !item.isRemoved()) {
             IPLDObject<org.projectjinxers.model.Document> documentObject = item.getDocumentObject();
             if (documentObject != null && documentObject.isMapped()) {
                 ModelController controller = null;
                 try {
-                    controller = group.getController();
+                    controller = group.getOrCreateController();
                 }
                 catch (Exception e) {
 
@@ -382,7 +382,7 @@ public class DocumentCell extends AbstractListCell<Document> implements Initiali
     public void statusChanged(ProgressObserver progressObserver) {
         Document item = getItem();
         if (progressObserver == item) {
-            update(item);
+            updateItem(item, false);
             mainPresenter.getView().statusChanged(progressObserver);
         }
     }
@@ -458,26 +458,20 @@ public class DocumentCell extends AbstractListCell<Document> implements Initiali
                     approvalStateTooltip.setText("Truth inversion");
                 }
                 else {
-                    try {
-                        ModelController controller = group.getController();
-                        ModelState modelState = controller.getCurrentValidatedState().getMapped();
-                        String documentHash = item.getMultihash();
-                        if (modelState.isSealedDocument(documentHash)) {
-                            SealedDocument sealed = modelState.expectSealedDocument(documentHash);
-                            if (sealed.isTruthInverted()) {
-                                approvalStateTooltip.setText("Successful truth inversion");
-                            }
-                            else {
-                                approvalStateTooltip.setText("Failed truth inversion");
-                            }
+                    ModelController controller = group.getController();
+                    ModelState modelState = controller.getCurrentValidatedState().getMapped();
+                    String documentHash = item.getMultihash();
+                    if (modelState.isSealedDocument(documentHash)) {
+                        SealedDocument sealed = modelState.expectSealedDocument(documentHash);
+                        if (sealed.isTruthInverted()) {
+                            approvalStateTooltip.setText("Successful truth inversion");
                         }
                         else {
-                            approvalStateTooltip.setText("Ongoing truth inversion");
+                            approvalStateTooltip.setText("Failed truth inversion");
                         }
                     }
-                    catch (Exception e) {
-                        // Not standalone, object is loaded, so the controller must have been initialized successfully
-                        throw new Error(e);
+                    else {
+                        approvalStateTooltip.setText("Ongoing truth inversion");
                     }
                 }
             }
@@ -518,19 +512,7 @@ public class DocumentCell extends AbstractListCell<Document> implements Initiali
         Document item = getItem();
         Group group = item.getGroup();
         IPLDObject<ModelState> modelStateObject;
-        ModelController controller;
-        if (group == null) {
-            controller = null;
-        }
-        else {
-            try {
-                controller = group.getController();
-            }
-            catch (Exception e) {
-                // Not standalone, object is loaded, so the controller must have been initialized successfully
-                throw new Error(e);
-            }
-        }
+        ModelController controller = group == null ? null : group.getController();
         modelStateObject = controller == null ? null : controller.getCurrentValidatedState();
         if (modelStateObject == null) {
             totalReviews.set("n/a");

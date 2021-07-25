@@ -177,7 +177,7 @@ public class DocumentPresenter extends DataPresenter<Document, DocumentPresenter
                 @Override
                 public boolean didConfirmData(Group group) {
                     try {
-                        group.getController();
+                        group.getOrCreateController();
                     }
                     catch (Exception e) {
                         getView().showError("Failed to create group", e);
@@ -363,7 +363,7 @@ public class DocumentPresenter extends DataPresenter<Document, DocumentPresenter
         IPLDObject<UserState> userState = null;
         ModelController controller;
         try {
-            controller = group.getController();
+            controller = group.getOrCreateController();
             modelStateObject = controller.getCurrentValidatedState();
             String userHash = user.getMultihash();
             if (userHash == null) {

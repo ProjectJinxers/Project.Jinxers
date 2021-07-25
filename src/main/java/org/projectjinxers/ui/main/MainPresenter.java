@@ -116,6 +116,12 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
 
     @Override
     public void onGroupUpdated(Group group) {
+        if (allDocuments != null) {
+            ModelState valid = group.getController().getCurrentValidatedState().getMapped();
+            for (Document document : allDocuments) {
+                document.checkRemoved(group, valid);
+            }
+        }
         getView().didUpdateGroup(group);
     }
 
@@ -183,7 +189,7 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
     public String getValidModelStateInfo(Group group) {
         ModelController controller;
         try {
-            controller = group.getController();
+            controller = group.getOrCreateController();
         }
         catch (Exception e) {
             return "Loading error";
@@ -205,7 +211,7 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
     public String getMultihash(Group group) {
         ModelController controller;
         try {
-            controller = group.getController();
+            controller = group.getOrCreateController();
         }
         catch (Exception e) {
             return "Failed to create model controller";
@@ -318,7 +324,7 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
 
     private void deleteDocument(Document document, User user) {
         SigningPresenter signingPresenter = SigningView.createSigningPresenter(user, getApplication());
-        signingPresenter.setListener((signer) -> document.delete(signer));
+        signingPresenter.setListener((signer) -> document.delete(user, signer));
         presentModally(signingPresenter, "Sign removal", false);
     }
 

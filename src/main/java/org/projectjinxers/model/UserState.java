@@ -603,6 +603,10 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         return new LinkedHashMap<>(allDocumentVersions);
     }
 
+    public boolean isRemoved(String firstVersionHash) {
+        return removedDocuments != null && removedDocuments.containsKey(firstVersionHash);
+    }
+
     /**
      * Checks if the user has posted a non-negative review, that has not been followed by a negative review, for the
      * document with the given hash. Neutral reviews are currently included.
@@ -716,6 +720,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             UserState settlementValues, Map<String, IPLDObject<UnbanRequest>> unbanRequests,
             Collection<IPLDObject<GrantedUnban>> unbans, IPLDObject<UserState> current,
             Collection<ProgressListener> progressListeners) {
+        boolean changed = false;
         UserState updated = copy();
         updated.version = this.version + 1;
         updated.previousVersion = current;
@@ -723,10 +728,12 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             for (String hash : transferredOwnershipHashes) {
                 updated.documents.remove(hash);
             }
+            changed = true;
         }
         if (sreqs != null) {
             updated.settlementRequests = addProgressListeners(sreqs, updated.settlementRequests, null,
                     progressListeners);
+            changed = true;
         }
         if (oreqs != null) {
             if (updated.ownershipRequests == null) {
@@ -736,6 +743,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
                 updated.ownershipRequests.put(OWNERSHIP_REQUEST_KEY_PROVIDER.getKey(ownershipRequest),
                         ownershipRequest);
             }
+            changed = true;
         }
         if (granted != null) {
             if (updated.grantedOwnerships == null) {
@@ -748,26 +756,33 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
                     updated.ownershipRequests.remove(key);
                 }
             }
+            changed = true;
         }
         if (docs != null) {
             updated.documents = addProgressListeners(docs, updated.documents, null, progressListeners);
+            changed = true;
         }
         if (removals != null) {
             updated.removedDocuments = addProgressListeners(removals, updated.removedDocuments, updated.documents,
                     progressListeners);
+            changed = true;
         }
         if (sealedDocuments != null) {
             if (updated.settlementRequests != null) { // null happens when sealed document is not an original
                 for (String hash : sealedDocuments) {
-                    updated.settlementRequests.remove(hash);
+                    if (updated.settlementRequests.remove(hash) != null) {
+                        changed = true;
+                    }
                 }
             }
             if (settlementValues != null) {
                 updated.applySettlement(settlementValues);
+                changed = true;
             }
         }
         if (unbanRequests != null) {
             updated.unbanRequests = addProgressListeners(unbanRequests, updated.unbanRequests, null, progressListeners);
+            changed = true;
         }
         if (unbans != null) {
             if (updated.grantedUnbans == null) {
@@ -778,8 +793,9 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
                 updated.grantedUnbans.put(key, unban);
                 updated.unbanRequests.remove(key);
             }
+            changed = true;
         }
-        return updated;
+        return changed ? updated : null;
     }
 
     public void addFalseClaim(IPLDObject<Document> falseClaim) {

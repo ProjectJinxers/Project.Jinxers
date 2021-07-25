@@ -77,6 +77,11 @@ public class TestIPFSAccess extends IPFSAccess {
     private boolean recordSavedObjects;
 
     @Override
+    public String getPeerIDBase64() {
+        return "";
+    }
+
+    @Override
     public byte[] loadObject(String hash) throws IOException {
         return objects.get(hash);
     }

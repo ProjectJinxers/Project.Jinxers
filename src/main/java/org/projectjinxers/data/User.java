@@ -150,7 +150,7 @@ public class User extends ProgressObserver {
         startedTask(ProgressTask.LOAD, -1);
         new Thread(() -> {
             try {
-                ModelController controller = group.getController();
+                ModelController controller = group.getOrCreateController();
                 if (controller != null) {
                     IPLDObject<ModelState> currentValidatedState = controller.getCurrentValidatedState();
                     if (currentValidatedState != null) {

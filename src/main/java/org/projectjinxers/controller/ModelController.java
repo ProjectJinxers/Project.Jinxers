@@ -171,6 +171,7 @@ public class ModelController {
 
     }
 
+    private static final String PUBSUB_SUB_KEY_FROM = "from";
     private static final String PUBSUB_SUB_KEY_DATA = "data";
     private static final String PUBSUB_TOPIC_PREFIX_OWNERSHIP_REQUEST = "or";
 
@@ -220,6 +221,7 @@ public class ModelController {
     private long timestampTolerance;
 
     private final String address;
+    private final String peerIDBase64;
     private IPLDObject<ModelState> currentValidatedState;
     private Map<String, SettlementController> currentLocalHashes = new HashMap<>();
 
@@ -260,6 +262,7 @@ public class ModelController {
     private ModelController(IPFSAccess access, Config config, SecretConfig secretConfig, long timestampTolerance)
             throws Exception {
         this.access = access;
+        this.peerIDBase64 = access.getPeerIDBase64();
         Config cfg = config == null ? Config.getSharedInstance() : config;
         this.secretConfig = secretConfig == null ? SecretConfig.getSharedInstance() : secretConfig;
         this.context = new IPLDContext(access, IPLDEncoding.JSON, IPLDEncoding.CBOR, false);
@@ -308,9 +311,15 @@ public class ModelController {
                     subscribedSuccessfully = true;
                     stream.forEach(map -> {
                         try {
-                            String pubSubData = (String) map.get(PUBSUB_SUB_KEY_DATA);
+                            String from = (String) map.get(PUBSUB_SUB_KEY_FROM);
                             System.out.println("Received pubsub message: " + map);
-                            handleIncomingModelState(pubSubData, System.currentTimeMillis());
+                            if (peerIDBase64.equals(from)) {
+                                System.out.println("Message came from local peer -> ignored");
+                            }
+                            else {
+                                String pubSubData = (String) map.get(PUBSUB_SUB_KEY_DATA);
+                                handleIncomingModelState(pubSubData, System.currentTimeMillis());
+                            }
                         }
                         catch (Exception e) {
                             e.printStackTrace();
@@ -340,8 +349,12 @@ public class ModelController {
                     subscribedSuccessfully = true;
                     stream.forEach(map -> {
                         try {
-                            String pubSubData = (String) map.get(PUBSUB_SUB_KEY_DATA);
-                            handleIncomingOwnershipRequest(pubSubData, System.currentTimeMillis() + timestampTolerance);
+                            String from = (String) map.get(PUBSUB_SUB_KEY_FROM);
+                            if (!peerIDBase64.equals(from)) {
+                                String pubSubData = (String) map.get(PUBSUB_SUB_KEY_DATA);
+                                handleIncomingOwnershipRequest(pubSubData,
+                                        System.currentTimeMillis() + timestampTolerance);
+                            }
                         }
                         catch (Exception e) {
                             e.printStackTrace();
@@ -1061,8 +1074,8 @@ public class ModelController {
                 return false;
             }
             IPLDObject<UserState> toSave = getInstanceToSave(userState);
-            if (docs != null || sreqs != null || oreqs != null || granted != null || hashes != null
-                    || settlementValues != null || ureqs != null || unbans != null) {
+            if (docs != null || removals != null || sreqs != null || oreqs != null || granted != null || hashes != null
+                    || sealedDocumentHashes != null || settlementValues != null || ureqs != null || unbans != null) {
                 try {
                     if (toSave != userState) {
                         ProgressListener progressListener = toSave.getProgressListener();
@@ -1075,24 +1088,26 @@ public class ModelController {
                     }
                     UserState updated = toSave.getMapped().updateLinks(docs, removals, sreqs, oreqs, granted, hashes,
                             sealedDocumentHashes, settlementValues, ureqs, unbans, toSave, userProgressListeners);
-                    IPLDObject<UserState> updatedObject = new IPLDObject<>(updated);
-                    updatedObject.save(context, null, null);
-                    if (userProgressListeners.size() > 0) {
-                        try {
-                            for (ProgressListener listener : userProgressListeners) {
-                                listener.finishedTask(ProgressTask.LINK_USER);
+                    if (updated != null) {
+                        IPLDObject<UserState> updatedObject = new IPLDObject<>(updated);
+                        updatedObject.save(context, null, null);
+                        if (userProgressListeners.size() > 0) {
+                            try {
+                                for (ProgressListener listener : userProgressListeners) {
+                                    listener.finishedTask(ProgressTask.LINK_USER);
+                                }
                             }
+                            catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                            ForwardingProgressListener listener = new ForwardingProgressListener();
+                            listener.listeners = userProgressListeners;
+                            // save progress listeners in case of an error later
+                            updatedObject.setProgressListener(listener);
+                            modelStateProgressListeners.add(listener);
                         }
-                        catch (Exception e) {
-                            e.printStackTrace();
-                        }
-                        ForwardingProgressListener listener = new ForwardingProgressListener();
-                        listener.listeners = userProgressListeners;
-                        // save progress listeners in case of an error later
-                        updatedObject.setProgressListener(listener);
-                        modelStateProgressListeners.add(listener);
+                        updatedUserStates.put(userHash, updatedObject);
                     }
-                    updatedUserStates.put(userHash, updatedObject);
                 }
                 catch (Exception e) {
                     e.printStackTrace();
