@@ -323,7 +323,7 @@ public class DocumentCell extends AbstractListCell<Document> implements Initiali
             menuItems.add(getUpdateItem());
             menuItems.add(getRemoveItem());
         }
-        else if (group != null) {
+        else if (group != null && item.getMultihash() != null) {
             IPLDObject<org.projectjinxers.model.Document> documentObject = item.getDocumentObject();
             if (documentObject != null && documentObject.isMapped()) {
                 ModelController controller = null;
@@ -577,14 +577,17 @@ public class DocumentCell extends AbstractListCell<Document> implements Initiali
                     truthStateTooltip.setText("Loading reviews");
                     Tooltip.install(truthImage, truthStateTooltip);
                 }
-                loadReviews(sealed, reviewObjects, false, 0);
+                loadReviews(getItem(), sealed, reviewObjects, false, 0);
             }
         }
         Tooltip.install(totalReviewsImage, totalReviewsTooltip);
     }
 
-    private void loadReviews(boolean sealed, Map<String, IPLDObject<Review>> reviewObjects, boolean completeFailure,
-            int attemptCountAfterLastSuccess) {
+    private void loadReviews(Document document, boolean sealed, Map<String, IPLDObject<Review>> reviewObjects,
+            boolean completeFailure, int attemptCountAfterLastSuccess) {
+        if (document != getItem()) {
+            return;
+        }
         if (completeFailure && attemptCountAfterLastSuccess == 3) {
             totalReviewsTooltip.setText("Total reviews (incomplete - gave up after 3 complete loading failures)");
             if (sealed) {
@@ -627,7 +630,7 @@ public class DocumentCell extends AbstractListCell<Document> implements Initiali
             declinations.set(String.valueOf(declinationsCount));
             if (toLoad.size() > 0) {
                 totalReviewsTooltip.setText("Total reviews (loading)");
-                loadObjects(toLoad, (successCount) -> loadReviews(sealed, reviewObjects, successCount == 0,
+                loadObjects(toLoad, (successCount) -> loadReviews(document, sealed, reviewObjects, successCount == 0,
                         successCount == 0 ? attemptCountAfterLastSuccess + 1 : 0));
             }
             else {

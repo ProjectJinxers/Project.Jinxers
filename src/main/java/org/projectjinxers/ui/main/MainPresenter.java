@@ -15,8 +15,8 @@ package org.projectjinxers.ui.main;
 
 import java.io.IOException;
 import java.text.DateFormat;
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -77,7 +77,7 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
     }
 
     private Data data;
-    private Map<String, Document> allDocuments;
+    private Collection<Document> allDocuments;
 
     private boolean editing;
 
@@ -129,7 +129,7 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
         return data.getUsers();
     }
 
-    public Map<String, Document> getAllDocuments() {
+    public Collection<Document> getAllDocuments() {
         return allDocuments;
     }
 
@@ -296,10 +296,10 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
                     truthInversion, approval, getApplication());
             documentPresenter.setListener((data) -> {
                 if (editing) {
-                    handleUpdatedDocument(document, data);
+                    handleUpdatedDocument(document, data, reviewed);
                 }
                 else {
-                    handleNewDocument(data);
+                    handleNewDocument(data, reviewed);
                 }
                 return true;
             });
@@ -317,47 +317,33 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
         }
     }
 
-    void handleNewDocument(Document document) {
-        // TODO: new reviews might not have an import URL (multhihash is null until saved, as well)
+    void handleNewDocument(Document document, Document reviewed) {
         String multihash = document.getMultihash();
         String key = multihash == null ? document.getImportURL() : multihash;
-        if (allDocuments == null) {
-            allDocuments = new HashMap<>();
+        if (key == null) {
+            key = getNewReviewKey(document, reviewed);
         }
-        allDocuments.put(key, document);
+        if (allDocuments == null) {
+            allDocuments = new ArrayList<>();
+        }
+        allDocuments.add(document);
         getView().didAddDocument(document);
         ensureTimeRefresh();
     }
 
-    void handleUpdatedDocument(Document old, Document updated) {
-        String oldHash = old.getMultihash();
-        String newHash = updated.getMultihash();
-        if (newHash == null) {
-            if (oldHash == null) {
-                if (old == updated) {
-                    getView().didUpdateDocument(updated);
-                }
-                else {
-                    String oldKey = old.getImportURL();
-                    String newKey = updated.getImportURL();
-                    allDocuments.remove(oldKey);
-                    allDocuments.put(newKey, updated);
-                    getView().didReplaceDocument(old, updated);
-                }
-            }
-            else {
-                allDocuments.put(oldHash, updated);
-                getView().didReplaceDocument(old, updated);
-            }
-        }
-        else if (old == updated) {
+    void handleUpdatedDocument(Document old, Document updated, Document reviewed) {
+        if (old == updated) {
             getView().didUpdateDocument(updated);
         }
         else {
-            allDocuments.remove(oldHash);
-            allDocuments.put(newHash, updated);
+            allDocuments.remove(old);
+            allDocuments.add(updated);
             getView().didReplaceDocument(old, updated);
         }
+    }
+
+    private String getNewReviewKey(Document review, Document reviewed) {
+        return reviewed.getMultihash() + "#" + review.getDocumentObject().getMapped().getDate().getTime();
     }
 
     public void saveData() {

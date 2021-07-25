@@ -150,7 +150,7 @@ public class ObjectStatusView implements Initializable, ProgressChangeListener {
         }
         else {
             totalProgressBar.setVisible(false);
-            finalTask = false;
+            finalTask = true;
         }
         if (retrying && changed && statusChangeListener != null) {
             retrying = false;
@@ -160,6 +160,7 @@ public class ObjectStatusView implements Initializable, ProgressChangeListener {
         ProgressTask failedTask = progressObserver.getFailedTask();
         int totalTaskSteps = progressObserver.getTotalTaskSteps();
         int executedTaskSteps = progressObserver.getExecutedTaskSteps();
+        boolean done = false;
         if (totalTaskSteps > 0) {
             progress.set(executedTaskSteps * 1.0 / totalTaskSteps);
             if (finalTask && executedTaskSteps == totalTaskSteps) {
@@ -172,6 +173,7 @@ public class ObjectStatusView implements Initializable, ProgressChangeListener {
                 if (statusMessagePrefix == null && failedTask == null) {
                     hide = true;
                 }
+                done = true;
             }
             else {
                 this.currentTask.set(
@@ -186,48 +188,21 @@ public class ObjectStatusView implements Initializable, ProgressChangeListener {
             cancelButton.setVisible(true);
         }
         else {
+            progress.set(1);
             if (changed && statusChangeListener != null) {
                 statusChangeListener.statusChanged(progressObserver);
             }
-            this.currentTask.set(null);
-            cancelButton.setVisible(false);
-            if (statusMessagePrefix == null && failedTask == null) {
-                hide = true;
-            }
-        }
-        if (failedTask == null) {
-            if (!totalProgressBar.isVisible()) {
-                currentTaskLabel.setVisible(true);
-            }
-            taskProgressBar.setVisible(true);
-            retryButton.setVisible(false);
-            if (progressObserver.isPaused()) {
-                setStatusMessage(statusMessagePrefix, "Paused");
-                if (changed && statusChangeListener != null) {
-                    statusChangeListener.statusChanged(progressObserver);
+            if (finalTask) {
+                this.currentTask.set(null);
+                cancelButton.setVisible(false);
+                if (statusMessagePrefix == null && failedTask == null) {
+                    hide = true;
                 }
-            }
-            else if (progressObserver.isObsolete()) {
-                setStatusMessage(statusMessagePrefix, "Obsolete");
-                if (changed && statusChangeListener != null) {
-                    statusChangeListener.statusChanged(progressObserver);
+                else {
+                    totalProgressBar.setVisible(false);
+                    taskProgressBar.setVisible(false);
                 }
-            }
-            else {
-                statusMessage.set(statusMessagePrefix);
-            }
-        }
-        else {
-            if (!totalProgressBar.isVisible()) {
-                currentTaskLabel.setVisible(false);
-            }
-            taskProgressBar.setVisible(false);
-            cancelButton.setVisible(false);
-            retryButton.setVisible(true);
-            String failureMessage = progressObserver.getFailureMessage();
-            setStatusMessage(statusMessagePrefix, failureMessage == null ? "Unknown failure" : failureMessage);
-            if (changed && statusChangeListener != null) {
-                statusChangeListener.statusChanged(progressObserver);
+                done = true;
             }
         }
         if (hide) {
@@ -236,6 +211,46 @@ public class ObjectStatusView implements Initializable, ProgressChangeListener {
         }
         else {
             root.setVisible(true);
+            if (done) {
+                retryButton.setVisible(false);
+            }
+            else {
+                if (failedTask == null) {
+                    if (totalProgressTasks < 2) {
+                        currentTaskLabel.setVisible(true);
+                    }
+                    taskProgressBar.setVisible(true);
+                    retryButton.setVisible(false);
+                    if (progressObserver.isPaused()) {
+                        setStatusMessage(statusMessagePrefix, "Paused");
+                        if (changed && statusChangeListener != null) {
+                            statusChangeListener.statusChanged(progressObserver);
+                        }
+                    }
+                    else if (progressObserver.isObsolete()) {
+                        setStatusMessage(statusMessagePrefix, "Obsolete");
+                        if (changed && statusChangeListener != null) {
+                            statusChangeListener.statusChanged(progressObserver);
+                        }
+                    }
+                    else {
+                        statusMessage.set(statusMessagePrefix);
+                    }
+                }
+                else {
+                    if (totalProgressTasks < 2) {
+                        currentTaskLabel.setVisible(false);
+                    }
+                    taskProgressBar.setVisible(false);
+                    cancelButton.setVisible(false);
+                    retryButton.setVisible(true);
+                    String failureMessage = progressObserver.getFailureMessage();
+                    setStatusMessage(statusMessagePrefix, failureMessage == null ? "Unknown failure" : failureMessage);
+                    if (changed && statusChangeListener != null) {
+                        statusChangeListener.statusChanged(progressObserver);
+                    }
+                }
+            }
         }
     }
 

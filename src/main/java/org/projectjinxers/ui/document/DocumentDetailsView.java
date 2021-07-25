@@ -13,6 +13,7 @@
  */
 package org.projectjinxers.ui.document;
 
+import static org.projectjinxers.ui.util.MarkdownUtility.fixSkippedProperties;
 import static org.projectjinxers.ui.util.ModelLoadingUtility.loadObject;
 import static org.projectjinxers.util.ObjectUtility.isNullOrBlank;
 
@@ -73,6 +74,7 @@ public class DocumentDetailsView
         editorsSplit.setDividerPosition(0, DEFAULT_DIVIDER_POSITION);
         abstractEditor.managedProperty().bind(abstractEditor.visibleProperty());
         contentsEditor.managedProperty().bind(contentsEditor.visibleProperty());
+        fixSkippedProperties(contentsEditor);
     }
 
     @Override
@@ -80,11 +82,7 @@ public class DocumentDetailsView
         Document document = documentDetailsPresenter.getDocument();
         if (document == null) {
             statusLine.set("No document selected");
-            abstractEditor.setMarkdown("");
-            contentsEditor.setMarkdown("");
-            editorsSplit.setDividerPosition(0, DEFAULT_DIVIDER_POSITION);
-            abstractEditor.setVisible(true);
-            contentsEditor.setVisible(true);
+            configureEmpty();
             return;
         }
         String multihash = document.getMultihash();
@@ -96,17 +94,14 @@ public class DocumentDetailsView
             else {
                 statusLine.set(multihash);
             }
-            abstractEditor.setMarkdown("");
-            contentsEditor.setMarkdown("");
-            editorsSplit.setDividerPosition(0, DEFAULT_DIVIDER_POSITION);
-            abstractEditor.setVisible(true);
-            contentsEditor.setVisible(true);
+            configureEmpty();
         }
         else {
             org.projectjinxers.model.Document doc = documentObject.getMapped();
             IPLDObject<DocumentContents> contentsObject = doc.getContents();
             if (contentsObject == null) {
                 statusLine.set(multihash + " - No contents");
+                configureEmpty();
             }
             else if (contentsObject.isMapped()) {
                 statusLine.set(multihash + " - Loaded");
@@ -116,16 +111,15 @@ public class DocumentDetailsView
                 if (isNullOrBlank(abstr)) {
                     if (isNullOrBlank(contentsMarkdown)) {
                         statusLine.set(multihash + " - No contents");
-                        editorsSplit.setDividerPosition(0, DEFAULT_DIVIDER_POSITION);
-                        abstractEditor.setVisible(true);
-                        contentsEditor.setMarkdown("");
+                        configureEmpty();
                     }
                     else {
                         editorsSplit.setDividerPosition(0, 0);
                         abstractEditor.setVisible(false);
+                        contentsEditor.setVisible(true);
                         contentsEditor.setMarkdown(contentsMarkdown);
+                        abstractEditor.setMarkdown("");
                     }
-                    abstractEditor.setMarkdown("");
                 }
                 else {
                     if (isNullOrBlank(contentsMarkdown)) {
@@ -145,6 +139,14 @@ public class DocumentDetailsView
                 loadObject(contentsObject, (successCount) -> updateView());
             }
         }
+    }
+
+    private void configureEmpty() {
+        abstractEditor.setMarkdown("");
+        contentsEditor.setMarkdown("");
+        editorsSplit.setDividerPosition(0, DEFAULT_DIVIDER_POSITION);
+        abstractEditor.setVisible(true);
+        contentsEditor.setVisible(true);
     }
 
     public StringProperty statusLineProperty() {

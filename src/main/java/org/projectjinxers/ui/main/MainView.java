@@ -15,6 +15,7 @@ package org.projectjinxers.ui.main;
 
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -187,13 +188,12 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
     }
 
     private void updateDocuments() {
-        Map<String, Document> allDocuments = mainPresenter.getAllDocuments();
+        Collection<Document> allDocuments = mainPresenter.getAllDocuments();
         if (allDocuments == null) {
-            documentsList.setItems(null);
+            documentsList.getItems().clear();
         }
         else {
-            List<Document> documentsList = new ArrayList<>(allDocuments.values());
-            this.documentsList.setItems(FXCollections.observableList(documentsList));
+            this.documentsList.getItems().setAll(allDocuments);
         }
     }
 

@@ -355,7 +355,6 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
     public Date getLastActivityDate(IPLDObject<Document> document) {
         Document doc = document.getMapped();
         UserState userState = doc.expectUserState();
-        // TODO: NPE when adding a new review from scratch
         userState = expectUserState(userState.getUser().getMultihash()).getMapped();
         String firstVersionHash = doc.getFirstVersionHash();
         if (firstVersionHash == null) {
