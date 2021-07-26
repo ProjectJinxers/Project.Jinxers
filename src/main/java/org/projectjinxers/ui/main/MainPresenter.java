@@ -74,6 +74,8 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
 
         void selectDocument(int index);
 
+        void updatedReviews(Document document);
+
         void refreshTime();
 
     }
@@ -117,9 +119,9 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
     @Override
     public void onGroupUpdated(Group group) {
         if (allDocuments != null) {
-            ModelState valid = group.getController().getCurrentValidatedState().getMapped();
+            IPLDObject<ModelState> valid = group.getController().getCurrentValidatedState();
             for (Document document : allDocuments) {
-                document.checkRemoved(group, valid);
+                document.groupUpdated(group, valid);
             }
         }
         getView().didUpdateGroup(group);
@@ -270,6 +272,20 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
             idx++;
         }
         Document document = new Document(group, multihash);
+        allDocuments.add(document);
+        getView().didAddDocument(document);
+    }
+
+    public void showInDocumentsList(Document document) {
+        int idx = 0;
+        String multihash = document.getMultihash();
+        for (Document doc : allDocuments) {
+            if (multihash.equals(doc.getMultihash())) {
+                getView().selectDocument(idx);
+                return;
+            }
+            idx++;
+        }
         allDocuments.add(document);
         getView().didAddDocument(document);
     }

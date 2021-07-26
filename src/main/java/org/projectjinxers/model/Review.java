@@ -154,6 +154,16 @@ public class Review extends Document implements DocumentAction, Loader<Review> {
     }
 
     @Override
+    public Document update(Document data, IPLDObject<DocumentContents> contents, IPLDObject<Document> current,
+            IPLDObject<UserState> userState) {
+        Review res = (Review) super.update(data, contents, current, userState);
+        Review review = (Review) data;
+        res.invertTruth = review.invertTruth;
+        res.approve = review.approve;
+        return res;
+    }
+
+    @Override
     public boolean updateModelState(ModelState modelState) {
         if (!invertTruth && modelState.isSealedDocument(document.getMultihash())) {
             return false;

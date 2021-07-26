@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.control.ListView?>
 <?import javafx.scene.control.SplitPane?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
 <?import javafx.scene.control.TextField?>
+<?import javafx.scene.control.TreeView?>
 <?import com.dansoftware.mdeditor.MarkdownEditorControl?>
 
 <fx:root xmlns:fx="http://javafx.com/fxml/1" type="BorderPane">
@@ -10,12 +14,37 @@
         <TextField text="${controller.statusLine}" editable="false"/>
     </top>
     <center>
-        <SplitPane fx:id="editorsSplit" orientation="VERTICAL" >
-            <MarkdownEditorControl fx:id="abstractEditor" viewMode="PREVIEW_ONLY">
-            </MarkdownEditorControl>
-            <MarkdownEditorControl fx:id="contentsEditor" viewMode="PREVIEW_ONLY">
-            </MarkdownEditorControl>
-        </SplitPane>
+        <TabPane>
+            <Tab closable="false" text="Contents">
+    	        <SplitPane fx:id="editorsSplit" orientation="VERTICAL">
+    	            <MarkdownEditorControl fx:id="abstractEditor" viewMode="PREVIEW_ONLY">
+    	            </MarkdownEditorControl>
+    	            <MarkdownEditorControl fx:id="contentsEditor" viewMode="PREVIEW_ONLY">
+    	            </MarkdownEditorControl>
+		        </SplitPane>
+            </Tab>
+            <Tab closable="false" text="Reviews">
+                <SplitPane fx:id="reviewsSplit" orientation="VERTICAL">
+                    <TreeView fx:id="reviewsTree" showRoot="false"/>
+                    <BorderPane>
+                        <top>
+                            <TextField text="${controller.reviewStatusLine}" editable="false"/>
+                        </top>
+                        <center>
+                            <SplitPane fx:id="reviewEditorsSplit" orientation="VERTICAL">
+                                <MarkdownEditorControl fx:id="reviewAbstractEditor" viewMode="PREVIEW_ONLY">
+                                </MarkdownEditorControl>
+                                <MarkdownEditorControl fx:id="reviewContentsEditor" viewMode="PREVIEW_ONLY">
+                                </MarkdownEditorControl>
+                            </SplitPane>
+                        </center>
+                    </BorderPane>
+                </SplitPane>
+            </Tab>
+            <Tab closable="false" text="History">
+                <ListView fx:id="historyList" fixedCellSize="200"/>
+            </Tab>
+        </TabPane>
     </center>
 </fx:root>
 

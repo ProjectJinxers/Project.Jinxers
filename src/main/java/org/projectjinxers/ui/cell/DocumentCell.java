@@ -13,25 +13,24 @@
  */
 package org.projectjinxers.ui.cell;
 
+import static org.projectjinxers.ui.cell.DocumentCellUtil.getDateTime;
+import static org.projectjinxers.ui.cell.DocumentCellUtil.updateReviewInfo;
+
 import java.net.URL;
-import java.text.DateFormat;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.ResourceBundle;
 
-import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.ModelController;
 import org.projectjinxers.controller.OwnershipTransferController;
 import org.projectjinxers.data.Document;
 import org.projectjinxers.data.Document.Kind;
+import org.projectjinxers.data.Document.ReviewInfo;
 import org.projectjinxers.data.Group;
 import org.projectjinxers.data.ProgressObserver;
 import org.projectjinxers.data.User;
-import org.projectjinxers.model.LoaderFactory;
 import org.projectjinxers.model.ModelState;
 import org.projectjinxers.model.Review;
 import org.projectjinxers.model.SealedDocument;
@@ -39,6 +38,7 @@ import org.projectjinxers.model.UserState;
 import org.projectjinxers.ui.cell.ObjectStatusView.StatusChangeListener;
 import org.projectjinxers.ui.main.MainPresenter;
 
+import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import javafx.event.Event;
@@ -48,7 +48,6 @@ import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Hyperlink;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.Tooltip;
-import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 
 /**
@@ -57,21 +56,8 @@ import javafx.scene.image.ImageView;
  */
 public class DocumentCell extends AbstractListCell<Document> implements Initializable, StatusChangeListener {
 
-    private static final long ONE_MINUTE = 1000L * 60;
-    private static final long ONE_HOUR = ONE_MINUTE * 60;
-    private static final long ONE_DAY = ONE_HOUR * 24;
-    private static final long ONE_WEEK = ONE_DAY * 7;
-    private static final long ONE_YEAR = ONE_DAY * 365;
-
-    private static final Image APPROVE_IMAGE = new Image("images/approve.png");
-    private static final Image DECLINE_IMAGE = new Image("images/decline.png");
-    private static final Image NEUTRAL_IMAGE = new Image("images/totalReviews.png");
-    private static final Image TRUTH_INVERSION_IMAGE = new Image("images/truthInversion.png");
-    private static final Image SEALED_TRUTH_IMAGE = new Image("images/sealedTruth.png");
-    private static final Image SEALED_LIE_IMAGE = new Image("images/sealedLie.png");
-    private static final Image UNKNOWN_SEAL_STATE = new Image("images/questionmark.png");
-
-    MainPresenter mainPresenter;
+    private MainPresenter mainPresenter;
+    private boolean history;
 
     @FXML
     private Hyperlink reviewedLink;
@@ -118,12 +104,14 @@ public class DocumentCell extends AbstractListCell<Document> implements Initiali
     private MenuItem settlementRequestItem;
     private MenuItem unbanRequestItem;
     private MenuItem ownershipRequestItem;
+    private MenuItem showInDocumentsListItem;
 
     private Document loading;
 
-    public DocumentCell(MainPresenter mainPresenter) {
+    public DocumentCell(MainPresenter mainPresenter, boolean history) {
         super("DocumentCell.fxml", true);
         this.mainPresenter = mainPresenter;
+        this.history = history;
     }
 
     public StringProperty ageProperty() {
@@ -288,12 +276,14 @@ public class DocumentCell extends AbstractListCell<Document> implements Initiali
         else {
             this.loading = null;
             Date date = document.getDate();
-            age.set(getAge(date));
+            age.set(DocumentCellUtil.getAge(date));
             time.set(getDateTime(date));
             updateUser(document.getUserState(), false, 0);
             if (document instanceof Review) {
                 reviewedLink.setVisible(true);
-                updateReviewInfo((Review) document);
+                Review review = (Review) document;
+                approvalStateTooltip = updateReviewInfo(review, item, approvalStateTooltip, approvalImage);
+                updateReviewed(review.getDocument(), false, 0);
             }
             else {
                 approvalImage.setImage(null);
@@ -309,7 +299,7 @@ public class DocumentCell extends AbstractListCell<Document> implements Initiali
             version.set(document.getVersion());
             tags.set(document.getTags());
             source.set(document.getSource());
-            updateReviewsInfo();
+            updateReviewsInfo(item);
         }
     }
 
@@ -322,6 +312,14 @@ public class DocumentCell extends AbstractListCell<Document> implements Initiali
         if (group == null && kind == Kind.STANDALONE) {
             menuItems.add(getUpdateItem());
             menuItems.add(getRemoveItem());
+        }
+        else if (history || item.isReplaced()) {
+            if (history) {
+                menuItems.add(getShowInDocumentsListItem());
+            }
+            else {
+                menuItems.add(getRemoveItem());
+            }
         }
         else if (group != null && item.getMultihash() != null && !item.isDestroying() && !item.isRemoved()) {
             IPLDObject<org.projectjinxers.model.Document> documentObject = item.getDocumentObject();
@@ -435,55 +433,6 @@ public class DocumentCell extends AbstractListCell<Document> implements Initiali
         }
     }
 
-    private void updateReviewInfo(Review review) {
-        Boolean approve = review.getApprove();
-        if (approvalStateTooltip == null) {
-            approvalStateTooltip = new Tooltip();
-        }
-        if (approve == null) {
-            approvalImage.setImage(NEUTRAL_IMAGE);
-            approvalStateTooltip.setText("Neutral");
-            Tooltip.install(approvalImage, approvalStateTooltip);
-        }
-        else if (approve) {
-            approvalImage.setImage(APPROVE_IMAGE);
-            approvalStateTooltip.setText("Approved");
-        }
-        else {
-            if (review.isInvertTruth()) {
-                approvalImage.setImage(TRUTH_INVERSION_IMAGE);
-                Document item = getItem();
-                Group group = item.getGroup();
-                if (group == null) {
-                    approvalStateTooltip.setText("Truth inversion");
-                }
-                else {
-                    ModelController controller = group.getController();
-                    ModelState modelState = controller.getCurrentValidatedState().getMapped();
-                    String documentHash = item.getMultihash();
-                    if (modelState.isSealedDocument(documentHash)) {
-                        SealedDocument sealed = modelState.expectSealedDocument(documentHash);
-                        if (sealed.isTruthInverted()) {
-                            approvalStateTooltip.setText("Successful truth inversion");
-                        }
-                        else {
-                            approvalStateTooltip.setText("Failed truth inversion");
-                        }
-                    }
-                    else {
-                        approvalStateTooltip.setText("Ongoing truth inversion");
-                    }
-                }
-            }
-            else {
-                approvalImage.setImage(DECLINE_IMAGE);
-                approvalStateTooltip.setText("Declined");
-            }
-        }
-        Tooltip.install(approvalImage, approvalStateTooltip);
-        updateReviewed(review.getDocument(), false, 0);
-    }
-
     private void updateReviewed(IPLDObject<org.projectjinxers.model.Document> reviewedObject, boolean failed,
             int attemptCount) {
         if (failed && attemptCount == 3) {
@@ -505,178 +454,73 @@ public class DocumentCell extends AbstractListCell<Document> implements Initiali
         }
     }
 
-    private void updateReviewsInfo() {
+    private void updateReviewsInfo(Document document) {
+        if (document != getItem()) {
+            return;
+        }
+        mainPresenter.getView().updatedReviews(document);
         if (totalReviewsTooltip == null) {
             totalReviewsTooltip = new Tooltip();
         }
-        Document item = getItem();
-        Group group = item.getGroup();
-        IPLDObject<ModelState> modelStateObject;
-        ModelController controller = group == null ? null : group.getController();
-        modelStateObject = controller == null ? null : controller.getCurrentValidatedState();
-        if (modelStateObject == null) {
-            totalReviews.set("n/a");
-            totalReviewsTooltip.setText("Total reviews");
-            approvals.set("n/a");
-            declinations.set("n/a");
-            truthImage.setImage(UNKNOWN_SEAL_STATE);
-            if (truthStateTooltip == null) {
-                truthStateTooltip = new Tooltip();
-            }
-            if (group == null) {
-                truthStateTooltip
-                        .setText("Please associate the document to a group, if you want to see the reviews summary.");
+        ReviewInfo reviewInfo = document
+                .getOrLoadReviewInfo((successCount) -> Platform.runLater(() -> updateReviewsInfo(document)));
+        if (reviewInfo.isAvailable()) {
+            totalReviews.set(String.valueOf(reviewInfo.getTotalCount()));
+            boolean loading = reviewInfo.isLoading();
+            String statusMessage = reviewInfo.getStatusMessage();
+            if (loading) {
+                totalReviewsTooltip.setText("Total reviews (loading)");
             }
             else {
-                truthStateTooltip.setText("Please wait until a model state has been validated.");
-            }
-            Tooltip.install(truthImage, truthStateTooltip);
-        }
-        else {
-            ModelState modelState = modelStateObject.getMapped();
-            String documentHash = item.getMultihash();
-            String[] reviewTableEntries = modelState.getReviewTableEntries(documentHash);
-            if (reviewTableEntries == null) {
-                totalReviews.set("0");
                 totalReviewsTooltip.setText("Total reviews");
-                approvals.set("0");
-                declinations.set("0");
+            }
+            int approvalsCount = reviewInfo.getApprovalsCount();
+            int declinationsCount = reviewInfo.getDeclinationsCount();
+            approvals.set(String.valueOf(approvalsCount));
+            declinations.set(String.valueOf(declinationsCount));
+            if (reviewInfo.isSealed()) {
+                if (truthStateTooltip == null) {
+                    truthStateTooltip = new Tooltip();
+                }
+                if (loading || statusMessage != null) {
+                    truthImage.setImage(DocumentCellUtil.UNKNOWN_SEAL_STATE);
+                    if (loading) {
+                        truthStateTooltip.setText("Loading reviews");
+                    }
+                    else {
+                        truthStateTooltip.setText(statusMessage);
+                    }
+                }
+                else if (approvalsCount > declinationsCount) {
+                    truthImage.setImage(DocumentCellUtil.SEALED_TRUTH_IMAGE);
+                    truthStateTooltip.setText("Truth");
+                }
+                else {
+                    truthImage.setImage(DocumentCellUtil.SEALED_LIE_IMAGE);
+                    truthStateTooltip.setText("Lie");
+                }
+                Tooltip.install(truthImage, truthStateTooltip);
+            }
+            else {
                 truthImage.setImage(null);
                 if (truthStateTooltip != null) {
                     Tooltip.uninstall(truthImage, truthStateTooltip);
                 }
             }
-            else {
-                Map<String, IPLDObject<Review>> reviewObjects = new HashMap<>();
-                IPLDContext context = controller.getContext();
-                for (String reviewHash : reviewTableEntries) {
-                    reviewObjects.put(reviewHash,
-                            new IPLDObject<>(reviewHash, LoaderFactory.REVIEW.createLoader(), context, null));
-                }
-                boolean sealed = modelState.isSealedDocument(documentHash);
-                if (sealed) {
-                    truthImage.setImage(UNKNOWN_SEAL_STATE);
-                    if (truthStateTooltip == null) {
-                        truthStateTooltip = new Tooltip();
-                    }
-                    truthStateTooltip.setText("Loading reviews");
-                    Tooltip.install(truthImage, truthStateTooltip);
-                }
-                loadReviews(getItem(), sealed, reviewObjects, false, 0);
-            }
-        }
-        Tooltip.install(totalReviewsImage, totalReviewsTooltip);
-    }
-
-    private void loadReviews(Document document, boolean sealed, Map<String, IPLDObject<Review>> reviewObjects,
-            boolean completeFailure, int attemptCountAfterLastSuccess) {
-        if (document != getItem()) {
-            return;
-        }
-        if (completeFailure && attemptCountAfterLastSuccess == 3) {
-            totalReviewsTooltip.setText("Total reviews (incomplete - gave up after 3 complete loading failures)");
-            if (sealed) {
-                if (truthStateTooltip == null) {
-                    truthStateTooltip = new Tooltip();
-                }
-                truthStateTooltip.setText("Incomplete evaluation - " + reviewObjects.size()
-                        + " total review table entries (might include older versions)");
-                Tooltip.install(truthImage, truthStateTooltip);
-            }
         }
         else {
-            int totalCount = reviewObjects.size();
-            int approvalsCount = 0;
-            int declinationsCount = 0;
-            Collection<IPLDObject<Review>> toLoad = new ArrayList<>();
-            for (IPLDObject<Review> reviewObject : reviewObjects.values()) {
-                if (reviewObject.isMapped()) {
-                    Review review = reviewObject.getMapped();
-                    String previousVersionHash = review.getPreviousVersionHash();
-                    if (reviewObjects.containsKey(previousVersionHash)) {
-                        totalCount--;
-                    }
-                    Boolean approve = review.getApprove();
-                    if (approve != null) {
-                        if (approve) {
-                            approvalsCount++;
-                        }
-                        else {
-                            declinationsCount++;
-                        }
-                    }
-                }
-                else {
-                    toLoad.add(reviewObject);
-                }
+            totalReviews.set("n/a");
+            totalReviewsTooltip.setText("Total reviews");
+            approvals.set("n/a");
+            declinations.set("n/a");
+            truthImage.setImage(DocumentCellUtil.UNKNOWN_SEAL_STATE);
+            if (truthStateTooltip == null) {
+                truthStateTooltip = new Tooltip();
             }
-            totalReviews.set(String.valueOf(totalCount));
-            approvals.set(String.valueOf(approvalsCount));
-            declinations.set(String.valueOf(declinationsCount));
-            if (toLoad.size() > 0) {
-                totalReviewsTooltip.setText("Total reviews (loading)");
-                loadObjects(toLoad, (successCount) -> loadReviews(document, sealed, reviewObjects, successCount == 0,
-                        successCount == 0 ? attemptCountAfterLastSuccess + 1 : 0));
-            }
-            else {
-                totalReviewsTooltip.setText("Total reviews");
-                if (sealed) {
-                    truthImage.setImage(approvalsCount > declinationsCount ? SEALED_TRUTH_IMAGE : SEALED_LIE_IMAGE);
-                }
-                else {
-                    truthImage.setImage(null);
-                    if (truthStateTooltip != null) {
-                        Tooltip.uninstall(truthImage, truthStateTooltip);
-                    }
-                }
-            }
+            truthStateTooltip.setText(reviewInfo.getStatusMessage());
+            Tooltip.install(truthImage, truthStateTooltip);
         }
-    }
-
-    private String getAge(Date date) {
-        long diff = System.currentTimeMillis() - date.getTime();
-        if (diff >= ONE_YEAR) {
-            long years = diff / ONE_YEAR;
-            if (years == 1) {
-                return "last year";
-            }
-            return years + " years ago";
-        }
-        if (diff >= ONE_WEEK) {
-            long weeks = diff / ONE_WEEK;
-            if (weeks == 1) {
-                return "last week";
-            }
-            return weeks + " weeks ago";
-        }
-        if (diff >= ONE_DAY) {
-            long days = diff / ONE_DAY;
-            if (days == 1) {
-                return "yesterday";
-            }
-            return days + " days ago";
-        }
-        if (diff >= ONE_HOUR) {
-            long hours = diff / ONE_HOUR;
-            if (hours == 1) {
-                return "1 hour ago";
-            }
-            return hours + " hours ago";
-        }
-        if (diff >= ONE_MINUTE) {
-            long minutes = diff / ONE_MINUTE;
-            if (minutes == 1) {
-                return "1 minute ago";
-            }
-            return minutes + " minutes ago";
-        }
-        return "just now";
-    }
-
-    private String getDateTime(Date date) {
-        DateFormat dateInstance = DateFormat.getDateInstance(DateFormat.MEDIUM);
-        DateFormat timeInstance = DateFormat.getTimeInstance(DateFormat.MEDIUM);
-        return dateInstance.format(date) + " " + timeInstance.format(date);
+        Tooltip.install(totalReviewsImage, totalReviewsTooltip);
     }
 
     private MenuItem getApproveItem() {
@@ -770,6 +614,14 @@ public class DocumentCell extends AbstractListCell<Document> implements Initiali
             });
         }
         return ownershipRequestItem;
+    }
+
+    private MenuItem getShowInDocumentsListItem() {
+        if (showInDocumentsListItem == null) {
+            showInDocumentsListItem = new MenuItem("Show in documents list");
+            showInDocumentsListItem.setOnAction(event -> mainPresenter.showInDocumentsList(getItem()));
+        }
+        return showInDocumentsListItem;
     }
 
 }

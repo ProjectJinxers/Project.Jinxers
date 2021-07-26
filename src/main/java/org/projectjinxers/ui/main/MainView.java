@@ -89,7 +89,7 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
         groupsList.setCellFactory(param -> new GroupCell(mainPresenter));
-        documentsList.setCellFactory(param -> new DocumentCell(mainPresenter));
+        documentsList.setCellFactory(param -> new DocumentCell(mainPresenter, false));
         ownershipRequestsList.setCellFactory(param -> new OwnershipRequestCell());
         unbanRequestsList.setCellFactory(param -> new UnbanRequestCell());
         votingsList.setCellFactory(param -> new VotingCell());
@@ -166,8 +166,18 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
     }
 
     @Override
+    public void updatedReviews(Document document) {
+        if (documentDetailsPresenter != null && document == documentDetailsPresenter.getDocument()) {
+            documentDetailsPresenter.getView().updateReviews();
+        }
+    }
+
+    @Override
     public void refreshTime() {
         documentsList.refresh();
+        if (documentDetailsPresenter != null) {
+            documentDetailsPresenter.getView().refreshTime();
+        }
     }
 
     @Override

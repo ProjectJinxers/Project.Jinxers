@@ -181,7 +181,7 @@ public class ObjectStatusView implements Initializable, ProgressChangeListener {
                 cancelButton.setVisible(true);
             }
         }
-        else if (executedTaskSteps == 0) {
+        else if (currentTask != null && executedTaskSteps == 0) {
             this.currentTask
                     .set(currentTask == null ? null : currentTask.getProgressMessage(progressObserver.isDestroying()));
             progress.set(-1);

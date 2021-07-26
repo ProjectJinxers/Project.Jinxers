@@ -13,17 +13,26 @@
  */
 package org.projectjinxers.data;
 
+import static org.projectjinxers.util.ModelUtility.loadObjects;
+
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.projectjinxers.account.Signer;
 import org.projectjinxers.config.Config;
+import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.IPLDObject.ProgressTask;
 import org.projectjinxers.controller.ModelController;
 import org.projectjinxers.model.DocumentRemoval;
 import org.projectjinxers.model.LoaderFactory;
 import org.projectjinxers.model.ModelState;
+import org.projectjinxers.model.Review;
 import org.projectjinxers.model.UserState;
+import org.projectjinxers.util.ModelUtility.CompletionHandler;
 
 /**
  * @author ProjectJinxers
@@ -37,6 +46,46 @@ public class Document extends ProgressObserver {
 
     }
 
+    public static class ReviewInfo {
+
+        private boolean available;
+        private int totalCount;
+        private int approvalsCount;
+        private int declinationsCount;
+        private boolean loading;
+        private boolean sealed;
+        private String statusMessage;
+
+        public boolean isAvailable() {
+            return available;
+        }
+
+        public int getTotalCount() {
+            return totalCount;
+        }
+
+        public int getApprovalsCount() {
+            return approvalsCount;
+        }
+
+        public int getDeclinationsCount() {
+            return declinationsCount;
+        }
+
+        public boolean isLoading() {
+            return loading;
+        }
+
+        public boolean isSealed() {
+            return sealed;
+        }
+
+        public String getStatusMessage() {
+            return statusMessage;
+        }
+
+    }
+
     private transient Group group;
     private transient User user;
     private String multihash;
@@ -44,18 +93,24 @@ public class Document extends ProgressObserver {
     private transient IPLDObject<org.projectjinxers.model.Document> documentObject;
     private transient IPLDObject<ModelState> modelStateObject;
     private Kind kind;
+    private transient boolean replaced;
 
-    private boolean loading;
-    private boolean saveCalled;
-    private boolean removeCalled;
-    private boolean removed;
+    private transient ReviewInfo reviewInfo;
+    private transient Map<String, Document> reviews;
+    private transient CompletionHandler reviewsHandler;
 
-    public Document(Group group, IPLDObject<org.projectjinxers.model.Document> documentObject) {
+    private transient boolean loading;
+    private transient boolean saveCalled;
+    private transient boolean removeCalled;
+    private transient boolean removed;
+
+    public Document(Group group, IPLDObject<org.projectjinxers.model.Document> documentObject, boolean replaced) {
         super(true);
         this.group = group;
         this.multihash = documentObject.getMultihash();
         this.documentObject = documentObject;
         this.kind = Kind.LOADED;
+        this.replaced = replaced;
     }
 
     public Document(Group group, String multihash) {
@@ -131,9 +186,9 @@ public class Document extends ProgressObserver {
                             String userHash = mapped.expectUserState().getUser().getMultihash();
                             try {
                                 this.modelStateObject = group.getOrCreateController().getCurrentValidatedState();
-                                IPLDObject<UserState> userState = modelStateObject.getMapped()
+                                IPLDObject<UserState> userStateObject = modelStateObject.getMapped()
                                         .expectUserState(userHash);
-                                if (userState == null) {
+                                if (userStateObject == null) {
                                     failedTask(ProgressTask.LOAD,
                                             "The document is not contained in the selected group.", null);
                                     this.group = null;
@@ -143,8 +198,14 @@ public class Document extends ProgressObserver {
                                 if (firstVersionHash == null) {
                                     firstVersionHash = multihash;
                                 }
-                                if (userState.getMapped().isRemoved(firstVersionHash)) {
+                                UserState userState = userStateObject.getMapped();
+                                if (userState.isRemoved(firstVersionHash)) {
                                     removed = true;
+                                }
+                                IPLDObject<org.projectjinxers.model.Document> latest = userState
+                                        .getDocumentByFirstVersionHash(firstVersionHash);
+                                if (!multihash.equals(latest.getMultihash())) {
+                                    replaced = true;
                                 }
                             }
                             catch (Exception e) {
@@ -168,6 +229,24 @@ public class Document extends ProgressObserver {
 
     public Kind getKind() {
         return kind;
+    }
+
+    public boolean isReplaced() {
+        return replaced;
+    }
+
+    public ReviewInfo getOrLoadReviewInfo(CompletionHandler completionHandler) {
+        this.reviewsHandler = completionHandler;
+        if (reviewInfo == null) {
+            reviewInfo = new ReviewInfo();
+            reviewInfo.loading = true;
+            updateReviewsInfo();
+        }
+        return reviewInfo;
+    }
+
+    public Map<String, Document> getReviews() {
+        return reviews;
     }
 
     public boolean isLoading() {
@@ -215,14 +294,15 @@ public class Document extends ProgressObserver {
         requestRemoval(controller, removalObject, user, signer);
     }
 
-    public void checkRemoved(Group group, ModelState valid) {
+    public void groupUpdated(Group group, IPLDObject<ModelState> valid) {
         if (this.group == group) {
+            this.modelStateObject = valid;
             if (documentObject != null && documentObject.isMapped()) {
                 org.projectjinxers.model.Document mapped = documentObject.getMapped();
                 IPLDObject<UserState> userStateObject = mapped.getUserState();
                 if (userStateObject != null) {
                     String userHash = userStateObject.getMapped().getUser().getMultihash();
-                    IPLDObject<UserState> userState = valid.expectUserState(userHash);
+                    IPLDObject<UserState> userState = valid.getMapped().expectUserState(userHash);
                     if (userState != null) {
                         String firstVersionHash = mapped.getFirstVersionHash();
                         if (firstVersionHash == null) {
@@ -254,6 +334,129 @@ public class Document extends ProgressObserver {
             return "Saved as " + multihash;
         }
         return null;
+    }
+
+    private void updateReviewsInfo() {
+        IPLDObject<ModelState> modelStateObject = this.modelStateObject;
+        if (modelStateObject == null) {
+            ModelController controller = group == null ? null : group.getController();
+            modelStateObject = controller == null ? null : controller.getCurrentValidatedState();
+        }
+        if (group == null || modelStateObject == null) {
+            reviewInfo.available = false;
+            if (group == null) {
+                reviewInfo.statusMessage = "Please associate the document to a group, if you want to see the reviews summary.";
+            }
+            else {
+                reviewInfo.statusMessage = "Please wait until a model state has been validated.";
+            }
+            reviewInfo.loading = false;
+            if (reviewsHandler != null) {
+                reviewsHandler.completed(0);
+            }
+        }
+        else {
+            reviewInfo.available = true;
+            ModelState modelState = modelStateObject.getMapped();
+            String[] reviewTableEntries = modelState.getReviewTableEntries(multihash);
+            reviewInfo.statusMessage = null;
+            if (reviewTableEntries == null) {
+                reviewInfo.totalCount = 0;
+                reviewInfo.approvalsCount = 0;
+                reviewInfo.declinationsCount = 0;
+                reviewInfo.loading = false;
+                if (reviewsHandler != null) {
+                    reviewsHandler.completed(0);
+                }
+            }
+            else {
+                if (reviews == null) {
+                    reviews = new HashMap<>();
+                }
+                IPLDContext context = group.getController().getContext();
+                synchronized (reviews) {
+                    for (String reviewHash : reviewTableEntries) {
+                        if (!reviews.containsKey(reviewHash)) {
+                            reviews.put(reviewHash, new Document(group,
+                                    new IPLDObject<>(reviewHash, LoaderFactory.DOCUMENT.createLoader(), context, null),
+                                    false));
+                        }
+                    }
+                }
+                boolean sealed = modelState.isSealedDocument(multihash);
+                if (sealed) {
+                    reviewInfo.sealed = true;
+                }
+                loadReviews(sealed, false, 0);
+            }
+        }
+    }
+
+    private void loadReviews(boolean sealed, boolean completeFailure, int attemptCountAfterLastSuccess) {
+        if (completeFailure && attemptCountAfterLastSuccess == 3) {
+            if (sealed) {
+                reviewInfo.statusMessage = "Incomplete evaluation - " + reviews.size()
+                        + " total review table entries (might include older versions)";
+            }
+            else {
+                reviewInfo.statusMessage = "Incomplete - gave up after 3 complete loading failures";
+            }
+            reviewInfo.loading = false;
+            if (reviewsHandler != null) {
+                reviewsHandler.completed(0);
+            }
+        }
+        else {
+            reviewInfo.totalCount = reviews.size();
+            reviewInfo.approvalsCount = 0;
+            reviewInfo.declinationsCount = 0;
+            Collection<IPLDObject<org.projectjinxers.model.Document>> toLoad = new ArrayList<>();
+            Collection<String> obsoleteVersionHashes = new ArrayList<>();
+            synchronized (reviews) {
+                for (Document reviewDocument : reviews.values()) {
+                    if (reviewDocument.documentObject.isMapped()) {
+                        Review review = (Review) reviewDocument.documentObject.getMapped();
+                        String previousVersionHash = review.getPreviousVersionHash();
+                        if (previousVersionHash != null && reviews.containsKey(previousVersionHash)) {
+                            obsoleteVersionHashes.add(previousVersionHash);
+                            reviewInfo.totalCount--;
+                        }
+                        Boolean approve = review.getApprove();
+                        if (approve != null) {
+                            if (approve) {
+                                reviewInfo.approvalsCount++;
+                            }
+                            else {
+                                reviewInfo.declinationsCount++;
+                            }
+                        }
+                    }
+                    else {
+                        toLoad.add(reviewDocument.documentObject);
+                    }
+                }
+                if (obsoleteVersionHashes != null) {
+                    for (String hash : obsoleteVersionHashes) {
+                        reviews.remove(hash);
+                    }
+                }
+            }
+            reviewInfo.statusMessage = null;
+            if (toLoad.size() > 0) {
+                loadObjects(toLoad, (successCount) -> {
+                    if (reviewsHandler != null) {
+                        reviewsHandler.completed(successCount);
+                    }
+                    loadReviews(sealed, successCount == 0, successCount == 0 ? attemptCountAfterLastSuccess + 1 : 0);
+                });
+            }
+            else {
+                reviewInfo.loading = false;
+                if (reviewsHandler != null) {
+                    reviewsHandler.completed(0);
+                }
+            }
+        }
     }
 
     private boolean requestRemoval(ModelController controller, IPLDObject<DocumentRemoval> removal, User user,

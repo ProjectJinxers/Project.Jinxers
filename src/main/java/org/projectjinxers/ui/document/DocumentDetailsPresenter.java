@@ -29,6 +29,10 @@ public class DocumentDetailsPresenter extends ChildPresenter<DocumentDetailsPres
 
     public interface DocumentDetailsView extends View {
 
+        void updateReviews();
+
+        void refreshTime();
+
     }
 
     private Document document;

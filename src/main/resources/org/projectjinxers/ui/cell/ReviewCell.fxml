@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.control.Hyperlink?>
+<?import javafx.scene.image.Image?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Tooltip?>
+<?import javafx.scene.layout.VBox?>
+
+<BorderPane xmlns:fx="http://javafx.com/fxml/1">
+    <center>
+        <VBox>
+            <BorderPane>
+                <left>
+                    <Label fx:id="dateLabel" text="${controller.age}">
+                        <tooltip>
+                            <Tooltip text="${controller.time}"/>
+                        </tooltip>
+                    </Label>
+                </left>
+                <center>
+                    <Hyperlink fx:id="authorLabel" text="${controller.author}" onAction="#showAuthor">
+                        <tooltip>
+                            <Tooltip text="${controller.authorDetails}"/>
+                        </tooltip>
+                    </Hyperlink>
+                </center>
+                <right>
+                    <ImageView fx:id="approvalImage"/>
+                </right>
+            </BorderPane>
+            <Label fx:id="titleLabel" text="${controller.title}" wrapText="true"/>
+            <BorderPane>
+	           <center>
+                    <HBox>
+                        <fx:define>
+                            <Image fx:id="totalReviewsIcon" url="images/totalReviews.png"/>
+                            <Image fx:id="approvalsIcon" url="images/approve.png"/>
+                            <Image fx:id="declinationsIcon" url="images/decline.png"/>
+                        </fx:define>
+                        <ImageView fx:id="totalReviewsImage" image="$totalReviewsIcon"/>
+                        <Label text="${controller.totalReviews}"/>
+                        <ImageView fx:id="approvalsImage" image="$approvalsIcon"/> 
+                        <Label text="${controller.approvals}"/>
+                        <ImageView fx:id="declinationsImage" image="$declinationsIcon"/> 
+                        <Label text="${controller.declinations}"/>
+                    </HBox>
+                </center>
+                <right>
+                    <ImageView fx:id="truthImage"/>
+                </right>
+    	    </BorderPane>
+        </VBox>
+    </center>
+</BorderPane>
+

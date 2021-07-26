@@ -125,7 +125,8 @@ public class DocumentView implements PJView<DocumentPresenter.DocumentView, Docu
             groupsBox.setDisable(true);
         }
         updateUsers(data == null ? null : data.getUser());
-        boolean isReview = documentPresenter.getReviewed() != null;
+        boolean isReview = reviewed != null
+                || documentObject != null && documentObject.isMapped() && documentObject.getMapped() instanceof Review;
         if (isReview) {
             approvalBox.getItems().addAll(APPROVAL_YES, APPROVAL_NO, APPROVAL_NEUTRAL);
         }
@@ -281,17 +282,13 @@ public class DocumentView implements PJView<DocumentPresenter.DocumentView, Docu
     @FXML
     void confirm(Event e) {
         boolean didNotConfirmContents = importField.isEditable();
-        if (didNotConfirmContents && documentPresenter.getReviewed() == null) {
+        if (didNotConfirmContents && !reviewPanel.isVisible()) {
             documentPresenter.confirmed(checkNotBlank(importField), groupsBox.getValue());
         }
         else {
             org.projectjinxers.model.Document data;
-            Document reviewed = documentPresenter.getReviewed();
-            if (reviewed == null) {
-                data = new org.projectjinxers.model.Document(checkNotEmpty(titleField), checkNotEmpty(subtitleField),
-                        checkNotEmpty(versionField), checkNotEmpty(tagsField), checkNotEmpty(sourceField), null, null);
-            }
-            else {
+            if (reviewPanel.isVisible()) {
+                Document reviewed = documentPresenter.getReviewed();
                 String approvalValue = approvalBox.getValue();
                 Boolean approve;
                 if (isNullOrEmpty(approvalValue) || approvalValue.equals(APPROVAL_NEUTRAL)) {
@@ -301,8 +298,13 @@ public class DocumentView implements PJView<DocumentPresenter.DocumentView, Docu
                     approve = approvalValue.equals(APPROVAL_YES);
                 }
                 data = new Review(checkNotEmpty(titleField), checkNotEmpty(subtitleField), checkNotEmpty(versionField),
-                        checkNotEmpty(tagsField), checkNotEmpty(sourceField), null, reviewed.getDocumentObject(),
-                        truthInversionBox.isSelected(), approve, null);
+                        checkNotEmpty(tagsField), checkNotEmpty(sourceField), null,
+                        reviewed == null ? null : reviewed.getDocumentObject(), truthInversionBox.isSelected(), approve,
+                        null);
+            }
+            else {
+                data = new org.projectjinxers.model.Document(checkNotEmpty(titleField), checkNotEmpty(subtitleField),
+                        checkNotEmpty(versionField), checkNotEmpty(tagsField), checkNotEmpty(sourceField), null, null);
             }
             documentPresenter.confirmed(data, groupsBox.getValue(), usersBox.getValue(), checkNotBlank(importField),
                     didNotConfirmContents);

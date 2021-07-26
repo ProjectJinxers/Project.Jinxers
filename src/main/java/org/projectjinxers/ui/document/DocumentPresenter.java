@@ -348,7 +348,7 @@ public class DocumentPresenter extends DataPresenter<Document, DocumentPresenter
             return;
         }
         if (abstr == null && contents == null
-                && (reviewed == null || !Boolean.TRUE.equals(((Review) data).getApprove()))) {
+                && (!(data instanceof Review) || !Boolean.TRUE.equals(((Review) data).getApprove()))) {
             getView().showMessage("Document without mandatory abstract or contents.");
             return;
         }

@@ -25,12 +25,15 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.Queue;
 import java.util.Set;
 
 import org.projectjinxers.config.SecretConfig;
 import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.controller.SimpleProgressListener;
 import org.projectjinxers.controller.IPLDObject.ProgressListener;
+import org.projectjinxers.controller.IPLDObject.ProgressTask;
 import org.projectjinxers.controller.IPLDReader.KeyProvider;
 import org.projectjinxers.controller.ValidationException;
 import org.projectjinxers.model.IPLDSerializable;
@@ -40,6 +43,12 @@ import org.projectjinxers.model.IPLDSerializable;
  *
  */
 public class ModelUtility {
+
+    public interface CompletionHandler {
+
+        void completed(int successCount);
+
+    }
 
     public static final int CURRENT_HASH_OBFUSCATION_VERSION = 0;
 
@@ -509,6 +518,57 @@ public class ModelUtility {
             }
         }
         return res;
+    }
+
+    public static <T extends IPLDSerializable> void loadObject(IPLDObject<T> object,
+            CompletionHandler completionHandler) {
+        new Thread(() -> {
+            if (object.isMapped()) {
+                completionHandler.completed(1);
+            }
+            else {
+                object.setProgressListener(new SimpleProgressListener() {
+                    @Override
+                    protected void finishedTask(ProgressTask task, boolean success) {
+                        object.removeProgressListener(this);
+                        completionHandler.completed(success ? 1 : 0);
+                    }
+                });
+                object.getMapped();
+            }
+        }).start();
+    }
+
+    public static <T extends IPLDSerializable> void loadObjects(Collection<IPLDObject<T>> objects,
+            CompletionHandler completionHandler) {
+        new Thread(() -> {
+            int totalAttempts = objects.size();
+            AtomicInteger finishCounter = new AtomicInteger();
+            AtomicInteger successCounter = new AtomicInteger();
+            for (IPLDObject<T> object : objects) {
+                if (object.isMapped()) {
+                    int successCount = successCounter.incrementAndGet();
+                    if (finishCounter.incrementAndGet() == totalAttempts) {
+                        completionHandler.completed(successCount);
+                    }
+                }
+                else {
+                    object.setProgressListener(new SimpleProgressListener() {
+                        @Override
+                        protected void finishedTask(ProgressTask task, boolean success) {
+                            object.removeProgressListener(this);
+                            if (success) {
+                                successCounter.incrementAndGet();
+                            }
+                            if (finishCounter.incrementAndGet() == totalAttempts) {
+                                completionHandler.completed(successCounter.get());
+                            }
+                        }
+                    });
+                    object.getMapped();
+                }
+            }
+        }).start();
     }
 
 }

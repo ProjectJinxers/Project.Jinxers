@@ -23,13 +23,13 @@ import org.projectjinxers.util.ModelUtility.CompletionHandler;
 
 import javafx.fxml.FXMLLoader;
 import javafx.scene.control.ContextMenu;
-import javafx.scene.control.ListCell;
+import javafx.scene.control.TreeCell;
 
 /**
  * @author ProjectJinxers
  *
  */
-public abstract class AbstractListCell<T> extends ListCell<T> {
+public abstract class AbstractTreeCell<T> extends TreeCell<T> {
 
     private String fxmlPath;
     private boolean hasContextMenu;
@@ -37,11 +37,11 @@ public abstract class AbstractListCell<T> extends ListCell<T> {
     private FXMLLoader loader;
     private ContextMenu contextMenu;
 
-    protected AbstractListCell(String fxmlPath) {
+    protected AbstractTreeCell(String fxmlPath) {
         this(fxmlPath, false);
     }
 
-    protected AbstractListCell(String fxmlPath, boolean hasContextMenu) {
+    protected AbstractTreeCell(String fxmlPath, boolean hasContextMenu) {
         this.fxmlPath = fxmlPath;
         this.hasContextMenu = hasContextMenu;
     }
