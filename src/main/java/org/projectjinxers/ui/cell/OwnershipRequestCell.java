@@ -19,6 +19,7 @@ import java.util.Collection;
 import java.util.ResourceBundle;
 
 import org.projectjinxers.controller.IPLDObject;
+import org.projectjinxers.data.Document;
 import org.projectjinxers.data.OwnershipRequest;
 import org.projectjinxers.data.User;
 import org.projectjinxers.model.UserState;
@@ -151,7 +152,7 @@ public class OwnershipRequestCell extends DocumentCell<OwnershipRequest> {
         }
         anonymousVotingRequested.set(item.isAnonymousVotingRequested());
         updateVotingInfo();
-        super.update(item);
+        update((Document) item); // GitHub Actions Java compiler fails if super method is called.
     }
 
     @FXML
