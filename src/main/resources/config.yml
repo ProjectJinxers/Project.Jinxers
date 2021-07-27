@@ -9,3 +9,9 @@ iota:
       
    validHashes:
       blah: zdpuB3TG8etpX8cBxR7T6kVWG5sThNZsGw1qqUURy24K9RzcC
+      
+      
+userVerification:
+   notRequired:
+      - blah
+      - foo

@@ -70,6 +70,7 @@ public class OwnershipTransferController {
     private final IPLDContext context;
     private final ECDSASignature signature;
     private final long timestamp;
+    private final boolean userVerificationRequired;
 
     private IPLDObject<OwnershipRequest> ownershipRequest;
     private IPLDObject<Voting> voting;
@@ -89,7 +90,8 @@ public class OwnershipTransferController {
      * @param timestamp       the timestamp (including tolerance) when the ownership request has been received
      */
     OwnershipTransferController(String documentHash, String userHash, boolean anonymousVoting,
-            IPLDObject<ModelState> modelState, IPLDContext context, ECDSASignature signature, long timestamp) {
+            IPLDObject<ModelState> modelState, IPLDContext context, ECDSASignature signature, long timestamp,
+            boolean userVerificationRequired) {
         this.documentHash = documentHash;
         this.userHash = userHash;
         this.anonymousVoting = anonymousVoting;
@@ -98,10 +100,11 @@ public class OwnershipTransferController {
         this.context = context;
         this.signature = signature;
         this.timestamp = timestamp;
+        this.userVerificationRequired = userVerificationRequired;
     }
 
     public OwnershipTransferController(IPLDObject<OwnershipRequest> ownershipRequest, IPLDObject<ModelState> modelState,
-            IPLDContext context) {
+            IPLDContext context, boolean userVerificationRequired) {
         OwnershipRequest req = ownershipRequest.getMapped();
         this.documentHash = req.getDocument().getMultihash();
         this.userHash = req.expectUserHash();
@@ -111,6 +114,7 @@ public class OwnershipTransferController {
         this.context = context;
         this.signature = ownershipRequest.getMetadata().getSignature();
         this.timestamp = req.getTimestamp();
+        this.userVerificationRequired = userVerificationRequired;
         if (!process() || this.ownershipRequest == null) {
             throw new ValidationException("expected ownership request");
         }
@@ -129,6 +133,7 @@ public class OwnershipTransferController {
         this.modelState = modelState.getMapped();
         this.context = context;
         this.timestamp = this.modelState.getTimestamp() + timestampTolerance;
+        this.userVerificationRequired = false;
         if (!process() || this.document == null || this.previousOwner == null
                 || !this.newOwner.getMultihash().equals(userHash)) {
             throw new ValidationException("invalid granted ownership");
@@ -142,6 +147,7 @@ public class OwnershipTransferController {
         this.documentHash = selection.getDocument().getMultihash();
         this.anonymousVoting = selection.isAnonymous();
         this.timestamp = selection.getDeadline().getTime() - OwnershipSelection.DURATION;
+        this.userVerificationRequired = false;
         if (!prepareVoting(Long.MAX_VALUE, false, null, document)) {
             throw new ValidationException("expected voting");
         }
@@ -180,11 +186,15 @@ public class OwnershipTransferController {
                 || modelState.getVotingForOwnershipTransfer(documentHash) != null) {
             return false;
         }
-        IPLDObject<UserState> userState = modelState.getUserState(userHash);
-        if (userState != null) {
+        IPLDObject<UserState> userStateObject = modelState.getUserState(userHash);
+        if (userStateObject != null) {
+            UserState userState = userStateObject.getMapped();
+            if (userVerificationRequired && userState.getVerifiedBy() == null) {
+                throw new ValidationException("user must be verified");
+            }
             byte[] hashBase = composePubMessageRequest(anonymousVoting, userHash, documentHash)
                     .getBytes(StandardCharsets.UTF_8);
-            userState.getMapped().getUser().getMapped().verifySignature(signature, hashBase, Signer.VERIFIER);
+            userState.getUser().getMapped().verifySignature(signature, hashBase, Signer.VERIFIER);
             IPLDObject<Document> document = new IPLDObject<>(documentHash, LoaderFactory.DOCUMENT.createLoader(),
                     context, null);
             Document loaded = document.getMapped();
@@ -195,9 +205,9 @@ public class OwnershipTransferController {
                                 "OP reclaims never result in votings, not even ownership requests "
                                         + "- for future validation the anonymous voting flag must be false");
                     }
-                    return prepareTransfer(userState, document, true);
+                    return prepareTransfer(userStateObject, document, true);
                 }
-                return processUserDocument(userState, document);
+                return processUserDocument(userStateObject, document);
             }
         }
         return false;

@@ -99,8 +99,9 @@ class ModelControllerTest {
         controller.saveDocument(documentObject, DEFAULT_SIGNER_SECURITY_LEVEL_1);
         String newHash = waitForPublishedAndSimulateDirectConfirmation(100, 100);
         IPLDObject<ModelState> firstEverModelState = new IPLDObject<>(newHash, new ModelState(),
-                controller.getContext(), new ValidationContext(controller.getContext(), null, null,
-                        System.currentTimeMillis(), Config.DEFAULT_TIMESTAMP_TOLERANCE, null));
+                controller.getContext(),
+                new ValidationContext(controller.getContext(), null, null, System.currentTimeMillis(),
+                        Config.DEFAULT_TIMESTAMP_TOLERANCE, Config.getSharedInstance(), null));
         controller.getContext().clearCache();
         ModelState firstEver = firstEverModelState.getMapped();
         assertNull(firstEver.getPreviousVersion());

@@ -14,6 +14,8 @@
 package org.projectjinxers.config;
 
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Corresponds to the config.yml resource file.
@@ -27,6 +29,7 @@ public class Config extends YamlConfig<Config.Root> {
         public IPFS ipfs;
         public IOTA iota;
         public ValidationParams validationParams;
+        public UserVerification userVerification;
 
     }
 
@@ -73,6 +76,12 @@ public class Config extends YamlConfig<Config.Root> {
 
     }
 
+    static class UserVerification {
+
+        public String[] notRequired;
+
+    }
+
     // if changed in a running system, all affected model meta versions must be changed as well and validation must be
     // adjusted
     public static final long DEFAULT_TIMESTAMP_TOLERANCE = 1000L * 60 * 2;
@@ -91,6 +100,7 @@ public class Config extends YamlConfig<Config.Root> {
 
     private String iotaAddress;
     private Long timestampTolerance;
+    private Set<String> userVerificationNotRequired;
 
     private Config(Root root) {
         super(root);
@@ -188,6 +198,19 @@ public class Config extends YamlConfig<Config.Root> {
             timestampTolerance = res == null ? DEFAULT_TIMESTAMP_TOLERANCE : res;
         }
         return timestampTolerance;
+    }
+
+    public boolean isUserVerificationRequired() {
+        if (userVerificationNotRequired == null) {
+            userVerificationNotRequired = new TreeSet<>();
+            UserVerification userVerification = root.userVerification;
+            if (userVerification != null && userVerification.notRequired != null) {
+                for (String val : userVerification.notRequired) {
+                    userVerificationNotRequired.add(val);
+                }
+            }
+        }
+        return !userVerificationNotRequired.contains(getIOTAAddress());
     }
 
     public Config subConfig(String iotaAddress, long timestampTolerance) {

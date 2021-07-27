@@ -58,6 +58,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
 
     private static final String KEY_VERSION = "v";
     private static final String KEY_RATING = "r";
+    private static final String KEY_VERIFIED_BY = "y";
     private static final String KEY_USER = "u";
     private static final String KEY_PREVIOUS_VERSION = "p";
     private static final String KEY_DOCUMENTS = "d";
@@ -406,6 +407,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
 
     private long version;
     private int rating;
+    private String verifiedBy;
     private IPLDObject<User> user;
     private IPLDObject<UserState> previousVersion;
     private Map<String, IPLDObject<Document>> documents;
@@ -456,6 +458,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             Metadata metadata) {
         this.version = reader.readNumber(KEY_VERSION).intValue();
         this.rating = reader.readNumber(KEY_RATING).intValue();
+        this.verifiedBy = reader.readString(KEY_VERIFIED_BY);
         this.user = reader.readLinkObject(KEY_USER, context, validationContext, LoaderFactory.USER, eager);
         this.previousVersion = reader.readLinkObject(KEY_PREVIOUS_VERSION, context, null, LoaderFactory.USER_STATE,
                 false);
@@ -489,6 +492,7 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
             throws IOException {
         writer.writeNumber(KEY_VERSION, version);
         writer.writeNumber(KEY_RATING, rating);
+        writer.writeString(KEY_VERIFIED_BY, verifiedBy);
         writer.writeLink(KEY_USER, user, signer, context, progressListener);
         writer.writeLink(KEY_PREVIOUS_VERSION, previousVersion, null, null, null);
         writer.writeLinkObjects(KEY_DOCUMENTS, documents, null, null, null);
@@ -516,6 +520,10 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
      */
     public int getRating() {
         return rating;
+    }
+
+    public String getVerifiedBy() {
+        return verifiedBy;
     }
 
     /**

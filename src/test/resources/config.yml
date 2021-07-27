@@ -11,3 +11,8 @@ iota:
       
 validationParams:
    timestampTolerance: 0
+   
+userVerification:
+   notRequired:
+      - blah
+      - foo

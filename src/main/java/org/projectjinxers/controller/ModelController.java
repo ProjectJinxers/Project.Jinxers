@@ -216,9 +216,11 @@ public class ModelController {
     }
 
     private final IPFSAccess access;
+    private final Config config;
     private final SecretConfig secretConfig;
     private final IPLDContext context;
-    private long timestampTolerance;
+    private final long timestampTolerance;
+    private final boolean userVerificationRequired;
 
     private final String address;
     private final String peerIDBase64;
@@ -263,11 +265,12 @@ public class ModelController {
             throws Exception {
         this.access = access;
         this.peerIDBase64 = access.getPeerIDBase64();
-        Config cfg = config == null ? Config.getSharedInstance() : config;
+        this.config = config == null ? Config.getSharedInstance() : config;
         this.secretConfig = secretConfig == null ? SecretConfig.getSharedInstance() : secretConfig;
         this.context = new IPLDContext(access, IPLDEncoding.JSON, IPLDEncoding.CBOR, false);
         this.timestampTolerance = timestampTolerance;
-        address = cfg.getIOTAAddress();
+        this.userVerificationRequired = this.config.isUserVerificationRequired();
+        address = this.config.getIOTAAddress();
         String currentModelStateHash;
         try {
             currentModelStateHash = access.readModelStateHash(address);
@@ -276,7 +279,7 @@ public class ModelController {
             }
         }
         catch (FileNotFoundException e) {
-            currentModelStateHash = cfg.getValidHash(address);
+            currentModelStateHash = this.config.getValidHash(address);
             if (currentModelStateHash != null) {
                 this.currentValidatedState = loadModelState(currentModelStateHash, false);
             }
@@ -285,7 +288,7 @@ public class ModelController {
                 if (currentModelStateHash != null) {
                     try {
                         this.currentValidationContext = new ValidationContext(context, null, null,
-                                System.currentTimeMillis() + timestampTolerance, 0, this.secretConfig);
+                                System.currentTimeMillis() + timestampTolerance, 0, this.config, this.secretConfig);
                         this.currentValidatedState = loadModelState(currentModelStateHash, true);
                         access.saveModelStateHash(address, currentModelStateHash);
                         break;
@@ -429,7 +432,7 @@ public class ModelController {
             }
             else {
                 currentValidationContext = new ValidationContext(context, currentValidatedState,
-                        currentLocalHashes.keySet(), timestamp, timestampTolerance, secretConfig);
+                        currentLocalHashes.keySet(), timestamp, timestampTolerance, config, secretConfig);
                 IPLDObject<ModelState> loaded = loadModelState(multihash, true);
                 mergeWithValidated(loaded);
             }
@@ -463,7 +466,7 @@ public class ModelController {
         IPLDObject<ModelState> currentModelState = currentValidatedState;
         OwnershipTransferController controller = new OwnershipTransferController(requestParts[2], requestParts[1],
                 OwnershipTransferController.OWNERSHIP_VOTING_ANONYMOUS.equals(requestParts[0]), currentModelState,
-                context, signature, timestamp);
+                context, signature, timestamp, userVerificationRequired);
         if (controller.process()) {
             saveLocalChanges(null, null, null, null, controller, null, System.currentTimeMillis());
         }
@@ -1667,7 +1670,8 @@ public class ModelController {
                         while (innerIt.hasNext()) {
                             IPLDObject<OwnershipRequest> ownershipRequest = innerIt.next();
                             try {
-                                new OwnershipTransferController(ownershipRequest, validated, context);
+                                new OwnershipTransferController(ownershipRequest, validated, context,
+                                        userVerificationRequired);
                             }
                             catch (Exception e) {
                                 innerIt.remove();

@@ -30,6 +30,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import org.projectjinxers.account.Signer;
+import org.projectjinxers.config.Config;
 import org.projectjinxers.config.SecretConfig;
 import org.projectjinxers.model.Document;
 import org.projectjinxers.model.DocumentRemoval;
@@ -75,6 +76,7 @@ public class ValidationContext {
     private final Set<String> currentLocalHashes;
     private final long timestamp;
     private final long timestampTolerance;
+    private final boolean userVerificationRequired;
     private final SecretConfig secretConfig;
     private final boolean strict;
     private SettlementController mainSettlementController;
@@ -94,12 +96,14 @@ public class ValidationContext {
     private Map<String, Set<String>> obsoleteReviewVersions = new HashMap<>();
 
     public ValidationContext(IPLDContext context, IPLDObject<ModelState> currentValidLocalState,
-            Set<String> currentLocalHashes, long timestamp, long timestampTolerance, SecretConfig secretConfig) {
+            Set<String> currentLocalHashes, long timestamp, long timestampTolerance, Config config,
+            SecretConfig secretConfig) {
         this.context = context;
         this.currentValidLocalState = currentValidLocalState;
         this.currentLocalHashes = currentLocalHashes;
         this.timestamp = timestamp;
         this.timestampTolerance = timestampTolerance;
+        this.userVerificationRequired = config.isUserVerificationRequired();
         this.secretConfig = secretConfig;
         this.strict = timestampTolerance > 0;
     }
@@ -114,6 +118,10 @@ public class ValidationContext {
 
     public long getTimestamp() {
         return timestamp;
+    }
+
+    public boolean isUserVerificationRequired() {
+        return userVerificationRequired;
     }
 
     public SecretConfig getSecretConfig() {
@@ -583,7 +591,7 @@ public class ValidationContext {
             }
             previousState = state.getPreviousVersion();
         }
-        new OwnershipTransferController(request, withoutRequest, context);
+        new OwnershipTransferController(request, withoutRequest, context, userVerificationRequired);
     }
 
     private <D extends ToggleRequest> String validateToggleRequest(IPLDObject<D> request) {
@@ -607,6 +615,19 @@ public class ValidationContext {
         IPLDObject<UserState> common = commonUserStates.get(userState.getUser().getMultihash());
         UserState since = common == null ? null : common.getMapped();
         IPLDObject<User> userObject = userState.getUser();
+        String wasVerifiedBy = since == null ? null : since.getVerifiedBy();
+        String isVerifiedBy = userState.getVerifiedBy();
+        if (wasVerifiedBy == null) {
+            if (isVerifiedBy != null) {
+                if (!UserVerification.getVerifier(isVerifiedBy).verifyUser(userObject)) {
+                    throw new ValidationException("failed to verify user verification");
+                }
+            }
+        }
+        else if (!wasVerifiedBy.equals(isVerifiedBy)) {
+            // If a verifier discontinues support, this has to changed.
+            throw new ValidationException("non-null verifiedBy must not be changed");
+        }
         String userHash = userObject.getMultihash();
         if (currentValidLocalState != null) {
             userObject = currentValidLocalState.getMapped().expectUserState(userHash).getMapped().getUser();
@@ -688,6 +709,9 @@ public class ValidationContext {
      */
     private void validateDocument(IPLDObject<Document> document, UserState userState, User user) {
         userState.validateRequiredRating();
+        if (userVerificationRequired && userState.getVerifiedBy() == null) {
+            throw new ValidationException("user not verified");
+        }
         Document doc = document.getMapped();
         if (doc instanceof Review) {
             Review review = (Review) doc;
