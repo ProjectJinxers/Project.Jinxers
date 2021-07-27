@@ -34,7 +34,7 @@ public class ModelLoadingUIUtility {
                 (successCount) -> Platform.runLater(() -> completionHandler.completed(successCount)));
     }
 
-    public static <T extends IPLDSerializable> void loadObjects(Collection<IPLDObject<T>> objects,
+    public static void loadObjects(Collection<IPLDObject<? extends IPLDSerializable>> objects,
             CompletionHandler completionHandler) {
         ModelUtility.loadObjects(objects,
                 (successCount) -> Platform.runLater(() -> completionHandler.completed(successCount)));

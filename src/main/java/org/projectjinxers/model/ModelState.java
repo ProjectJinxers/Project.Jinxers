@@ -333,6 +333,10 @@ public class ModelState implements IPLDSerializable, Loader<ModelState> {
         return sealedDocuments.get(documentHash).getMapped();
     }
 
+    public Map<String, IPLDObject<OwnershipRequest>[]> getOwnershipRequests() {
+        return ownershipRequests;
+    }
+
     /**
      * @param documentHash the document hash
      * @return the ownership requests for the document with the given hash (no null checks!)

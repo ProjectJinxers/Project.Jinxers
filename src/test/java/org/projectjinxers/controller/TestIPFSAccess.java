@@ -77,6 +77,11 @@ public class TestIPFSAccess extends IPFSAccess {
     private boolean recordSavedObjects;
 
     @Override
+    void configure() {
+
+    }
+
+    @Override
     public String getPeerIDBase64() {
         return "";
     }

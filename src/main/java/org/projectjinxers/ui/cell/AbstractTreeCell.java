@@ -100,7 +100,7 @@ public abstract class AbstractTreeCell<T> extends TreeCell<T> {
         });
     }
 
-    public <O extends IPLDSerializable> void loadObjects(Collection<IPLDObject<O>> objects,
+    public void loadObjects(Collection<IPLDObject<? extends IPLDSerializable>> objects,
             CompletionHandler completionHandler) {
         final Object item = getItem();
         ModelLoadingUIUtility.loadObjects(objects, (successCount) -> {

@@ -149,30 +149,29 @@ public class User extends ProgressObserver {
         });
         startedTask(ProgressTask.LOAD, -1);
         new Thread(() -> {
-            try {
-                ModelController controller = group.getOrCreateController();
-                if (controller != null) {
-                    IPLDObject<ModelState> currentValidatedState = controller.getCurrentValidatedState();
-                    if (currentValidatedState != null) {
-                        IPLDObject<UserState> userState = currentValidatedState.getMapped().getUserState(multihash);
-                        if (userState != null) {
-                            userObject = userState.getMapped().getUser();
-                            org.projectjinxers.model.User user = userObject.getMapped();
-                            String name = user.getUsername();
-                            if (this.name == null) {
-                                this.name = name;
-                            }
-                            else if (!this.name.equals(name)) {
-                                failedTask(ProgressTask.LOAD, "username mismatch", null);
-                                return;
-                            }
-                            this.publicKey = user.getPublicKey();
+            ModelController controller = group.getOrCreateController();
+            if (group.isInitializingController()) {
+                failedTask(ProgressTask.LOAD,
+                        "Please wait until the model controller for the group has been initialized.", null);
+            }
+            else {
+                IPLDObject<ModelState> currentValidatedState = controller.getCurrentValidatedState();
+                if (currentValidatedState != null) {
+                    IPLDObject<UserState> userState = currentValidatedState.getMapped().getUserState(multihash);
+                    if (userState != null) {
+                        userObject = userState.getMapped().getUser();
+                        org.projectjinxers.model.User user = userObject.getMapped();
+                        String name = user.getUsername();
+                        if (this.name == null) {
+                            this.name = name;
                         }
+                        else if (!this.name.equals(name)) {
+                            failedTask(ProgressTask.LOAD, "username mismatch", null);
+                            return;
+                        }
+                        this.publicKey = user.getPublicKey();
                     }
                 }
-            }
-            catch (Exception e) {
-                failedTask(ProgressTask.LOAD, "Failed to load the user.", e);
             }
         }).start();
     }

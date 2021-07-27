@@ -18,7 +18,6 @@ import static org.projectjinxers.util.ModelUtility.dequeue;
 import static org.projectjinxers.util.ModelUtility.enqueue;
 import static org.projectjinxers.util.ModelUtility.indexOfNonNullEntry;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -53,6 +52,7 @@ import org.projectjinxers.model.Review;
 import org.projectjinxers.model.SealedDocument;
 import org.projectjinxers.model.SettlementRequest;
 import org.projectjinxers.model.Tally;
+import org.projectjinxers.model.ToggleRequest;
 import org.projectjinxers.model.UnbanRequest;
 import org.projectjinxers.model.UserState;
 import org.projectjinxers.model.Votable;
@@ -68,6 +68,10 @@ import org.spongycastle.util.encoders.Base64;
 public class ModelController {
 
     public interface ModelControllerListener {
+
+        void initialized();
+
+        void failedInitialization();
 
         void onModelStateValidated();
 
@@ -177,22 +181,20 @@ public class ModelController {
 
     private static final Map<String, ModelController> MODEL_CONTROLLERS = new HashMap<>();
 
-    public static ModelController getModelController(Config config) throws Exception {
+    public static ModelController getModelController(Config config) {
         return getModelController(config, null);
     }
 
-    public static ModelController getModelController(Config config, SecretConfig secretConfig) throws Exception {
+    public static ModelController getModelController(Config config, SecretConfig secretConfig) {
         IPFSAccess access = new IPFSAccess();
-        access.configure();
         return getModelController(access, config, secretConfig);
     }
 
-    public static ModelController getModelController(IPFSAccess access, Config config) throws Exception {
+    public static ModelController getModelController(IPFSAccess access, Config config) {
         return getModelController(access, config, null);
     }
 
-    public static ModelController getModelController(IPFSAccess access, Config config, SecretConfig secretConfig)
-            throws Exception {
+    public static ModelController getModelController(IPFSAccess access, Config config, SecretConfig secretConfig) {
         Config cfg = config == null ? Config.getSharedInstance() : config;
         String address = cfg.getIOTAAddress();
         synchronized (MODEL_CONTROLLERS) {
@@ -223,7 +225,7 @@ public class ModelController {
     private final boolean userVerificationRequired;
 
     private final String address;
-    private final String peerIDBase64;
+    private String peerIDBase64;
     private IPLDObject<ModelState> currentValidatedState;
     private Map<String, SettlementController> currentLocalHashes = new HashMap<>();
 
@@ -248,6 +250,8 @@ public class ModelController {
     private Map<String, IPLDObject<Voting>> queuedVotings;
     private boolean abortLocalChanges;
 
+    private boolean initializing;
+    private boolean initialized;
     private ModelControllerListener listener;
 
     /**
@@ -261,47 +265,14 @@ public class ModelController {
      *                           negative disables timestamp validation, does not affect validating relative durations)
      * @throws Exception if initialization failed and the application should not continue running.
      */
-    private ModelController(IPFSAccess access, Config config, SecretConfig secretConfig, long timestampTolerance)
-            throws Exception {
+    private ModelController(IPFSAccess access, Config config, SecretConfig secretConfig, long timestampTolerance) {
         this.access = access;
-        this.peerIDBase64 = access.getPeerIDBase64();
         this.config = config == null ? Config.getSharedInstance() : config;
         this.secretConfig = secretConfig == null ? SecretConfig.getSharedInstance() : secretConfig;
         this.context = new IPLDContext(access, IPLDEncoding.JSON, IPLDEncoding.CBOR, false);
         this.timestampTolerance = timestampTolerance;
         this.userVerificationRequired = this.config.isUserVerificationRequired();
         address = this.config.getIOTAAddress();
-        String currentModelStateHash;
-        try {
-            currentModelStateHash = access.readModelStateHash(address);
-            if (currentModelStateHash != null) {
-                this.currentValidatedState = loadModelState(currentModelStateHash, false);
-            }
-        }
-        catch (FileNotFoundException e) {
-            currentModelStateHash = this.config.getValidHash(address);
-            if (currentModelStateHash != null) {
-                this.currentValidatedState = loadModelState(currentModelStateHash, false);
-            }
-            do {
-                currentModelStateHash = readNextModelStateHashFromTangle(address);
-                if (currentModelStateHash != null) {
-                    try {
-                        this.currentValidationContext = new ValidationContext(context, null, null,
-                                System.currentTimeMillis() + timestampTolerance, 0, this.config, this.secretConfig);
-                        this.currentValidatedState = loadModelState(currentModelStateHash, true);
-                        access.saveModelStateHash(address, currentModelStateHash);
-                        break;
-                    }
-                    catch (Exception e2) {
-                        e2.printStackTrace();
-                    }
-                }
-            }
-            while (currentModelStateHash != null);
-        }
-        subscribeToModelStatesTopic();
-        subscribeToOwnershipRequestsTopic();
     }
 
     void subscribeToModelStatesTopic() {
@@ -330,7 +301,6 @@ public class ModelController {
                     });
                 }
                 catch (Exception e) {
-                    e.printStackTrace();
                     if (subscribedSuccessfully) {
                         subscribeToModelStatesTopic();
                     }
@@ -365,7 +335,6 @@ public class ModelController {
                     });
                 }
                 catch (Exception e) {
-                    e.printStackTrace();
                     if (subscribedSuccessfully) {
                         subscribeToOwnershipRequestsTopic();
                     }
@@ -387,6 +356,14 @@ public class ModelController {
         return timestampTolerance;
     }
 
+    public boolean isInitialized() {
+        return initialized;
+    }
+
+    public boolean isInitializing() {
+        return initializing;
+    }
+
     /**
      * @return the current fully validated (or trusted) model state
      */
@@ -394,8 +371,65 @@ public class ModelController {
         return currentValidatedState;
     }
 
-    public void setListener(ModelControllerListener listener) {
+    public boolean initialize(ModelControllerListener listener) {
         this.listener = listener;
+        if (!initialized) {
+            if (!initializing) {
+                initializing = true;
+                new Thread(() -> {
+                    String currentModelStateHash;
+                    try {
+                        access.configure();
+                        this.peerIDBase64 = access.getPeerIDBase64();
+                    }
+                    catch (Exception e) {
+                        initializing = false;
+                        if (listener != null) {
+                            listener.failedInitialization();
+                        }
+                        return;
+                    }
+                    try {
+                        currentModelStateHash = access.readModelStateHash(address);
+                        if (currentModelStateHash != null) {
+                            this.currentValidatedState = loadModelState(currentModelStateHash, false);
+                        }
+                    }
+                    catch (IOException e) {
+                        currentModelStateHash = this.config.getValidHash(address);
+                        if (currentModelStateHash != null) {
+                            this.currentValidatedState = loadModelState(currentModelStateHash, false);
+                        }
+                        do {
+                            currentModelStateHash = readNextModelStateHashFromTangle(address);
+                            if (currentModelStateHash != null) {
+                                try {
+                                    this.currentValidationContext = new ValidationContext(context, null, null,
+                                            System.currentTimeMillis() + timestampTolerance, 0, this.config,
+                                            this.secretConfig);
+                                    this.currentValidatedState = loadModelState(currentModelStateHash, true);
+                                    access.saveModelStateHash(address, currentModelStateHash);
+                                    break;
+                                }
+                                catch (Exception e2) {
+                                    e2.printStackTrace();
+                                }
+                            }
+                        }
+                        while (currentModelStateHash != null);
+                    }
+                    subscribeToModelStatesTopic();
+                    subscribeToOwnershipRequestsTopic();
+                    initializing = false;
+                    initialized = true;
+                    if (listener != null) {
+                        listener.initialized();
+                    }
+                }).start();
+            }
+            return true;
+        }
+        return false;
     }
 
     private String readNextModelStateHashFromTangle(String address) {
@@ -464,9 +498,18 @@ public class ModelController {
         signature.v = v;
 
         IPLDObject<ModelState> currentModelState = currentValidatedState;
-        OwnershipTransferController controller = new OwnershipTransferController(requestParts[2], requestParts[1],
-                OwnershipTransferController.OWNERSHIP_VOTING_ANONYMOUS.equals(requestParts[0]), currentModelState,
-                context, signature, timestamp, userVerificationRequired);
+        OwnershipTransferController controller;
+        if (requestParts.length == 3) {
+            controller = new OwnershipTransferController(requestParts[2], requestParts[1],
+                    OwnershipTransferController.OWNERSHIP_VOTING_ANONYMOUS.equals(requestParts[0]), currentModelState,
+                    context, signature, timestamp, userVerificationRequired);
+        }
+        else {
+            controller = new OwnershipTransferController(requestParts[2], requestParts[1],
+                    OwnershipTransferController.OWNERSHIP_VOTING_ANONYMOUS.equals(requestParts[0]),
+                    Boolean.valueOf(requestParts[3]), Integer.valueOf(requestParts[4]), currentModelState, context,
+                    signature, timestamp, userVerificationRequired);
+        }
         if (controller.process()) {
             saveLocalChanges(null, null, null, null, controller, null, System.currentTimeMillis());
         }
@@ -529,6 +572,22 @@ public class ModelController {
             throws IOException {
         String topic = PUBSUB_TOPIC_PREFIX_OWNERSHIP_REQUEST + address;
         String request = OwnershipTransferController.composePubMessageRequest(anonymousVoting, userHash, documentHash);
+        byte[] requestBytes = request.getBytes(StandardCharsets.UTF_8);
+        ECDSASignature signature = signer.sign(requestBytes);
+        try {
+            access.publish(topic, OwnershipTransferController.composePubMessage(request, signature));
+        }
+        catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void toggleOwnershipRequest(OwnershipRequest ownershipRequest, Signer signer) {
+        String topic = PUBSUB_TOPIC_PREFIX_OWNERSHIP_REQUEST + address;
+        ToggleRequest toggled = ownershipRequest.toggle();
+        String request = OwnershipTransferController.composePubMessageRequest(ownershipRequest.isAnonymousVoting(),
+                ownershipRequest.expectUserHash(), ownershipRequest.getDocument().getMultihash(), toggled.isActive(),
+                toggled.getPayload());
         byte[] requestBytes = request.getBytes(StandardCharsets.UTF_8);
         ECDSASignature signature = signer.sign(requestBytes);
         try {
@@ -1014,6 +1073,13 @@ public class ModelController {
         }
         if (queuedUnbanRequests != null) {
             dequeue(queuedUnbanRequests, unbanRequests, UserState.UNBAN_REQUEST_KEY_PROVIDER, userHashes, false);
+        }
+        if (unbanRequest != null) {
+            String userHash = unbanRequest.getMapped().expectUserHash();
+            if (!addProgressListener(unbanRequest, userHash, userHashes, unbanRequests,
+                    UserState.UNBAN_REQUEST_KEY_PROVIDER)) {
+                unbanRequest = null;
+            }
         }
         for (Entry<String, Collection<ProgressListener>> entry : userHashes.entrySet()) {
             String userHash = entry.getKey();

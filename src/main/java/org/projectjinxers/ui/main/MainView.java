@@ -24,8 +24,8 @@ import java.util.ResourceBundle;
 import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.data.Document;
 import org.projectjinxers.data.Group;
+import org.projectjinxers.data.OwnershipRequest;
 import org.projectjinxers.data.ProgressObserver;
-import org.projectjinxers.model.OwnershipRequest;
 import org.projectjinxers.model.UnbanRequest;
 import org.projectjinxers.model.Voting;
 import org.projectjinxers.ui.ProjectJinxers;
@@ -68,7 +68,7 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
     private ListView<Document> documentsList;
 
     @FXML
-    private ListView<IPLDObject<OwnershipRequest>> ownershipRequestsList;
+    private ListView<OwnershipRequest> ownershipRequestsList;
 
     @FXML
     private ListView<IPLDObject<UnbanRequest>> unbanRequestsList;
@@ -89,12 +89,27 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
         groupsList.setCellFactory(param -> new GroupCell(mainPresenter));
-        documentsList.setCellFactory(param -> new DocumentCell(mainPresenter, false));
-        ownershipRequestsList.setCellFactory(param -> new OwnershipRequestCell());
+        documentsList.setCellFactory(param -> new DocumentCell<Document>(mainPresenter, false));
+        ownershipRequestsList.setCellFactory(param -> new OwnershipRequestCell(mainPresenter));
         unbanRequestsList.setCellFactory(param -> new UnbanRequestCell());
         votingsList.setCellFactory(param -> new VotingCell());
 
         documentsList.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal == null) {
+                if (documentDetailsPresenter != null) {
+                    documentDetailsPresenter.setDocument(null);
+                }
+            }
+            else {
+                if (documentDetailsPresenter == null) {
+                    documentDetailsPresenter = DocumentDetailsView.createDocumentDetailsPresenter(mainPresenter,
+                            detailViewContainer);
+                }
+                documentDetailsPresenter.setDocument(newVal);
+            }
+        });
+
+        ownershipRequestsList.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal == null) {
                 if (documentDetailsPresenter != null) {
                     documentDetailsPresenter.setDocument(null);
@@ -117,11 +132,13 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
 
     @Override
     public void didUpdateGroup(Group group) {
-        groupsList.refresh();
-        documentsList.refresh();
-        ownershipRequestsList.refresh();
-        unbanRequestsList.refresh();
-        votingsList.refresh();
+        if (groupsList != null) {
+            groupsList.refresh();
+            documentsList.refresh();
+            ownershipRequestsList.refresh();
+            unbanRequestsList.refresh();
+            votingsList.refresh();
+        }
     }
 
     @Override

@@ -90,6 +90,10 @@ public class DocumentDetailsView
 
     private StringProperty statusLine = new SimpleStringProperty();
     private StringProperty reviewStatusLine = new SimpleStringProperty();
+    private StringProperty reviewSubtitle = new SimpleStringProperty();
+    private StringProperty reviewVersion = new SimpleStringProperty();
+    private StringProperty reviewTags = new SimpleStringProperty();
+    private StringProperty reviewSource = new SimpleStringProperty();
 
     @Override
     public DocumentDetailsPresenter getPresenter() {
@@ -113,7 +117,7 @@ public class DocumentDetailsView
         reviewAbstractEditor.managedProperty().bind(reviewAbstractEditor.visibleProperty());
         reviewContentsEditor.managedProperty().bind(reviewContentsEditor.visibleProperty());
         fixSkippedProperties(reviewContentsEditor);
-        historyList.setCellFactory(param -> new DocumentCell(mainPresenter, true));
+        historyList.setCellFactory(param -> new DocumentCell<Document>(mainPresenter, true));
     }
 
     @Override
@@ -262,6 +266,12 @@ public class DocumentDetailsView
                     }
                 });
             }
+            if (statusLine == reviewStatusLine) {
+                reviewSubtitle.set(doc.getSubtitle());
+                reviewVersion.set(doc.getVersion());
+                reviewTags.set(doc.getTags());
+                reviewSource.set(doc.getSource());
+            }
         }
     }
 
@@ -272,6 +282,12 @@ public class DocumentDetailsView
         splitPane.setDividerPosition(0, DEFAULT_DIVIDER_POSITION);
         abstractEditor.setVisible(true);
         contentsEditor.setVisible(true);
+        if (splitPane == reviewEditorsSplit) {
+            reviewSubtitle.set(null);
+            reviewVersion.set(null);
+            reviewTags.set(null);
+            reviewSource.set(null);
+        }
     }
 
     private void updateHistory(Document document) {
@@ -348,6 +364,38 @@ public class DocumentDetailsView
 
     public String getReviewStatusLine() {
         return reviewStatusLine.get();
+    }
+
+    public StringProperty reviewSubtitleProperty() {
+        return reviewSubtitle;
+    }
+
+    public String getReviewSubtitle() {
+        return reviewSubtitle.get();
+    }
+
+    public StringProperty reviewVersionProperty() {
+        return reviewVersion;
+    }
+
+    public String getReviewVersion() {
+        return reviewVersion.get();
+    }
+
+    public StringProperty reviewTagsProperty() {
+        return reviewTags;
+    }
+
+    public String getReviewTags() {
+        return reviewTags.get();
+    }
+
+    public StringProperty reviewSourceProperty() {
+        return reviewSource;
+    }
+
+    public String getReviewSource() {
+        return reviewSource.get();
     }
 
 }

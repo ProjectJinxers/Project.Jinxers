@@ -54,7 +54,8 @@ import javafx.scene.image.ImageView;
  * @author ProjectJinxers
  *
  */
-public class DocumentCell extends AbstractListCell<Document> implements Initializable, StatusChangeListener {
+public class DocumentCell<D extends Document> extends AbstractListCell<D>
+        implements Initializable, StatusChangeListener {
 
     private MainPresenter mainPresenter;
     private boolean history;
@@ -107,6 +108,11 @@ public class DocumentCell extends AbstractListCell<Document> implements Initiali
     private MenuItem showInDocumentsListItem;
 
     private Document loading;
+
+    protected DocumentCell(String fxmlPath, MainPresenter mainPresenter, boolean hasContextMenu) {
+        super(fxmlPath, hasContextMenu);
+        this.mainPresenter = mainPresenter;
+    }
 
     public DocumentCell(MainPresenter mainPresenter, boolean history) {
         super("DocumentCell.fxml", true);
@@ -324,46 +330,37 @@ public class DocumentCell extends AbstractListCell<Document> implements Initiali
         else if (group != null && item.getMultihash() != null && !item.isDestroying() && !item.isRemoved()) {
             IPLDObject<org.projectjinxers.model.Document> documentObject = item.getDocumentObject();
             if (documentObject != null && documentObject.isMapped()) {
-                ModelController controller = null;
-                try {
-                    controller = group.getOrCreateController();
-                }
-                catch (Exception e) {
-
-                }
-                if (controller != null) {
-                    IPLDObject<ModelState> currentValidatedState = controller.getCurrentValidatedState();
-                    if (currentValidatedState != null) {
-                        ModelState validState = currentValidatedState.getMapped();
-                        String documentHash = item.getMultihash();
-                        if (validState.isSealedDocument(documentHash)) {
-                            SealedDocument sealed = validState.expectSealedDocument(documentHash);
-                            if (sealed.isOriginal()) {
-                                menuItems.add(getTruthInversionItem());
-                            }
+                ModelController controller = group.getOrCreateController();
+                IPLDObject<ModelState> currentValidatedState = controller.getCurrentValidatedState();
+                if (currentValidatedState != null) {
+                    ModelState validState = currentValidatedState.getMapped();
+                    String documentHash = item.getMultihash();
+                    if (validState.isSealedDocument(documentHash)) {
+                        SealedDocument sealed = validState.expectSealedDocument(documentHash);
+                        if (sealed.isOriginal()) {
+                            menuItems.add(getTruthInversionItem());
                         }
-                        else {
-                            menuItems.add(getApproveItem());
-                            menuItems.add(getDeclineItem());
-                            menuItems.add(getReviewItem());
-                        }
-                        menuItems.add(getEditItem());
-                        org.projectjinxers.model.Document document = documentObject.getMapped();
-                        if (document.getUserState().getMapped().checkRequiredRating()) {
-                            menuItems.add(getDeleteItem());
-                        }
-                        else {
-                            menuItems.add(getUnbanRequestItem());
-                        }
-                        // Date date = document.getDate();
-                        // TODO: check prerequisites for settlement requests and add item if met
-                        if (validState.getVotingForOwnershipTransfer(documentHash) == null) {
-                            Date lastActivityDate = validState.getLastActivityDate(documentObject);
-                            if (lastActivityDate != null && System.currentTimeMillis()
-                                    + controller.getTimestampTolerance()
-                                    - lastActivityDate.getTime() >= OwnershipTransferController.REQUIRED_INACTIVITY) {
-                                menuItems.add(getOwnershipRequestItem());
-                            }
+                    }
+                    else {
+                        menuItems.add(getApproveItem());
+                        menuItems.add(getDeclineItem());
+                        menuItems.add(getReviewItem());
+                    }
+                    menuItems.add(getEditItem());
+                    org.projectjinxers.model.Document document = documentObject.getMapped();
+                    if (document.getUserState().getMapped().checkRequiredRating()) {
+                        menuItems.add(getDeleteItem());
+                    }
+                    else {
+                        menuItems.add(getUnbanRequestItem());
+                    }
+                    // Date date = document.getDate();
+                    // TODO: check prerequisites for settlement requests and add item if met
+                    if (validState.getVotingForOwnershipTransfer(documentHash) == null) {
+                        Date lastActivityDate = validState.getLastActivityDate(documentObject);
+                        if (lastActivityDate != null && System.currentTimeMillis() + controller.getTimestampTolerance()
+                                - lastActivityDate.getTime() >= OwnershipTransferController.REQUIRED_INACTIVITY) {
+                            menuItems.add(getOwnershipRequestItem());
                         }
                     }
                 }
@@ -378,7 +375,7 @@ public class DocumentCell extends AbstractListCell<Document> implements Initiali
 
     @Override
     public void statusChanged(ProgressObserver progressObserver) {
-        Document item = getItem();
+        D item = getItem();
         if (progressObserver == item) {
             updateItem(item, false);
             mainPresenter.getView().statusChanged(progressObserver);

@@ -86,6 +86,10 @@ public abstract class ToggleRequest implements IPLDSerializable {
         return active;
     }
 
+    public int getPayload() {
+        return payload;
+    }
+
     public IPLDObject<UserState> getUserState() {
         return userState;
     }
@@ -110,6 +114,10 @@ public abstract class ToggleRequest implements IPLDSerializable {
      * @return the toggled copy
      */
     public ToggleRequest toggle() {
+        return toggle(payload + 1);
+    }
+
+    public ToggleRequest toggle(int newPayload) {
         ToggleRequest copy = createCopyInstance();
         copy.active = !active;
         copy.payload = payload + 1;

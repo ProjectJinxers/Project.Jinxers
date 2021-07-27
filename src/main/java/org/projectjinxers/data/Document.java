@@ -28,6 +28,7 @@ import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.IPLDObject.ProgressTask;
 import org.projectjinxers.controller.ModelController;
 import org.projectjinxers.model.DocumentRemoval;
+import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.LoaderFactory;
 import org.projectjinxers.model.ModelState;
 import org.projectjinxers.model.Review;
@@ -170,9 +171,13 @@ public class Document extends ProgressObserver {
                 try {
                     Thread.sleep(2000);
                     if (documentObject == null) {
-                        ModelController controller = group == null
-                                ? ModelController.getModelController(Config.getSharedInstance())
-                                : group.getOrCreateController();
+                        ModelController controller;
+                        if (group == null) {
+                            controller = ModelController.getModelController(Config.getSharedInstance());
+                        }
+                        else {
+                            controller = group.getController();
+                        }
                         IPLDObject<org.projectjinxers.model.Document> documentObject = new IPLDObject<>(multihash,
                                 LoaderFactory.DOCUMENT.createLoader(), controller.getContext(), null);
                         this.documentObject = documentObject;
@@ -184,35 +189,34 @@ public class Document extends ProgressObserver {
                     else {
                         if (group != null) {
                             String userHash = mapped.expectUserState().getUser().getMultihash();
-                            try {
-                                this.modelStateObject = group.getOrCreateController().getCurrentValidatedState();
-                                IPLDObject<UserState> userStateObject = modelStateObject.getMapped()
-                                        .expectUserState(userHash);
-                                if (userStateObject == null) {
-                                    failedTask(ProgressTask.LOAD,
-                                            "The document is not contained in the selected group.", null);
-                                    this.group = null;
-                                    return;
-                                }
-                                String firstVersionHash = mapped.getFirstVersionHash();
-                                if (firstVersionHash == null) {
-                                    firstVersionHash = multihash;
-                                }
-                                UserState userState = userStateObject.getMapped();
-                                if (userState.isRemoved(firstVersionHash)) {
-                                    removed = true;
-                                }
-                                IPLDObject<org.projectjinxers.model.Document> latest = userState
-                                        .getDocumentByFirstVersionHash(firstVersionHash);
-                                if (!multihash.equals(latest.getMultihash())) {
-                                    replaced = true;
-                                }
-                            }
-                            catch (Exception e) {
+                            ModelController controller = group.getOrCreateController();
+                            if (group.isInitializingController()) {
                                 failedTask(ProgressTask.LOAD,
-                                        "Failed to check if the document is contained in the selected group.", null);
+                                        "Please wait until the model controller for the group has been initialized.",
+                                        null);
+                                return;
+                            }
+                            this.modelStateObject = controller.getCurrentValidatedState();
+                            IPLDObject<UserState> userStateObject = modelStateObject == null ? null
+                                    : modelStateObject.getMapped().getUserState(userHash);
+                            if (userStateObject == null) {
+                                failedTask(ProgressTask.LOAD, "The document is not contained in the selected group.",
+                                        null);
                                 this.group = null;
                                 return;
+                            }
+                            String firstVersionHash = mapped.getFirstVersionHash();
+                            if (firstVersionHash == null) {
+                                firstVersionHash = multihash;
+                            }
+                            UserState userState = userStateObject.getMapped();
+                            if (userState.isRemoved(firstVersionHash)) {
+                                removed = true;
+                            }
+                            IPLDObject<org.projectjinxers.model.Document> latest = userState
+                                    .getDocumentByFirstVersionHash(firstVersionHash);
+                            if (!multihash.equals(latest.getMultihash())) {
+                                replaced = true;
                             }
                         }
                         finishedTask(ProgressTask.LOAD);
@@ -313,6 +317,7 @@ public class Document extends ProgressObserver {
                         }
                     }
                 }
+                updateReviewsInfo();
             }
         }
     }
@@ -410,7 +415,7 @@ public class Document extends ProgressObserver {
             reviewInfo.totalCount = reviews.size();
             reviewInfo.approvalsCount = 0;
             reviewInfo.declinationsCount = 0;
-            Collection<IPLDObject<org.projectjinxers.model.Document>> toLoad = new ArrayList<>();
+            Collection<IPLDObject<? extends IPLDSerializable>> toLoad = new ArrayList<>();
             Collection<String> obsoleteVersionHashes = new ArrayList<>();
             synchronized (reviews) {
                 for (Document reviewDocument : reviews.values()) {

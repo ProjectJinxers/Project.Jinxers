@@ -78,6 +78,7 @@ class ModelControllerTest {
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAAddress(), modelStateHash);
         ModelController controller = ModelController.getModelController(access, null);
+        controller.initialize(null);
         // prepare for simulated message
         String[] newHashes = access.readObjects("model/modelController/saveDocument/simple_rec.json");
         String[] newHashes2 = access.readObjects("model/modelController/saveDocument/simple_rec2.json");
@@ -90,6 +91,7 @@ class ModelControllerTest {
     @Test
     void testFirstActionEver() throws Exception {
         ModelController controller = ModelController.getModelController(access, null);
+        controller.initialize(null);
         User user = new User("user", Users.createAccount("user", "pass", 1).getPubKey());
         UserState userState = new UserState(new IPLDObject<>(user));
         DocumentContents contents = new DocumentContents("Abstract", "Contents");
@@ -124,6 +126,7 @@ class ModelControllerTest {
         final String userHash = hashes[0];
         Config config = Config.getSharedInstance();
         ModelController controller = ModelController.getModelController(access, null);
+        waitUntilInitialized(controller);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -147,6 +150,7 @@ class ModelControllerTest {
         final String userHash = hashes[0];
         Config config = Config.getSharedInstance();
         ModelController controller = ModelController.getModelController(access, null);
+        waitUntilInitialized(controller);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -182,6 +186,7 @@ class ModelControllerTest {
         final String userHash = hashes[0];
         Config config = Config.getSharedInstance();
         ModelController controller = ModelController.getModelController(access, null);
+        waitUntilInitialized(controller);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -222,6 +227,7 @@ class ModelControllerTest {
         final String userHash = hashes[0];
         Config config = Config.getSharedInstance();
         ModelController controller = ModelController.getModelController(access, null);
+        waitUntilInitialized(controller);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -264,6 +270,7 @@ class ModelControllerTest {
         final String userHash = hashes[0];
         final String documentHash = hashes[2];
         ModelController controller = ModelController.getModelController(access, null);
+        controller.initialize(null);
         assertNull(validateInitialModelState(modelStateHash, 400));
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
@@ -279,6 +286,7 @@ class ModelControllerTest {
         final String validModelStateHash = validHashes[12];
         Config config = Config.getSharedInstance();
         ModelController controller = ModelController.getModelController(access, config);
+        controller.initialize(null);
         assertNull(validateInitialModelState(validModelStateHash, 400));
         String[] hashes = access.readObjects("model/modelController/settlement/eligible.json");
         final String modelStateHash = hashes[27];
@@ -305,6 +313,7 @@ class ModelControllerTest {
         final String validModelStateHash = validHashes[12];
         Config config = Config.getSharedInstance();
         ModelController controller = ModelController.getModelController(access, config);
+        controller.initialize(null);
         assertNull(validateInitialModelState(validModelStateHash, 400));
         String[] hashes = access.readObjects("model/modelController/settlement/eligible.json");
         final String modelStateHash = hashes[27];
@@ -336,6 +345,7 @@ class ModelControllerTest {
         final String validModelStateHash = validHashes[12];
         Config config = Config.getSharedInstance();
         ModelController controller = ModelController.getModelController(access, config);
+        controller.initialize(null);
         assertNull(validateInitialModelState(validModelStateHash, 400));
         String[] hashes = access.readObjects("model/modelController/settlement/eligible.json");
         final String modelStateHash = hashes[27];
@@ -372,6 +382,7 @@ class ModelControllerTest {
         final String validModelStateHash = hashes[17];
         Config config = Config.getSharedInstance();
         ModelController controller = ModelController.getModelController(access, config);
+        controller.initialize(null);
         validateInitialModelState(validModelStateHash, 400);
 
         hashes = access.readObjects("model/modelController/settlement/sealed_20_3.json");
@@ -391,6 +402,7 @@ class ModelControllerTest {
         final String validModelStateHash = validHashes[17];
         Config config = Config.getSharedInstance();
         ModelController controller = ModelController.getModelController(access, config);
+        controller.initialize(null);
         validateInitialModelState(validModelStateHash, 400);
         // 1625204576909
         String[] hashes = access.readObjects("model/modelController/settlement/sealed_20_3_1.json");
@@ -420,6 +432,7 @@ class ModelControllerTest {
         final String validModelStateHash = hashes[17];
         Config config = Config.getSharedInstance();
         ModelController controller = ModelController.getModelController(access, config);
+        controller.initialize(null);
         validateInitialModelState(validModelStateHash, 400);
 
         hashes = access.readObjects("model/modelController/settlement/blocked_20_3_1.json");
@@ -443,6 +456,7 @@ class ModelControllerTest {
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAAddress(), modelStateHash);
         ModelController controller = ModelController.getModelController(access, config);
+        waitUntilInitialized(controller);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -460,6 +474,7 @@ class ModelControllerTest {
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAAddress(), modelStateHash);
         ModelController controller = ModelController.getModelController(access, config);
+        waitUntilInitialized(controller);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -484,6 +499,7 @@ class ModelControllerTest {
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAAddress(), modelStateHash);
         ModelController controller = ModelController.getModelController(access, config);
+        waitUntilInitialized(controller);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -513,6 +529,7 @@ class ModelControllerTest {
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAAddress(), modelStateHash);
         ModelController controller = ModelController.getModelController(access, config);
+        waitUntilInitialized(controller);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -533,6 +550,7 @@ class ModelControllerTest {
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAAddress(), modelStateHash);
         ModelController controller = ModelController.getModelController(access, config);
+        waitUntilInitialized(controller);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -553,6 +571,7 @@ class ModelControllerTest {
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAAddress(), modelStateHash);
         ModelController controller = ModelController.getModelController(access, config);
+        waitUntilInitialized(controller);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -573,6 +592,7 @@ class ModelControllerTest {
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAAddress(), modelStateHash);
         ModelController controller = ModelController.getModelController(access, config);
+        waitUntilInitialized(controller);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -598,6 +618,8 @@ class ModelControllerTest {
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAAddress(), modelStateHash);
         ModelController controller = ModelController.getModelController(access, config);
+        waitUntilInitialized(controller);
+
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -631,6 +653,7 @@ class ModelControllerTest {
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAAddress(), modelStateHash);
         ModelController controller = ModelController.getModelController(access, config);
+        waitUntilInitialized(controller);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -675,6 +698,7 @@ class ModelControllerTest {
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAAddress(), modelStateHash);
         ModelController controller = ModelController.getModelController(access, config);
+        waitUntilInitialized(controller);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -694,6 +718,7 @@ class ModelControllerTest {
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAAddress(), modelStateHash);
         ModelController controller = ModelController.getModelController(access, config);
+        waitUntilInitialized(controller);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -723,6 +748,7 @@ class ModelControllerTest {
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAAddress(), modelStateHash);
         ModelController controller = ModelController.getModelController(access, config);
+        waitUntilInitialized(controller);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -759,6 +785,7 @@ class ModelControllerTest {
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAAddress(), modelStateHash);
         ModelController controller = ModelController.getModelController(access, config);
+        waitUntilInitialized(controller);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -801,6 +828,7 @@ class ModelControllerTest {
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAAddress(), modelStateHash);
         ModelController controller = ModelController.getModelController(access, config);
+        waitUntilInitialized(controller);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -825,6 +853,7 @@ class ModelControllerTest {
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAAddress(), modelStateHash);
         ModelController controller = ModelController.getModelController(access, config);
+        waitUntilInitialized(controller);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -856,6 +885,7 @@ class ModelControllerTest {
         Config config = Config.getSharedInstance();
         access.saveModelStateHash(config.getIOTAAddress(), modelStateHash);
         ModelController controller = ModelController.getModelController(access, config);
+        waitUntilInitialized(controller);
         IPLDObject<ModelState> modelStateObject = controller.getCurrentValidatedState();
         ModelState modelState = modelStateObject.getMapped();
         assertNotNull(modelState);
@@ -888,6 +918,14 @@ class ModelControllerTest {
         catch (InterruptedException e) {
 
         }
+    }
+
+    private void waitUntilInitialized(ModelController controller) {
+        controller.initialize(null);
+        do {
+            waitFor(20);
+        }
+        while (controller.isInitializing());
     }
 
     private String validateInitialModelState(String hash, long waitAfter) {

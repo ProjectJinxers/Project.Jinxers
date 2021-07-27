@@ -19,8 +19,6 @@ import org.projectjinxers.ui.common.PJPresenter.View;
 
 import javafx.scene.Scene;
 
-import static org.projectjinxers.util.ObjectUtility.isNullOrEmpty;
-
 /**
  * @author ProjectJinxers
  *

@@ -48,7 +48,9 @@ public class Group implements ModelControllerListener, Comparable<Group> {
     private transient SecretConfig secretConfig;
     private transient ModelController controller;
 
-    private GroupListener listener;
+    private transient GroupListener listener;
+    private transient boolean initializingController;
+    private transient boolean failedInitialization;
 
     Group() {
         this.save = true;
@@ -68,6 +70,21 @@ public class Group implements ModelControllerListener, Comparable<Group> {
         this.timestampTolerance = timestampTolerance;
         this.secretObfuscationParams = secretObfuscationParams;
         this.save = save;
+    }
+
+    @Override
+    public void initialized() {
+        initializingController = false;
+    }
+
+    @Override
+    public void failedInitialization() {
+        initializingController = false;
+        controller = null;
+        this.failedInitialization = true;
+        if (listener != null) {
+            listener.onGroupUpdated(this);
+        }
     }
 
     @Override
@@ -152,12 +169,22 @@ public class Group implements ModelControllerListener, Comparable<Group> {
         return controller;
     }
 
-    public ModelController getOrCreateController() throws Exception {
+    public ModelController getOrCreateController() {
         if (controller == null) {
             controller = ModelController.getModelController(getConfig(), getSecretConfig());
-            controller.setListener(this);
+            if (controller.initialize(this)) {
+                initializingController = true;
+            }
         }
         return controller;
+    }
+
+    public boolean isInitializingController() {
+        return initializingController;
+    }
+
+    public boolean isFailedInitialization() {
+        return failedInitialization;
     }
 
     public void setListener(GroupListener listener) {

@@ -17,7 +17,9 @@ import java.io.IOException;
 import java.text.DateFormat;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -28,6 +30,7 @@ import org.projectjinxers.data.Data;
 import org.projectjinxers.data.Document;
 import org.projectjinxers.data.Group;
 import org.projectjinxers.data.Group.GroupListener;
+import org.projectjinxers.data.OwnershipRequest;
 import org.projectjinxers.data.Settings;
 import org.projectjinxers.data.User;
 import org.projectjinxers.model.ModelState;
@@ -82,6 +85,7 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
 
     private Data data;
     private Collection<Document> allDocuments;
+    private Map<String, OwnershipRequest> allOwnershipRequests = new HashMap<>();
 
     private boolean editing;
 
@@ -106,23 +110,58 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
         else {
             Group mainGroup = data.getGroup(mainAddress);
             if (mainGroup != null && mainGroup.isMain()) {
-                mainGroup.setListener(this);
+                loadGroupObjects();
                 return;
             }
         }
         Group mainGroup = new Group("Main", mainAddress, config.getConfiguredTimestampTolerance(),
                 data.getSettings().isSaveGroups());
-        mainGroup.setListener(this);
         data.addGroup(mainGroup);
+        loadGroupObjects();
+    }
+
+    private void loadGroupObjects() {
+        for (Group group : data.getGroups().values()) {
+            group.getOrCreateController();
+            group.setListener(this);
+            loadGroupObjects(group);
+        }
+    }
+
+    private void loadGroupObjects(Group group) {
+        if (!group.isInitializingController()) {
+            IPLDObject<ModelState> currentValidatedState = group.getController().getCurrentValidatedState();
+            if (currentValidatedState != null) {
+                Map<String, IPLDObject<org.projectjinxers.model.OwnershipRequest>[]> ownershipRequests = currentValidatedState
+                        .getMapped().getOwnershipRequests();
+                if (ownershipRequests != null) {
+                    for (Entry<String, IPLDObject<org.projectjinxers.model.OwnershipRequest>[]> entry : ownershipRequests
+                            .entrySet()) {
+                        String key = entry.getKey();
+                        if (!allOwnershipRequests.containsKey(key)) {
+                            allOwnershipRequests.put(key,
+                                    new OwnershipRequest(group, entry.getKey(), entry.getValue()));
+                        }
+                    }
+                }
+            }
+        }
     }
 
     @Override
     public void onGroupUpdated(Group group) {
-        if (allDocuments != null) {
-            IPLDObject<ModelState> valid = group.getController().getCurrentValidatedState();
-            for (Document document : allDocuments) {
-                document.groupUpdated(group, valid);
+        ModelController controller = group.getController();
+        if (controller != null) {
+            IPLDObject<ModelState> valid = controller.getCurrentValidatedState();
+            if (allDocuments != null) {
+                for (Document document : allDocuments) {
+                    document.groupUpdated(group, valid);
+                }
             }
+            for (OwnershipRequest request : allOwnershipRequests.values()) {
+                request.groupUpdated(group, valid);
+            }
+            loadGroupObjects(group);
         }
         getView().didUpdateGroup(group);
     }
@@ -189,16 +228,15 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
     }
 
     public String getValidModelStateInfo(Group group) {
-        ModelController controller;
-        try {
-            controller = group.getOrCreateController();
-        }
-        catch (Exception e) {
-            return "Loading error";
-        }
+        boolean failedInitialization = group.isFailedInitialization();
+        ModelController controller = group.getOrCreateController();
+        boolean initializingController = group.isInitializingController();
         IPLDObject<ModelState> currentValidatedState = controller.getCurrentValidatedState();
         if (currentValidatedState == null) {
-            return "No valid state";
+            if (failedInitialization) {
+                return "Failed controller initialization";
+            }
+            return initializingController ? "Initializing controller…" : "No valid state";
         }
         ModelState state = currentValidatedState.getMapped();
         long version = state.getVersion();
@@ -211,13 +249,7 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
     }
 
     public String getMultihash(Group group) {
-        ModelController controller;
-        try {
-            controller = group.getOrCreateController();
-        }
-        catch (Exception e) {
-            return "Failed to create model controller";
-        }
+        ModelController controller = group.getOrCreateController();
         IPLDObject<ModelState> currentValidatedState = controller.getCurrentValidatedState();
         if (currentValidatedState == null) {
             return "The controller hasn't trusted or validated any model states, yet.";

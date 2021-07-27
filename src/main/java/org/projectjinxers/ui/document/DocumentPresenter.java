@@ -176,13 +176,7 @@ public class DocumentPresenter extends DataPresenter<Document, DocumentPresenter
             groupListener = new DataListener<Group>() {
                 @Override
                 public boolean didConfirmData(Group group) {
-                    try {
-                        group.getOrCreateController();
-                    }
-                    catch (Exception e) {
-                        getView().showError("Failed to create group", e);
-                        return false;
-                    }
+                    group.getOrCreateController();
                     Group replaced = data.addGroup(group);
                     boolean saveGroup = group.isSave();
                     if (saveGroup || replaced != null && replaced.isSave() || data.getSettings().isSaveGroups()) {
@@ -361,42 +355,39 @@ public class DocumentPresenter extends DataPresenter<Document, DocumentPresenter
                 : edited.getDocumentObject();
         IPLDObject<ModelState> modelStateObject;
         IPLDObject<UserState> userState = null;
-        ModelController controller;
-        try {
-            controller = group.getOrCreateController();
-            modelStateObject = controller.getCurrentValidatedState();
-            String userHash = user.getMultihash();
-            if (userHash == null) {
-                userState = new IPLDObject<>(new UserState(user.getOrCreateNewUserObject()));
-            }
-            else {
-                if (modelStateObject != null) {
-                    ModelState modelState = modelStateObject.getMapped();
-                    userState = modelState.expectUserState(userHash);
-                    if (userState != null && reviewed != null) {
-                        Map<String, IPLDObject<org.projectjinxers.model.Document>> docs = userState.getMapped()
-                                .getAllDocuments();
-                        if (docs != null) {
-                            String reviewedHash = reviewed.getMultihash();
-                            for (IPLDObject<org.projectjinxers.model.Document> doc : docs.values()) {
-                                org.projectjinxers.model.Document mapped = doc.getMapped();
-                                if (mapped instanceof Review
-                                        && reviewedHash.equals(((Review) mapped).getDocument().getMultihash())) {
-                                    getView().showMessage("The user has already reviewed the document.");
-                                    return;
-                                }
+        ModelController controller = group.getOrCreateController();
+        if (group.isInitializingController()) {
+            getView().showMessage("Please wait until the model controller has been initialized.");
+            return;
+        }
+        modelStateObject = controller.getCurrentValidatedState();
+        String userHash = user.getMultihash();
+        if (userHash == null) {
+            userState = new IPLDObject<>(new UserState(user.getOrCreateNewUserObject()));
+        }
+        else {
+            if (modelStateObject != null) {
+                ModelState modelState = modelStateObject.getMapped();
+                userState = modelState.expectUserState(userHash);
+                if (userState != null && reviewed != null) {
+                    Map<String, IPLDObject<org.projectjinxers.model.Document>> docs = userState.getMapped()
+                            .getAllDocuments();
+                    if (docs != null) {
+                        String reviewedHash = reviewed.getMultihash();
+                        for (IPLDObject<org.projectjinxers.model.Document> doc : docs.values()) {
+                            org.projectjinxers.model.Document mapped = doc.getMapped();
+                            if (mapped instanceof Review
+                                    && reviewedHash.equals(((Review) mapped).getDocument().getMultihash())) {
+                                getView().showMessage("The user has already reviewed the document.");
+                                return;
                             }
                         }
                     }
                 }
-                if (userState == null) {
-                    userState = new IPLDObject<>(new UserState(user.getUserObject()));
-                }
             }
-        }
-        catch (Exception e) {
-            getView().showError("Failed to save the document.", e);
-            return;
+            if (userState == null) {
+                userState = new IPLDObject<>(new UserState(user.getUserObject()));
+            }
         }
         IPLDObject<org.projectjinxers.model.Document> toSave;
         if (documentObject == null) {

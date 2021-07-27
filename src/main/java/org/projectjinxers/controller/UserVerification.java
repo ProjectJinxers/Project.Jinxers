@@ -35,6 +35,10 @@ public class UserVerification {
         VERIFIERS.put("trustAll", (user) -> true); // prototype only, not part of the specification
     }
 
+    public static void registerVerifier(String key, UserVerifier verifier) {
+        VERIFIERS.put(key, verifier);
+    }
+
     public static UserVerifier getVerifier(String key) {
         return VERIFIERS.get(key);
     }

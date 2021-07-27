@@ -56,6 +56,15 @@ public class OwnershipTransferController {
                 + PUBSUB_MESSAGE_OWNERSHIP_REQUEST_REQUEST_SEPARATOR + documentHash;
     }
 
+    public static String composePubMessageRequest(boolean anonymousVoting, String userHash, String documentHash,
+            boolean toggleState, int payload) {
+        return (anonymousVoting ? OWNERSHIP_VOTING_ANONYMOUS : OWNERSHIP_VOTING_NOT_ANONYMOUS)
+                + PUBSUB_MESSAGE_OWNERSHIP_REQUEST_REQUEST_SEPARATOR + userHash
+                + PUBSUB_MESSAGE_OWNERSHIP_REQUEST_REQUEST_SEPARATOR + documentHash
+                + PUBSUB_MESSAGE_OWNERSHIP_REQUEST_REQUEST_SEPARATOR + toggleState
+                + PUBSUB_MESSAGE_OWNERSHIP_REQUEST_REQUEST_SEPARATOR + payload;
+    }
+
     static String composePubMessage(String request, ECDSASignature signature) {
         return request + PUBSUB_MESSAGE_OWNERSHIP_REQUEST_MAIN_SEPARATOR + signature.r
                 + PUBSUB_MESSAGE_OWNERSHIP_REQUEST_MAIN_SEPARATOR + signature.s
@@ -65,6 +74,8 @@ public class OwnershipTransferController {
     private final String documentHash;
     private final String userHash;
     private final boolean anonymousVoting;
+    private final boolean toggleState;
+    private final int payload;
     private IPLDObject<ModelState> modelStateObject;
     private ModelState modelState;
     private final IPLDContext context;
@@ -95,6 +106,24 @@ public class OwnershipTransferController {
         this.documentHash = documentHash;
         this.userHash = userHash;
         this.anonymousVoting = anonymousVoting;
+        this.toggleState = true;
+        this.payload = 0;
+        this.modelStateObject = modelState;
+        this.modelState = modelState.getMapped();
+        this.context = context;
+        this.signature = signature;
+        this.timestamp = timestamp;
+        this.userVerificationRequired = userVerificationRequired;
+    }
+
+    OwnershipTransferController(String documentHash, String userHash, boolean anonymousVoting, boolean toggleState,
+            int payload, IPLDObject<ModelState> modelState, IPLDContext context, ECDSASignature signature,
+            long timestamp, boolean userVerificationRequired) {
+        this.documentHash = documentHash;
+        this.userHash = userHash;
+        this.anonymousVoting = anonymousVoting;
+        this.toggleState = toggleState;
+        this.payload = payload;
         this.modelStateObject = modelState;
         this.modelState = modelState.getMapped();
         this.context = context;
@@ -109,6 +138,8 @@ public class OwnershipTransferController {
         this.documentHash = req.getDocument().getMultihash();
         this.userHash = req.expectUserHash();
         this.anonymousVoting = req.isAnonymousVoting();
+        this.toggleState = req.isActive();
+        this.payload = req.getPayload();
         this.modelStateObject = modelState;
         this.modelState = modelStateObject.getMapped();
         this.context = context;
@@ -128,7 +159,17 @@ public class OwnershipTransferController {
         IPLDObject<ModelState> previousState = modelState.getMapped().getPreviousVersion();
         IPLDObject<OwnershipRequest> ownershipRequest = previousState.getMapped().expectUserState(userHash).getMapped()
                 .getOwnershipRequest(documentHash);
-        this.anonymousVoting = ownershipRequest == null ? false : ownershipRequest.getMapped().isAnonymousVoting();
+        OwnershipRequest req = ownershipRequest == null ? null : ownershipRequest.getMapped();
+        if (req == null) {
+            this.anonymousVoting = false;
+            this.toggleState = true;
+            this.payload = 0;
+        }
+        else {
+            this.anonymousVoting = req.isAnonymousVoting();
+            this.toggleState = req.isActive();
+            this.payload = req.getPayload();
+        }
         this.modelStateObject = modelState;
         this.modelState = modelState.getMapped();
         this.context = context;
@@ -154,6 +195,8 @@ public class OwnershipTransferController {
         this.userHash = null;
         this.context = null;
         this.signature = null;
+        this.toggleState = false;
+        this.payload = 0;
     }
 
     /**
@@ -192,9 +235,14 @@ public class OwnershipTransferController {
             if (userVerificationRequired && userState.getVerifiedBy() == null) {
                 throw new ValidationException("user must be verified");
             }
-            byte[] hashBase = composePubMessageRequest(anonymousVoting, userHash, documentHash)
-                    .getBytes(StandardCharsets.UTF_8);
+            byte[] hashBase = (payload > 0
+                    ? composePubMessageRequest(anonymousVoting, userHash, documentHash, toggleState, payload)
+                    : composePubMessageRequest(anonymousVoting, userHash, documentHash))
+                            .getBytes(StandardCharsets.UTF_8);
             userState.getUser().getMapped().verifySignature(signature, hashBase, Signer.VERIFIER);
+            if (payload > 0) {
+                return processUserDocument(userStateObject, null);
+            }
             IPLDObject<Document> document = new IPLDObject<>(documentHash, LoaderFactory.DOCUMENT.createLoader(),
                     context, null);
             Document loaded = document.getMapped();
@@ -215,7 +263,10 @@ public class OwnershipTransferController {
 
     private boolean processUserDocument(IPLDObject<UserState> userState, IPLDObject<Document> document) {
         UserState unwrapped = userState.getMapped();
-        if (unwrapped.getRating() >= REQUIRED_RATING) {
+        if (!toggleState || unwrapped.getRating() >= REQUIRED_RATING) {
+            if (payload > 0) { // toggling
+                return prepareTransfer(userState, null, false);
+            }
             Document doc = document.getMapped();
             if (doc instanceof Review) {
                 Review review = (Review) doc;
@@ -265,6 +316,13 @@ public class OwnershipTransferController {
             return false;
         }
         OwnershipRequest or = request.getMapped();
+        if (or.isActive() != toggleState) {
+            if (or.getPayload() >= payload) {
+                throw new ValidationException("payload not increased");
+            }
+            this.ownershipRequest = new IPLDObject<>((OwnershipRequest) or.toggle(payload));
+            return true;
+        }
         return prepareVoting(or.getTimestamp(), or.isActive(), resolvedUser, resolvedDocument);
     }
 

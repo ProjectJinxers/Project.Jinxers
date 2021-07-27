@@ -539,13 +539,13 @@ public class ModelUtility {
         }).start();
     }
 
-    public static <T extends IPLDSerializable> void loadObjects(Collection<IPLDObject<T>> objects,
-            CompletionHandler completionHandler) {
+    public static /* <T extends IPLDSerializable> */ void loadObjects(
+            Collection<IPLDObject<? extends IPLDSerializable>> objects, CompletionHandler completionHandler) {
         new Thread(() -> {
             int totalAttempts = objects.size();
             AtomicInteger finishCounter = new AtomicInteger();
             AtomicInteger successCounter = new AtomicInteger();
-            for (IPLDObject<T> object : objects) {
+            for (IPLDObject<?> object : objects) {
                 if (object.isMapped()) {
                     int successCount = successCounter.incrementAndGet();
                     if (finishCounter.incrementAndGet() == totalAttempts) {

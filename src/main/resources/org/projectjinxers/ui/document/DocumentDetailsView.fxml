@@ -29,6 +29,14 @@
                     <BorderPane>
                         <top>
                             <TextField text="${controller.reviewStatusLine}" editable="false"/>
+                            <Label fx:id="subtitleLabel" text="${controller.reviewSubtitle}" wrapText="true"/>
+                            <Label fx:id="versionLabel" text="${controller.reviewVersion}"/>
+                            <Label fx:id="tagsLabel" text="${controller.reviewTags}" wrapText="true"/>
+                            <Label fx:id="sourceLabel" text="${controller.reviewSource}">
+                                <tooltip>
+                                    <Tooltip text="${controller.reviewSource}"/>
+                                </tooltip>
+                            </Label>
                         </top>
                         <center>
                             <SplitPane fx:id="reviewEditorsSplit" orientation="VERTICAL">
