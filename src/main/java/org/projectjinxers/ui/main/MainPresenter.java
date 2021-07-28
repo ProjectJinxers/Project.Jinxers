@@ -28,9 +28,11 @@ import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.ModelController;
 import org.projectjinxers.data.Data;
 import org.projectjinxers.data.Document;
+import org.projectjinxers.data.DocumentFilters.DocumentFilter;
 import org.projectjinxers.data.Group;
 import org.projectjinxers.data.Group.GroupListener;
 import org.projectjinxers.data.OwnershipRequest;
+import org.projectjinxers.data.ProgressObserver;
 import org.projectjinxers.data.Settings;
 import org.projectjinxers.data.User;
 import org.projectjinxers.model.ModelState;
@@ -79,6 +81,8 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
 
         void updatedReviews(Document document);
 
+        void updateDocuments();
+
         void refreshTime();
 
     }
@@ -86,6 +90,9 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
     private Data data;
     private Collection<Document> allDocuments;
     private Map<String, OwnershipRequest> allOwnershipRequests = new HashMap<>();
+
+    private DocumentFilter appliedDocumentFilter;
+    private Collection<Document> filteredDocuments;
 
     private boolean editing;
 
@@ -154,8 +161,19 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
         if (controller != null) {
             IPLDObject<ModelState> valid = controller.getCurrentValidatedState();
             if (allDocuments != null) {
-                for (Document document : allDocuments) {
-                    document.groupUpdated(group, valid);
+                if (appliedDocumentFilter == null) {
+                    for (Document document : allDocuments) {
+                        document.groupUpdated(group, valid);
+                    }
+                }
+                else {
+                    filteredDocuments.clear();
+                    for (Document document : allDocuments) {
+                        document.groupUpdated(group, valid);
+                        if (appliedDocumentFilter.accept(document, observer -> checkFilter(observer))) {
+                            filteredDocuments.add(document);
+                        }
+                    }
                 }
             }
             for (OwnershipRequest request : allOwnershipRequests.values()) {
@@ -163,7 +181,7 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
             }
             loadGroupObjects(group);
         }
-        getView().didUpdateGroup(group);
+        Platform.runLater(() -> getView().didUpdateGroup(group));
     }
 
     public Settings getSettings() {
@@ -178,8 +196,8 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
         return data.getUsers();
     }
 
-    public Collection<Document> getAllDocuments() {
-        return allDocuments;
+    public Collection<Document> getDocuments() {
+        return appliedDocumentFilter == null ? allDocuments : filteredDocuments;
     }
 
     public void saveGroup(Group group) {
@@ -305,6 +323,10 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
         }
         Document document = new Document(group, multihash);
         allDocuments.add(document);
+        if (appliedDocumentFilter != null
+                && appliedDocumentFilter.accept(document, observer -> checkFilter(observer))) {
+            filteredDocuments.add(document);
+        }
         getView().didAddDocument(document);
     }
 
@@ -319,6 +341,10 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
             idx++;
         }
         allDocuments.add(document);
+        if (appliedDocumentFilter != null
+                && appliedDocumentFilter.accept(document, observer -> checkFilter(observer))) {
+            filteredDocuments.add(document);
+        }
         getView().didAddDocument(document);
     }
 
@@ -334,6 +360,10 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
 
     public void removeStandaloneDocument(Document document) {
         allDocuments.remove(document);
+        if (appliedDocumentFilter != null
+                && appliedDocumentFilter.accept(document, observer -> checkFilter(observer))) {
+            filteredDocuments.remove(document);
+        }
         Group group = document.getGroup();
         group.removeStandaloneDocument(document.getMultihash());
         if (group.isSave()) {
@@ -429,19 +459,100 @@ public class MainPresenter extends PJPresenter<MainPresenter.MainView> implement
             }
         }
         allDocuments.add(document);
+        if (appliedDocumentFilter != null) {
+            if (appliedDocumentFilter.accept(document, observer -> checkFilter(observer))) {
+                filteredDocuments.add(document);
+            }
+            else {
+                return;
+            }
+        }
         getView().didAddDocument(document);
         ensureTimeRefresh();
     }
 
     void handleUpdatedDocument(Document old, Document updated, Document reviewed) {
         if (old == updated) {
-            getView().didUpdateDocument(updated);
+            if (appliedDocumentFilter == null
+                    || appliedDocumentFilter.accept(updated, observer -> checkFilter(observer))) {
+                getView().didUpdateDocument(updated);
+            }
+            else {
+                filteredDocuments.remove(updated);
+                getView().updateDocuments();
+            }
         }
         else {
             allDocuments.remove(old);
             allDocuments.add(updated);
-            getView().didReplaceDocument(old, updated);
+            if (appliedDocumentFilter == null) {
+                getView().didReplaceDocument(old, updated);
+            }
+            else {
+                boolean changed = false;
+                if (appliedDocumentFilter.accept(old, observer -> checkFilter(observer))) {
+                    filteredDocuments.remove(old);
+                    changed = true;
+                }
+                if (appliedDocumentFilter.accept(updated, observer -> checkFilter(observer))) {
+                    filteredDocuments.add(updated);
+                    changed = true;
+                }
+                if (changed) {
+                    getView().didReplaceDocument(old, updated);
+                }
+            }
         }
+    }
+
+    void applyDocumentFilter(DocumentFilter filter) {
+        if (filter != appliedDocumentFilter) {
+            if (filteredDocuments == null) {
+                filteredDocuments = new ArrayList<>();
+            }
+            else {
+                filteredDocuments.clear();
+            }
+            if (filter == null) {
+                appliedDocumentFilter = filter;
+                getView().updateDocuments();
+            }
+            else if (allDocuments == null) {
+                appliedDocumentFilter = filter;
+            }
+            else {
+                new Thread(() -> {
+                    for (Document document : allDocuments) {
+                        if (filter.accept(document, observer -> checkFilter(observer))) {
+                            filteredDocuments.add(document);
+                        }
+                    }
+                    appliedDocumentFilter = filter;
+                    Platform.runLater(() -> getView().updateDocuments());
+                }).start();
+            }
+        }
+    }
+
+    boolean checkFilter(ProgressObserver progressObserver) {
+        if (progressObserver instanceof Document) {
+            if (appliedDocumentFilter != null) {
+                Document document = (Document) progressObserver;
+                if (appliedDocumentFilter.accept(document, observer -> checkFilter(observer))) {
+                    if (!filteredDocuments.contains(document)) {
+                        filteredDocuments.add(document);
+                        Platform.runLater(() -> getView().updateDocuments());
+                    }
+                }
+                else {
+                    if (filteredDocuments.remove(document)) {
+                        Platform.runLater(() -> getView().updateDocuments());
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
     }
 
     public void saveData() {

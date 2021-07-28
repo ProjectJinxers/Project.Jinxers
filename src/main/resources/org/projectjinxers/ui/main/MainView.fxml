@@ -3,6 +3,7 @@
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.ChoiceBox?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.control.ListView?>
 <?import javafx.scene.control.SplitPane?>
@@ -43,8 +44,9 @@
 	                <BorderPane>
 	                    <top>
 		                    <HBox>
-		                        <TextField fx:id="filterField"/>
+		                        <TextField fx:id="documentFilterQueryField"/>
 		                        <CheckBox fx:id="myDocuments" text="My documents"/>
+		                        <ChoiceBox fx:id="predefinedDocumentFiltersBox"/>
 		                        <Button onAction="#onAddDocument">
 		                            <graphic>
 		                                <ImageView image="$addIcon"/>

@@ -13,6 +13,9 @@
  */
 package org.projectjinxers.ui.main;
 
+import static org.projectjinxers.ui.util.TextFieldUtility.checkNotEmpty;
+import static org.projectjinxers.util.ObjectUtility.checkNotEmpty;
+
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -23,6 +26,9 @@ import java.util.ResourceBundle;
 
 import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.data.Document;
+import org.projectjinxers.data.DocumentFilters;
+import org.projectjinxers.data.DocumentFilters.DocumentFilter;
+import org.projectjinxers.data.DocumentFilters.TextFilter;
 import org.projectjinxers.data.Group;
 import org.projectjinxers.data.OwnershipRequest;
 import org.projectjinxers.data.ProgressObserver;
@@ -42,8 +48,10 @@ import javafx.collections.FXCollections;
 import javafx.event.Event;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
+import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.ListView;
 import javafx.scene.control.MultipleSelectionModel;
+import javafx.scene.control.TextField;
 import javafx.scene.layout.BorderPane;
 
 /**
@@ -63,6 +71,12 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
 
     @FXML
     private ListView<Group> groupsList;
+
+    @FXML
+    private TextField documentFilterQueryField;
+
+    @FXML
+    private ChoiceBox<DocumentFilter> predefinedDocumentFiltersBox;
 
     @FXML
     private ListView<Document> documentsList;
@@ -94,6 +108,23 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
         unbanRequestsList.setCellFactory(param -> new UnbanRequestCell());
         votingsList.setCellFactory(param -> new VotingCell());
 
+        documentFilterQueryField.textProperty().addListener((obs, oldVal, newVal) -> {
+            String query = checkNotEmpty(newVal);
+            DocumentFilter filter = predefinedDocumentFiltersBox.getValue();
+            if (query != null) {
+                filter = new TextFilter(query, filter);
+            }
+            mainPresenter.applyDocumentFilter(filter);
+        });
+        predefinedDocumentFiltersBox.getItems().setAll(DocumentFilters.getFilters().values());
+        predefinedDocumentFiltersBox.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            DocumentFilter filter = newVal;
+            String query = checkNotEmpty(documentFilterQueryField);
+            if (query != null) {
+                filter = new TextFilter(query, filter);
+            }
+            mainPresenter.applyDocumentFilter(filter);
+        });
         documentsList.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal == null) {
                 if (documentDetailsPresenter != null) {
@@ -190,6 +221,11 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
     }
 
     @Override
+    public void updateDocuments() {
+        updateDocuments(documentsList.getSelectionModel().getSelectedItem(), -1);
+    }
+
+    @Override
     public void refreshTime() {
         documentsList.refresh();
         if (documentDetailsPresenter != null) {
@@ -199,8 +235,10 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
 
     @Override
     public void statusChanged(ProgressObserver progressObserver) {
-        if (documentDetailsPresenter != null && progressObserver == documentDetailsPresenter.getDocument()) {
-            documentDetailsPresenter.getView().updateView();
+        if (mainPresenter.checkFilter(progressObserver)) {
+            if (documentDetailsPresenter != null && progressObserver == documentDetailsPresenter.getDocument()) {
+                documentDetailsPresenter.getView().updateView();
+            }
         }
     }
 
@@ -222,18 +260,21 @@ public class MainView implements PJView<MainPresenter.MainView, MainPresenter>, 
     }
 
     private void updateDocuments(Document toSelect, int indexToSelect) {
-        Collection<Document> allDocuments = mainPresenter.getAllDocuments();
+        Collection<Document> allDocuments = mainPresenter.getDocuments();
         if (allDocuments == null) {
             documentsList.getItems().clear();
         }
         else {
             documentsList.getItems().setAll(allDocuments);
             MultipleSelectionModel<Document> selectionModel = documentsList.getSelectionModel();
-            if (toSelect != null) {
+            if (toSelect != null && allDocuments.contains(toSelect)) {
                 selectionModel.select(toSelect);
                 int selectedIndex = selectionModel.getSelectedIndex();
                 if (selectedIndex >= 0) {
                     documentsList.scrollTo(selectedIndex);
+                }
+                else {
+                    selectionModel.select(null);
                 }
             }
             else if (indexToSelect >= 0) {

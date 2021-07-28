@@ -27,6 +27,7 @@ import org.projectjinxers.controller.IPLDContext;
 import org.projectjinxers.controller.IPLDObject;
 import org.projectjinxers.controller.IPLDObject.ProgressTask;
 import org.projectjinxers.controller.ModelController;
+import org.projectjinxers.model.DocumentContents;
 import org.projectjinxers.model.DocumentRemoval;
 import org.projectjinxers.model.IPLDSerializable;
 import org.projectjinxers.model.LoaderFactory;
@@ -339,6 +340,81 @@ public class Document extends ProgressObserver {
             return "Saved as " + multihash;
         }
         return null;
+    }
+
+    public boolean isSettlementRequested() {
+        if (reviewInfo != null && reviewInfo.sealed) {
+            return true;
+        }
+        if (group != null && multihash != null) {
+            ModelController controller = group.getController();
+            if (controller != null && controller.isInitialized()) {
+                IPLDObject<ModelState> currentValidatedState = controller.getCurrentValidatedState();
+                if (currentValidatedState != null) {
+                    return currentValidatedState.getMapped().getSettlementRequest(multihash) != null;
+                }
+            }
+        }
+        return false;
+    }
+
+    public boolean isSealed() {
+        if (reviewInfo != null && reviewInfo.sealed) {
+            return true;
+        }
+        if (group != null && multihash != null) {
+            ModelController controller = group.getController();
+            if (controller != null && controller.isInitialized()) {
+                IPLDObject<ModelState> currentValidatedState = controller.getCurrentValidatedState();
+                if (currentValidatedState != null) {
+                    return currentValidatedState.getMapped().isSealedDocument(multihash);
+                }
+            }
+        }
+        return false;
+    }
+
+    public boolean conformsToFilterQuery(String filterQuery, ProgressChangeListener listener) {
+        if (documentObject != null && documentObject.isMapped()) {
+            org.projectjinxers.model.Document document = documentObject.getMapped();
+            String query = filterQuery.toLowerCase();
+            String title = document.getTitle();
+            if (title != null && title.toLowerCase().contains(query)) {
+                return true;
+            }
+            String subtitle = document.getSubtitle();
+            if (subtitle != null && subtitle.toLowerCase().contains(query)) {
+                return true;
+            }
+            String version = document.getVersion();
+            if (version != null && version.toLowerCase().contains(query)) {
+                return true;
+            }
+            String tags = document.getTags();
+            if (tags != null && tags.toLowerCase().contains(query)) {
+                return true;
+            }
+            String source = document.getSource();
+            if (source != null && source.toLowerCase().contains(query)) {
+                return true;
+            }
+            IPLDObject<DocumentContents> contentsObject = document.getContents();
+            if (contentsObject != null && contentsObject.isMapped()) {
+                DocumentContents contents = contentsObject.getMapped();
+                String abstr = contents.getAbstract();
+                if (abstr != null && abstr.toLowerCase().contains(query)) {
+                    return true;
+                }
+                String text = contents.getContents();
+                if (text != null && text.toLowerCase().contains(query)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        setProgressChangeListener(listener);
+        getOrLoadDocumentObject();
+        return false;
     }
 
     private void updateReviewsInfo() {

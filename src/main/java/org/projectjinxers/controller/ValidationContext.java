@@ -584,10 +584,14 @@ public class ValidationContext {
             ModelState state = previousState.getMapped();
             IPLDObject<UserState> userStateObject = state.expectUserState(userHash);
             UserState userState = userStateObject.getMapped();
-            if (userState.getOwnershipRequest(documentHash) != null) {
+            IPLDObject<OwnershipRequest> ownershipRequest = userState.getOwnershipRequest(documentHash);
+            if (ownershipRequest == null) {
                 userState.validateRequiredRating();
                 withoutRequest = previousState;
                 break;
+            }
+            else {
+                req.validate(ownershipRequest.getMapped());
             }
             previousState = state.getPreviousVersion();
         }

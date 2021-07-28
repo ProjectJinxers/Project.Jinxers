@@ -207,7 +207,6 @@ public class ObjectStatusView implements Initializable, ProgressChangeListener {
         }
         if (hide) {
             root.setVisible(false);
-            statusChangeListener = null;
         }
         else {
             root.setVisible(true);
