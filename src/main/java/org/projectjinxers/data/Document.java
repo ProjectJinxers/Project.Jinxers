@@ -254,6 +254,14 @@ public class Document extends ProgressObserver {
         return reviews;
     }
 
+    public boolean isFalseClaim() {
+        UserState userState = documentObject.getMapped().expectUserState();
+        String userHash = userState.getUser().getMultihash();
+        IPLDObject<UserState> userStateObject = group.getController().getCurrentValidatedState().getMapped()
+                .expectUserState(userHash);
+        return userStateObject.getMapped().isFalseClaim(multihash);
+    }
+
     public boolean isLoading() {
         return loading;
     }

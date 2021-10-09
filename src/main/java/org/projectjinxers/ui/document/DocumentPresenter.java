@@ -129,6 +129,10 @@ public class DocumentPresenter extends DataPresenter<Document, DocumentPresenter
         return approval;
     }
 
+    public boolean isReviewedFalseClaim() {
+        return reviewed.isFalseClaim();
+    }
+
     public List<Group> getGroups() {
         return new ArrayList<>(data.getGroups().values());
     }

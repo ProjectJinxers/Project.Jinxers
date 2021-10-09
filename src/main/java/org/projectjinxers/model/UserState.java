@@ -923,6 +923,10 @@ public class UserState implements IPLDSerializable, Loader<UserState> {
         addFalseDeclination(falseDeclination);
     }
 
+    public boolean isFalseClaim(String documentHash) {
+        return falseClaims != null && falseClaims.containsKey(documentHash);
+    }
+
     public Collection<IPLDObject<Document>> getNewDocuments(UserState since, boolean ignoreCached) {
         if (ignoreCached || newDocuments == null || since == null && newDocumentsSince >= 0
                 || since != null && since.getVersion() != newDocumentsSince) {

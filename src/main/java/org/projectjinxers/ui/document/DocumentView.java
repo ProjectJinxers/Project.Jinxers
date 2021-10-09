@@ -271,7 +271,7 @@ public class DocumentView implements PJView<DocumentPresenter.DocumentView, Docu
     @FXML
     void truthInversionToggled(Event e) {
         if (truthInversionBox.isSelected()) {
-            approvalBox.setValue(APPROVAL_NO);
+            approvalBox.setValue(documentPresenter.isReviewedFalseClaim() ? APPROVAL_YES : APPROVAL_NO);
             approvalBox.setDisable(true);
         }
         else {
